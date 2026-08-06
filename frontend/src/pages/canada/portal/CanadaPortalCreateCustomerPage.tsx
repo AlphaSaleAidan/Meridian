@@ -530,7 +530,6 @@ export default function CanadaPortalCreateCustomerPage() {
     pos: '',
     plan: 'premium',
     priceBump: 0,
-    setupFee: '',
     firstMonthFree: false,
     // Per-order fee handling, set here at close and FIXED for the merchant.
     feeAllocationMode: 'business_pays' as 'business_pays' | 'split_5050' | 'customer_pays',
@@ -552,11 +551,9 @@ export default function CanadaPortalCreateCustomerPage() {
 
   const selectedPlan = getPlan(form.plan)
   const price = selectedPlan.price + form.priceBump
-  // The rep's own setup fee (theirs, 100%) vs what the customer is billed:
-  // the website add-on rides inside the billed setup fee but routes to the
-  // build program, not the rep.
-  const repSetupFee = form.setupFee ? parseInt(form.setupFee) : 0
-  const setupFee = repSetupFee + (form.website ? WEBSITE_ADDON_CAD : 0)
+  // Setup fee = the sum of toggled setup services (Website Buildout today,
+  // more coming). The manual rep-entered setup fee is retired (Aidan 08-06).
+  const setupFee = form.website ? WEBSITE_ADDON_CAD : 0
   const dueToday = (form.firstMonthFree ? 0 : price) + setupFee
   const interval = selectedPlan.interval === 'week' ? '/wk' : '/mo'
 
@@ -1118,16 +1115,79 @@ export default function CanadaPortalCreateCustomerPage() {
 
             <div className="mb-4">
               <label className="block text-2xs font-medium text-pm-canada-text-muted mb-1.5">
-                Setup Fee <span className="text-pm-accent">(you keep 100%)</span>
+                Setup Services <span className="text-pm-canada-text-faint">(one-time — billed together as the setup fee)</span>
               </label>
-              <div className="relative">
-                <DollarSign size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-pm-canada-text-faint" />
-                <input type="number" value={form.setupFee}
-                  onChange={e => update('setupFee', e.target.value)}
-                  placeholder="0"
-                  className="w-full pl-8 pr-3 py-2.5 text-sm-tight rounded-lg bg-pm-canada-bg border border-pm-canada-border text-white placeholder-pm-canada-text-faint focus:border-pm-accent/50 focus:outline-none transition-colors" />
+              <div className="rounded-xl border border-pm-canada-border bg-pm-canada-bg">
+                <div className="flex items-center justify-between p-4">
+                  <div className="flex items-center gap-3">
+                    <Globe size={18} className={form.website ? 'text-pm-accent' : 'text-pm-canada-text-faint'} />
+                    <div>
+                      <p className="text-sm-tight font-semibold text-white">Website Buildout</p>
+                      <p className="text-2xs text-pm-canada-text-muted">Custom site or rebuild, built in 48 hours on the Meridian network</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm-tight font-semibold text-pm-accent">CA${WEBSITE_ADDON_CAD}</span>
+                    <button
+                      onClick={() => update('website', !form.website)}
+                      className={`relative w-12 h-6 rounded-full transition-colors duration-200 ${
+                        form.website ? 'bg-pm-accent' : 'bg-pm-canada-border'
+                      }`}
+                    >
+                      <div className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform duration-200 ${
+                        form.website ? 'translate-x-6' : ''
+                      }`} />
+                    </button>
+                  </div>
+                </div>
+                {form.website && (
+                  <div className="px-4 pb-4 pt-3 space-y-3 border-t border-pm-canada-border">
+                    <div>
+                      <label className="block text-2xs font-medium text-pm-canada-text-muted mb-1.5">Current website (leave empty for a brand-new site)</label>
+                      <input type="text" value={form.websiteCurrentUrl}
+                        onChange={e => update('websiteCurrentUrl', e.target.value)}
+                        placeholder="theirbusiness.com"
+                        className="w-full px-3 py-2.5 text-sm-tight rounded-lg bg-pm-canada-surface border border-pm-canada-border text-white placeholder-pm-canada-text-faint focus:border-pm-accent/50 focus:outline-none" />
+                    </div>
+                    <div>
+                      <label className="block text-2xs font-medium text-pm-canada-text-muted mb-1.5">
+                        What must the site do? <span className="text-pm-accent">(required — this is the builders&rsquo; brief)</span>
+                      </label>
+                      <textarea rows={2} value={form.websiteGoals}
+                        onChange={e => update('websiteGoals', e.target.value)}
+                        placeholder="Take pickup orders online, show the menu, rank for local searches..."
+                        className="w-full px-3 py-2.5 text-sm-tight rounded-lg bg-pm-canada-surface border border-pm-canada-border text-white placeholder-pm-canada-text-faint focus:border-pm-accent/50 focus:outline-none resize-none" />
+                      <p className="text-2xs text-pm-canada-text-faint mt-1">Ask the owner on the call — 20+ characters</p>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-2xs font-medium text-pm-canada-text-muted mb-1.5">Pages (comma-separated)</label>
+                        <input type="text" value={form.websitePages}
+                          onChange={e => update('websitePages', e.target.value)}
+                          className="w-full px-3 py-2.5 text-sm-tight rounded-lg bg-pm-canada-surface border border-pm-canada-border text-white focus:border-pm-accent/50 focus:outline-none" />
+                      </div>
+                      <div>
+                        <label className="block text-2xs font-medium text-pm-canada-text-muted mb-1.5">Words &amp; photos</label>
+                        <select value={form.websiteContent}
+                          onChange={e => update('websiteContent', e.target.value)}
+                          className="w-full px-3 py-2.5 text-sm-tight rounded-lg bg-pm-canada-surface border border-pm-canada-border text-white focus:border-pm-accent/50 focus:outline-none">
+                          <option value="ready">Owner has content ready</option>
+                          <option value="partial">Some of it exists</option>
+                          <option value="none">Write it for them</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-2xs font-medium text-pm-canada-text-muted mb-1.5">Brand notes (colors, tone, sites they like)</label>
+                      <input type="text" value={form.websiteBrand}
+                        onChange={e => update('websiteBrand', e.target.value)}
+                        className="w-full px-3 py-2.5 text-sm-tight rounded-lg bg-pm-canada-surface border border-pm-canada-border text-white focus:border-pm-accent/50 focus:outline-none" />
+                    </div>
+                    <p className="text-2xs text-pm-accent/60">When you create the customer, a 48-hour build contest goes live — the owner picks their site from real, clickable previews.</p>
+                  </div>
+                )}
               </div>
-              <p className="text-2xs text-pm-accent/60 mt-1">Custom amount — goes directly to you</p>
+              <p className="text-2xs text-pm-canada-text-faint mt-1.5">More setup services are on the way — each lists its price and adds to the one-time setup fee.</p>
             </div>
 
             <div className="flex items-center justify-between p-4 rounded-xl border border-pm-canada-border bg-pm-canada-bg">
@@ -1166,12 +1226,6 @@ export default function CanadaPortalCreateCustomerPage() {
                 <span className="text-pm-canada-text-muted">Plan</span>
                 <span className="text-white font-medium">{selectedPlan.label} — CA${price}{interval}</span>
               </div>
-              {repSetupFee > 0 && (
-                <div className="flex justify-between py-2 border-b border-pm-canada-border">
-                  <span className="text-pm-canada-text-muted">Setup Fee <span className="text-pm-accent">(yours)</span></span>
-                  <span className="text-pm-accent font-medium">CA${repSetupFee}</span>
-                </div>
-              )}
               {form.website && (
                 <div className="flex justify-between py-2 border-b border-pm-canada-border">
                   <span className="text-pm-canada-text-muted">Website build <span className="text-pm-canada-text-faint">(48h, in setup fee)</span></span>
@@ -1237,74 +1291,6 @@ export default function CanadaPortalCreateCustomerPage() {
                 <div className="text-pm-accent font-medium">CA${dueToday.toLocaleString()}</div>
               </div>
             </div>
-          </div>
-
-          <div className="rounded-xl border border-pm-canada-border bg-pm-canada-surface">
-            <div className="flex items-center justify-between p-4">
-              <div className="flex items-center gap-3">
-                <Globe size={18} className={form.website ? 'text-pm-accent' : 'text-pm-canada-text-faint'} />
-                <div>
-                  <p className="text-sm-tight font-semibold text-white">Website Build — CA${WEBSITE_ADDON_CAD}</p>
-                  <p className="text-2xs text-pm-canada-text-muted">New site or rebuild in 48 hours — added to the setup fee, built on the Meridian network</p>
-                </div>
-              </div>
-              <button
-                onClick={() => update('website', !form.website)}
-                className={`relative w-12 h-6 rounded-full transition-colors duration-200 ${
-                  form.website ? 'bg-pm-accent' : 'bg-pm-canada-border'
-                }`}
-              >
-                <div className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform duration-200 ${
-                  form.website ? 'translate-x-6' : ''
-                }`} />
-              </button>
-            </div>
-            {form.website && (
-              <div className="px-4 pb-4 pt-3 space-y-3 border-t border-pm-canada-border">
-                <div>
-                  <label className="block text-2xs font-medium text-pm-canada-text-muted mb-1.5">Current website (leave empty for a brand-new site)</label>
-                  <input type="text" value={form.websiteCurrentUrl}
-                    onChange={e => update('websiteCurrentUrl', e.target.value)}
-                    placeholder="theirbusiness.com"
-                    className="w-full px-3 py-2.5 text-sm-tight rounded-lg bg-pm-canada-bg border border-pm-canada-border text-white placeholder-pm-canada-text-faint focus:border-pm-accent/50 focus:outline-none" />
-                </div>
-                <div>
-                  <label className="block text-2xs font-medium text-pm-canada-text-muted mb-1.5">
-                    What must the site do? <span className="text-pm-accent">(required — this is the builders&rsquo; brief)</span>
-                  </label>
-                  <textarea rows={2} value={form.websiteGoals}
-                    onChange={e => update('websiteGoals', e.target.value)}
-                    placeholder="Take pickup orders online, show the menu, rank for local searches..."
-                    className="w-full px-3 py-2.5 text-sm-tight rounded-lg bg-pm-canada-bg border border-pm-canada-border text-white placeholder-pm-canada-text-faint focus:border-pm-accent/50 focus:outline-none resize-none" />
-                  <p className="text-2xs text-pm-canada-text-faint mt-1">Ask the owner on the call — 20+ characters</p>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-2xs font-medium text-pm-canada-text-muted mb-1.5">Pages (comma-separated)</label>
-                    <input type="text" value={form.websitePages}
-                      onChange={e => update('websitePages', e.target.value)}
-                      className="w-full px-3 py-2.5 text-sm-tight rounded-lg bg-pm-canada-bg border border-pm-canada-border text-white focus:border-pm-accent/50 focus:outline-none" />
-                  </div>
-                  <div>
-                    <label className="block text-2xs font-medium text-pm-canada-text-muted mb-1.5">Words &amp; photos</label>
-                    <select value={form.websiteContent}
-                      onChange={e => update('websiteContent', e.target.value)}
-                      className="w-full px-3 py-2.5 text-sm-tight rounded-lg bg-pm-canada-bg border border-pm-canada-border text-white focus:border-pm-accent/50 focus:outline-none">
-                      <option value="ready">Owner has content ready</option>
-                      <option value="partial">Some of it exists</option>
-                      <option value="none">Write it for them</option>
-                    </select>
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-2xs font-medium text-pm-canada-text-muted mb-1.5">Brand notes (colors, tone, sites they like)</label>
-                  <input type="text" value={form.websiteBrand}
-                    onChange={e => update('websiteBrand', e.target.value)}
-                    className="w-full px-3 py-2.5 text-sm-tight rounded-lg bg-pm-canada-bg border border-pm-canada-border text-white focus:border-pm-accent/50 focus:outline-none" />
-                </div>
-                <p className="text-2xs text-pm-accent/60">When you create the customer, a 48-hour build contest goes live — the owner picks their site from real, clickable previews.</p>
-              </div>
-            )}
           </div>
 
           {/* Checkout Link section */}
@@ -1476,7 +1462,7 @@ export default function CanadaPortalCreateCustomerPage() {
               <ArrowLeft size={14} /> Back
             </button>
             <button onClick={() => {
-              setForm({ businessName: '', ownerName: '', email: '', phone: '', vertical: '', pos: '', plan: 'premium', priceBump: 0, setupFee: '', firstMonthFree: false, feeAllocationMode: 'business_pays', website: false, websiteCurrentUrl: '', websiteGoals: '', websitePages: 'Home, Services, Contact', websiteBrand: '', websiteContent: 'partial', notes: '' })
+              setForm({ businessName: '', ownerName: '', email: '', phone: '', vertical: '', pos: '', plan: 'premium', priceBump: 0, firstMonthFree: false, feeAllocationMode: 'business_pays', website: false, websiteCurrentUrl: '', websiteGoals: '', websitePages: 'Home, Services, Contact', websiteBrand: '', websiteContent: 'partial', notes: '' })
               setStep('details')
               setOnboardingLink('')
               setCustomerLoginUrl('')
@@ -1666,7 +1652,7 @@ export default function CanadaPortalCreateCustomerPage() {
               <ArrowLeft size={14} /> Back to Leads
             </button>
             <button onClick={() => {
-              setForm({ businessName: '', ownerName: '', email: '', phone: '', vertical: '', pos: '', plan: 'premium', priceBump: 0, setupFee: '', firstMonthFree: false, feeAllocationMode: 'business_pays', website: false, websiteCurrentUrl: '', websiteGoals: '', websitePages: 'Home, Services, Contact', websiteBrand: '', websiteContent: 'partial', notes: '' })
+              setForm({ businessName: '', ownerName: '', email: '', phone: '', vertical: '', pos: '', plan: 'premium', priceBump: 0, firstMonthFree: false, feeAllocationMode: 'business_pays', website: false, websiteCurrentUrl: '', websiteGoals: '', websitePages: 'Home, Services, Contact', websiteBrand: '', websiteContent: 'partial', notes: '' })
               setStep('details')
               setOnboardingLink('')
               setCustomerLoginUrl('')

@@ -530,7 +530,6 @@ export default function USPortalCreateCustomerPage() {
     pos: '',
     plan: 'premium',
     priceBump: 0,
-    setupFee: '',
     firstMonthFree: false,
     // Per-order fee handling, set here at close and FIXED for the merchant.
     feeAllocationMode: 'business_pays' as 'business_pays' | 'split_5050' | 'customer_pays',
@@ -552,11 +551,9 @@ export default function USPortalCreateCustomerPage() {
 
   const selectedPlan = getPlan(form.plan)
   const price = selectedPlan.price + form.priceBump
-  // The rep's own setup fee (theirs, 100%) vs what the customer is billed:
-  // the website add-on rides inside the billed setup fee but routes to the
-  // build program, not the rep.
-  const repSetupFee = form.setupFee ? parseInt(form.setupFee) : 0
-  const setupFee = repSetupFee + (form.website ? WEBSITE_ADDON_USD : 0)
+  // Setup fee = the sum of toggled setup services (Website Buildout today,
+  // more coming). The manual rep-entered setup fee is retired (Aidan 08-06).
+  const setupFee = form.website ? WEBSITE_ADDON_USD : 0
   const dueToday = (form.firstMonthFree ? 0 : price) + setupFee
   const interval = selectedPlan.interval === 'week' ? '/wk' : '/mo'
 
@@ -1114,16 +1111,79 @@ export default function USPortalCreateCustomerPage() {
 
             <div className="mb-4">
               <label className="block text-[11px] font-medium text-[#A1A1A8] mb-1.5">
-                Setup Fee <span className="text-[#17C5B0]">(you keep 100%)</span>
+                Setup Services <span className="text-[#4a5550]">(one-time — billed together as the setup fee)</span>
               </label>
-              <div className="relative">
-                <DollarSign size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#4a5550]" />
-                <input type="number" value={form.setupFee}
-                  onChange={e => update('setupFee', e.target.value)}
-                  placeholder="0"
-                  className="w-full pl-8 pr-3 py-2.5 text-[13px] rounded-lg bg-[#0A0A0B] border border-[#1F1F23] text-white placeholder-[#4a5550] focus:border-[#17C5B0]/50 focus:outline-none transition-colors" />
+              <div className="rounded-xl border border-[#1F1F23] bg-[#0A0A0B]">
+                <div className="flex items-center justify-between p-4">
+                  <div className="flex items-center gap-3">
+                    <Globe size={18} className={form.website ? 'text-[#17C5B0]' : 'text-[#4a5550]'} />
+                    <div>
+                      <p className="text-[13px] font-semibold text-white">Website Buildout</p>
+                      <p className="text-[11px] text-[#A1A1A8]">Custom site or rebuild, built in 48 hours on the Meridian network</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-[13px] font-semibold text-[#17C5B0]">${WEBSITE_ADDON_USD}</span>
+                    <button
+                      onClick={() => update('website', !form.website)}
+                      className={`relative w-12 h-6 rounded-full transition-colors duration-200 ${
+                        form.website ? 'bg-[#17C5B0]' : 'bg-[#1F1F23]'
+                      }`}
+                    >
+                      <div className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform duration-200 ${
+                        form.website ? 'translate-x-6' : ''
+                      }`} />
+                    </button>
+                  </div>
+                </div>
+                {form.website && (
+                  <div className="px-4 pb-4 pt-3 space-y-3 border-t border-[#1F1F23]">
+                    <div>
+                      <label className="block text-[11px] font-medium text-[#A1A1A8] mb-1.5">Current website (leave empty for a brand-new site)</label>
+                      <input type="text" value={form.websiteCurrentUrl}
+                        onChange={e => update('websiteCurrentUrl', e.target.value)}
+                        placeholder="theirbusiness.com"
+                        className="w-full px-3 py-2.5 text-[13px] rounded-lg bg-[#111113] border border-[#1F1F23] text-white placeholder-[#4a5550] focus:border-[#17C5B0]/50 focus:outline-none" />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-medium text-[#A1A1A8] mb-1.5">
+                        What must the site do? <span className="text-[#17C5B0]">(required — this is the builders&rsquo; brief)</span>
+                      </label>
+                      <textarea rows={2} value={form.websiteGoals}
+                        onChange={e => update('websiteGoals', e.target.value)}
+                        placeholder="Take pickup orders online, show the menu, rank for local searches..."
+                        className="w-full px-3 py-2.5 text-[13px] rounded-lg bg-[#111113] border border-[#1F1F23] text-white placeholder-[#4a5550] focus:border-[#17C5B0]/50 focus:outline-none resize-none" />
+                      <p className="text-[10px] text-[#4a5550] mt-1">Ask the owner on the call — 20+ characters</p>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-medium text-[#A1A1A8] mb-1.5">Pages (comma-separated)</label>
+                        <input type="text" value={form.websitePages}
+                          onChange={e => update('websitePages', e.target.value)}
+                          className="w-full px-3 py-2.5 text-[13px] rounded-lg bg-[#111113] border border-[#1F1F23] text-white focus:border-[#17C5B0]/50 focus:outline-none" />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-medium text-[#A1A1A8] mb-1.5">Words &amp; photos</label>
+                        <select value={form.websiteContent}
+                          onChange={e => update('websiteContent', e.target.value)}
+                          className="w-full px-3 py-2.5 text-[13px] rounded-lg bg-[#111113] border border-[#1F1F23] text-white focus:border-[#17C5B0]/50 focus:outline-none">
+                          <option value="ready">Owner has content ready</option>
+                          <option value="partial">Some of it exists</option>
+                          <option value="none">Write it for them</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-medium text-[#A1A1A8] mb-1.5">Brand notes (colors, tone, sites they like)</label>
+                      <input type="text" value={form.websiteBrand}
+                        onChange={e => update('websiteBrand', e.target.value)}
+                        className="w-full px-3 py-2.5 text-[13px] rounded-lg bg-[#111113] border border-[#1F1F23] text-white focus:border-[#17C5B0]/50 focus:outline-none" />
+                    </div>
+                    <p className="text-[10px] text-[#17C5B0]/60">When you create the customer, a 48-hour build contest goes live — the owner picks their site from real, clickable previews.</p>
+                  </div>
+                )}
               </div>
-              <p className="text-[10px] text-[#17C5B0]/60 mt-1">Custom amount — goes directly to you</p>
+              <p className="text-[10px] text-[#4a5550] mt-1.5">More setup services are on the way — each lists its price and adds to the one-time setup fee.</p>
             </div>
 
             <div className="flex items-center justify-between p-4 rounded-xl border border-[#1F1F23] bg-[#0A0A0B]">
@@ -1162,12 +1222,6 @@ export default function USPortalCreateCustomerPage() {
                 <span className="text-[#A1A1A8]">Plan</span>
                 <span className="text-white font-medium">{selectedPlan.label} — ${price}{interval}</span>
               </div>
-              {repSetupFee > 0 && (
-                <div className="flex justify-between py-2 border-b border-[#1F1F23]">
-                  <span className="text-[#A1A1A8]">Setup Fee <span className="text-[#17C5B0]">(yours)</span></span>
-                  <span className="text-[#17C5B0] font-medium">${repSetupFee}</span>
-                </div>
-              )}
               {form.website && (
                 <div className="flex justify-between py-2 border-b border-[#1F1F23]">
                   <span className="text-[#A1A1A8]">Website build <span className="text-[#4a5550]">(48h, in setup fee)</span></span>
@@ -1233,74 +1287,6 @@ export default function USPortalCreateCustomerPage() {
                 <div className="text-[#17C5B0] font-medium">${dueToday.toLocaleString()}</div>
               </div>
             </div>
-          </div>
-
-          <div className="rounded-xl border border-[#1F1F23] bg-[#111113]">
-            <div className="flex items-center justify-between p-4">
-              <div className="flex items-center gap-3">
-                <Globe size={18} className={form.website ? 'text-[#17C5B0]' : 'text-[#4a5550]'} />
-                <div>
-                  <p className="text-[13px] font-semibold text-white">Website Build — ${WEBSITE_ADDON_USD}</p>
-                  <p className="text-[11px] text-[#A1A1A8]">New site or rebuild in 48 hours — added to the setup fee, built on the Meridian network</p>
-                </div>
-              </div>
-              <button
-                onClick={() => update('website', !form.website)}
-                className={`relative w-12 h-6 rounded-full transition-colors duration-200 ${
-                  form.website ? 'bg-[#17C5B0]' : 'bg-[#1F1F23]'
-                }`}
-              >
-                <div className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform duration-200 ${
-                  form.website ? 'translate-x-6' : ''
-                }`} />
-              </button>
-            </div>
-            {form.website && (
-              <div className="px-4 pb-4 pt-3 space-y-3 border-t border-[#1F1F23]">
-                <div>
-                  <label className="block text-[11px] font-medium text-[#A1A1A8] mb-1.5">Current website (leave empty for a brand-new site)</label>
-                  <input type="text" value={form.websiteCurrentUrl}
-                    onChange={e => update('websiteCurrentUrl', e.target.value)}
-                    placeholder="theirbusiness.com"
-                    className="w-full px-3 py-2.5 text-[13px] rounded-lg bg-[#0A0A0B] border border-[#1F1F23] text-white placeholder-[#4a5550] focus:border-[#17C5B0]/50 focus:outline-none" />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-medium text-[#A1A1A8] mb-1.5">
-                    What must the site do? <span className="text-[#17C5B0]">(required — this is the builders&rsquo; brief)</span>
-                  </label>
-                  <textarea rows={2} value={form.websiteGoals}
-                    onChange={e => update('websiteGoals', e.target.value)}
-                    placeholder="Take pickup orders online, show the menu, rank for local searches..."
-                    className="w-full px-3 py-2.5 text-[13px] rounded-lg bg-[#0A0A0B] border border-[#1F1F23] text-white placeholder-[#4a5550] focus:border-[#17C5B0]/50 focus:outline-none resize-none" />
-                  <p className="text-[10px] text-[#4a5550] mt-1">Ask the owner on the call — 20+ characters</p>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[11px] font-medium text-[#A1A1A8] mb-1.5">Pages (comma-separated)</label>
-                    <input type="text" value={form.websitePages}
-                      onChange={e => update('websitePages', e.target.value)}
-                      className="w-full px-3 py-2.5 text-[13px] rounded-lg bg-[#0A0A0B] border border-[#1F1F23] text-white focus:border-[#17C5B0]/50 focus:outline-none" />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-medium text-[#A1A1A8] mb-1.5">Words &amp; photos</label>
-                    <select value={form.websiteContent}
-                      onChange={e => update('websiteContent', e.target.value)}
-                      className="w-full px-3 py-2.5 text-[13px] rounded-lg bg-[#0A0A0B] border border-[#1F1F23] text-white focus:border-[#17C5B0]/50 focus:outline-none">
-                      <option value="ready">Owner has content ready</option>
-                      <option value="partial">Some of it exists</option>
-                      <option value="none">Write it for them</option>
-                    </select>
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-[11px] font-medium text-[#A1A1A8] mb-1.5">Brand notes (colors, tone, sites they like)</label>
-                  <input type="text" value={form.websiteBrand}
-                    onChange={e => update('websiteBrand', e.target.value)}
-                    className="w-full px-3 py-2.5 text-[13px] rounded-lg bg-[#0A0A0B] border border-[#1F1F23] text-white focus:border-[#17C5B0]/50 focus:outline-none" />
-                </div>
-                <p className="text-[10px] text-[#17C5B0]/60">When you create the customer, a 48-hour build contest goes live — the owner picks their site from real, clickable previews.</p>
-              </div>
-            )}
           </div>
 
           {/* Monthly Subscription Link section */}
@@ -1472,7 +1458,7 @@ export default function USPortalCreateCustomerPage() {
               <ArrowLeft size={14} /> Back
             </button>
             <button onClick={() => {
-              setForm({ businessName: '', ownerName: '', email: '', phone: '', vertical: '', pos: '', plan: 'premium', priceBump: 0, setupFee: '', firstMonthFree: false, feeAllocationMode: 'business_pays', website: false, websiteCurrentUrl: '', websiteGoals: '', websitePages: 'Home, Services, Contact', websiteBrand: '', websiteContent: 'partial', notes: '' })
+              setForm({ businessName: '', ownerName: '', email: '', phone: '', vertical: '', pos: '', plan: 'premium', priceBump: 0, firstMonthFree: false, feeAllocationMode: 'business_pays', website: false, websiteCurrentUrl: '', websiteGoals: '', websitePages: 'Home, Services, Contact', websiteBrand: '', websiteContent: 'partial', notes: '' })
               setStep('details')
               setOnboardingLink('')
               setCustomerLoginUrl('')
@@ -1659,7 +1645,7 @@ export default function USPortalCreateCustomerPage() {
               <ArrowLeft size={14} /> Back to Leads
             </button>
             <button onClick={() => {
-              setForm({ businessName: '', ownerName: '', email: '', phone: '', vertical: '', pos: '', plan: 'premium', priceBump: 0, setupFee: '', firstMonthFree: false, feeAllocationMode: 'business_pays', website: false, websiteCurrentUrl: '', websiteGoals: '', websitePages: 'Home, Services, Contact', websiteBrand: '', websiteContent: 'partial', notes: '' })
+              setForm({ businessName: '', ownerName: '', email: '', phone: '', vertical: '', pos: '', plan: 'premium', priceBump: 0, firstMonthFree: false, feeAllocationMode: 'business_pays', website: false, websiteCurrentUrl: '', websiteGoals: '', websitePages: 'Home, Services, Contact', websiteBrand: '', websiteContent: 'partial', notes: '' })
               setStep('details')
               setOnboardingLink('')
               setCustomerLoginUrl('')
