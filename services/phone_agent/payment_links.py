@@ -270,8 +270,16 @@ def _order_amount_cents(order: dict[str, Any]) -> int:
 
 def _stripe_line_items(order: dict[str, Any], currency: str) -> list[dict]:
     """Itemized Stripe line_items when items carry prices; else a single
-    order-total line (charges the correct amount either way)."""
+    order-total line (charges the correct amount either way).
+
+    Itemized lines bill unit_price × quantity, but the normalizer's order
+    total also carries sales tax and per-item modifier charges (toppings) —
+    neither has a line of its own, so itemized checkouts silently
+    undercharged by that delta (the merchant ate the tax). Close the gap
+    with one explicit "Tax & extras" line so the customer pays exactly the
+    total the order was confirmed (and recorded in phone_orders) at."""
     items, ok = [], True
+    items_cents = 0
     for i in order.get("items", []):
         price = i.get("unit_price", i.get("price"))
         if price is None:
@@ -280,15 +288,28 @@ def _stripe_line_items(order: dict[str, Any], currency: str) -> list[dict]:
         name = i.get("name", "Item")
         if i.get("size"):
             name += f" ({i['size']})"
+        qty = int(i.get("quantity", 1) or 1)
+        unit_cents = int(round(float(price) * 100))
+        items_cents += unit_cents * qty
         items.append({
-            "quantity": int(i.get("quantity", 1) or 1),
+            "quantity": qty,
             "price_data": {
                 "currency": currency,
-                "unit_amount": int(round(float(price) * 100)),
+                "unit_amount": unit_cents,
                 "product_data": {"name": name},
             },
         })
     if ok and items:
+        delta = _order_amount_cents(order) - items_cents
+        if delta > 0:
+            items.append({
+                "quantity": 1,
+                "price_data": {
+                    "currency": currency,
+                    "unit_amount": delta,
+                    "product_data": {"name": "Tax & extras"},
+                },
+            })
         return items
     return [{
         "quantity": 1,
