@@ -44,6 +44,12 @@ PHONE_ONBOARDING = os.getenv("STRIPE_PHONE_ONBOARDING", "0") == "1"
 CONNECT_RETURN_URL = os.getenv("CONNECT_RETURN_URL", "https://meridian.tips/canada/portal?payments=connected")
 CONNECT_REFRESH_URL = os.getenv("CONNECT_REFRESH_URL", "https://meridian.tips/canada/portal?payments=retry")
 CONNECT_COUNTRY = os.getenv("CONNECT_DEFAULT_COUNTRY", "CA")
+# Platform publishable key for the embedded Connect.js flow. Prefer the phone-
+# order account's pk when the split is on; fall back to the platform pk.
+CONNECT_PUBLISHABLE_KEY = (
+    os.getenv("STRIPE_PHONE_PUBLISHABLE_KEY")
+    or os.getenv("STRIPE_PUBLISHABLE_KEY", "")
+)
 
 # phone_agent modules (pay_on_phone.mark_order_paid) live in a sibling dir.
 _PHONE_AGENT_DIR = str(Path(__file__).resolve().parents[3] / "services" / "phone_agent")
@@ -231,43 +237,54 @@ async def _reverse_paid_order(
                     logger.error("refund: voice_ledger reversal failed for %s: %s", merchant_id, e)
 
 
+async def _ensure_connected_account(stripe, key: str, merchant_id: str) -> str:
+    """The merchant's Stripe connected account id, creating it once if needed.
+
+    The merchant does NOT need their own Stripe account — this creates an
+    Express connected account FOR them under the phone-order platform, with
+    daily payouts to their bank. Stripe collects the (legally required) KYC +
+    bank details during onboarding; we never see raw bank numbers."""
+    db = get_db()
+    rows = await db.select("phone_agent_config",
+                           filters={"merchant_id": f"eq.{merchant_id}"}, limit=1)
+    row = rows[0] if rows else {}
+    acct = (row.get("stripe_account_id") or "").strip()
+    if acct:
+        return acct
+    try:
+        # api_key passed per request as well as globally: an await between
+        # these two calls can let another task reassign the SDK global.
+        account = stripe.Account.create(
+            api_key=key,
+            type="express",
+            country=CONNECT_COUNTRY,
+            email=(row.get("merchant_email") or None),
+            capabilities={"card_payments": {"requested": True}, "transfers": {"requested": True}},
+            business_profile={"name": row.get("business_name") or None},
+            # Pay the merchant out DAILY — after we auto-take the service fee
+            # (application_fee on each destination charge), Stripe settles the
+            # remainder to them on a daily schedule.
+            settings={"payouts": {"schedule": {"interval": "daily"}}},
+            metadata={"merchant_id": merchant_id},
+        )
+    except Exception as e:  # noqa: BLE001
+        logger.error("Stripe account create failed for %s: %s", merchant_id, e)
+        raise HTTPException(status_code=502, detail="Could not create Stripe account") from e
+    acct = account["id"]
+    await _set_config(db, merchant_id, {"stripe_account_id": acct})
+    return acct
+
+
 @router.post("/onboard/{merchant_id}")
 async def onboard(merchant_id: str, principal=Depends(require_service_auth)):
     """Create the merchant's Stripe connected account (once) and return a hosted
-    onboarding link. Called from the onboarding wizard's Payments step."""
+    onboarding link (the redirect fallback to the embedded flow below)."""
     await enforce_service_member(principal, merchant_id)
     key = _onboarding_key()
     if not key:
         raise HTTPException(status_code=503, detail="Stripe not configured")
     stripe = _stripe(key)
-    db = get_db()
-    rows = await db.select("phone_agent_config", filters={"merchant_id": f"eq.{merchant_id}"}, limit=1)
-    row = rows[0] if rows else {}
-    acct = (row.get("stripe_account_id") or "").strip()
-
-    if not acct:
-        try:
-            # api_key passed per request as well as globally: an await between
-            # these two calls can let another task reassign the SDK global.
-            account = stripe.Account.create(
-                api_key=key,
-                type="express",
-                country=CONNECT_COUNTRY,
-                email=(row.get("merchant_email") or None),
-                capabilities={"card_payments": {"requested": True}, "transfers": {"requested": True}},
-                business_profile={"name": row.get("business_name") or None},
-                # Pay the merchant out DAILY — after we auto-take the service fee
-                # (application_fee on each destination charge), Stripe settles the
-                # remainder to them on a daily schedule.
-                settings={"payouts": {"schedule": {"interval": "daily"}}},
-                metadata={"merchant_id": merchant_id},
-            )
-        except Exception as e:  # noqa: BLE001
-            logger.error("Stripe account create failed for %s: %s", merchant_id, e)
-            raise HTTPException(status_code=502, detail="Could not create Stripe account") from e
-        acct = account["id"]
-        await _set_config(db, merchant_id, {"stripe_account_id": acct})
-
+    acct = await _ensure_connected_account(stripe, key, merchant_id)
     link = stripe.AccountLink.create(
         api_key=key,
         account=acct,
@@ -276,6 +293,39 @@ async def onboard(merchant_id: str, principal=Depends(require_service_auth)):
         type="account_onboarding",
     )
     return {"account_id": acct, "onboarding_url": link["url"]}
+
+
+@router.post("/account-session/{merchant_id}")
+async def account_session(merchant_id: str, principal=Depends(require_service_auth)):
+    """Embedded onboarding: create (once) the merchant's connected account and
+    an AccountSession with the account_onboarding component, so Stripe's
+    embedded form renders INSIDE the Meridian portal — the merchant never
+    leaves meridian.tips and never signs into Stripe. Returns the short-lived
+    client_secret + the platform publishable key the frontend Connect.js needs.
+
+    The client polls GET /status/{merchant_id} after onExit to confirm
+    charges_enabled; the account.updated webhook also syncs it server-side."""
+    await enforce_service_member(principal, merchant_id)
+    key = _onboarding_key()
+    pub = CONNECT_PUBLISHABLE_KEY
+    if not key or not pub:
+        raise HTTPException(status_code=503,
+                            detail="Stripe embedded onboarding not configured")
+    stripe = _stripe(key)
+    acct = await _ensure_connected_account(stripe, key, merchant_id)
+    try:
+        session = stripe.AccountSession.create(
+            api_key=key,
+            account=acct,
+            components={"account_onboarding": {"enabled": True}},
+        )
+    except Exception as e:  # noqa: BLE001
+        logger.error("AccountSession create failed for %s: %s", merchant_id, e)
+        raise HTTPException(status_code=502,
+                            detail="Could not start onboarding") from e
+    return {"account_id": acct,
+            "client_secret": session["client_secret"],
+            "publishable_key": pub}
 
 
 @router.get("/status/{merchant_id}")
