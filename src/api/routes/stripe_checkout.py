@@ -6,6 +6,7 @@ Endpoints:
   POST /api/stripe/webhook          → Handle Stripe webhook events
 """
 
+import json
 import logging
 import os
 import secrets
@@ -79,12 +80,16 @@ async def stripe_webhook(request: Request):
         logger.error("STRIPE_WEBHOOK_SECRET not set — refusing Stripe webhook (fail closed)")
         raise HTTPException(status_code=503, detail="Webhook not configured")
     try:
-        event = stripe.Webhook.construct_event(
+        stripe.Webhook.construct_event(
             payload, sig_header, STRIPE_WEBHOOK_SECRET
-        )
+        )  # verify signature (raises if bad)
     except Exception as e:
         logger.error(f"Webhook signature verification failed: {e}")
         raise HTTPException(status_code=400, detail="Invalid signature")
+    # Read the VERIFIED payload as plain dicts — this SDK's StripeObject is not
+    # dict-subclassed, so event.get(...) raises AttributeError and 500s the
+    # webhook. Bytes are signature-verified above, so json.loads is safe.
+    event = json.loads(payload)
 
     event_id = event.get("id", "")
     event_type = event.get("type", "")
