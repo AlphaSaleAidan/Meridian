@@ -62,6 +62,7 @@ def test_alert_sources_reference_a_real_protocol():
     referenced = []
     for src in [
         _ROOT / "src" / "services" / "billing_monitor.py",
+        _ROOT / "src" / "services" / "kitchen_monitor.py",
         _ROOT / "services" / "phone_agent" / "pay_on_phone.py",
         _ROOT / "src" / "email" / "templates" / "edge_status.py",
     ]:
