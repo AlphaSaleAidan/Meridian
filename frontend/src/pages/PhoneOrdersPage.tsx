@@ -20,7 +20,7 @@ import { phoneService, type PhoneConfig } from '@/lib/phone-service'
 import { getAuthHeaders } from '@/lib/supabase'
 import {
   LiveCallsBanner, RecordingPlayback, SettingsTab, ForwardingWizard,
-  CallRecommendationsCard, VoiceWalletCard,
+  CallRecommendationsCard, VoiceWalletCard, DemoCallCard,
 } from '@/components/phone'
 
 /* ---------- Config maps ---------- */
@@ -731,6 +731,10 @@ export default function PhoneOrdersPage() {
           )}
         </div>
       </div>
+      {/* Public demo only (/demo/phone, /canada/demo/phone) — a prospect can
+          call the real agent from the page they're being shown. Never rendered
+          for a live merchant, whose own number is the one that matters. */}
+      {isDemo && <DemoCallCard />}
       <div className="period-toggle">
         {([
           { key: 'overview' as const, label: 'Overview' },

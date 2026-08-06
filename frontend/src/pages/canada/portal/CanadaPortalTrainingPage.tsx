@@ -19,7 +19,7 @@ export default function CanadaPortalTrainingPage() {
         </div>
       </header>
 
-      <DemoCallCard accent="#17C5B0" />
+      <DemoCallCard accent="#17C5B0" variant="portal" />
 
       <TrainingCourse accent="#17C5B0" />
 
