@@ -35,6 +35,12 @@ def _voice(voice_id: str, *, stability: float = 0.4, style: float = 0.45) -> dic
         "similarityBoost": 0.75,
         "style": style,
         "useSpeakerBoost": True,
+        # ElevenLabs takes are nondeterministic and Vapi caches TTS audio per
+        # utterance: one flat take of a persona's greeting gets replayed on
+        # every later call (0 ttsCharacters billed = cache hit), which reads
+        # as "the agent went robotic". Personas exist to sound alive — always
+        # synthesize fresh.
+        "cachingEnabled": False,
     }
 
 

@@ -53,6 +53,9 @@ def test_registry_shape_and_cast():
         assert p["voice"]["voiceId"], pid
         assert "{business}" in p["greeting"], pid
         assert p["block"].strip(), pid
+        # regression: a cached flat TTS take of the greeting replays forever
+        # and makes the persona sound robotic — personas always synth fresh
+        assert p["voice"]["cachingEnabled"] is False, pid
 
 
 def test_persona_block_carries_shared_product_rules():
