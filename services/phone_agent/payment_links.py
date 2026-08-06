@@ -7,6 +7,7 @@ All other POS systems get a Meridian-hosted checkout page.
 """
 import logging
 import os
+import time
 import uuid
 from typing import Any
 
@@ -31,6 +32,19 @@ MERIDIAN_CHECKOUT_BASE = os.getenv("MERIDIAN_CHECKOUT_URL", "https://pay.meridia
 # validated in Stripe test mode and turned on.
 UNIFIED_PAYMENTS_ENABLED = os.getenv("UNIFIED_PAYMENTS_ENABLED", "0") == "1"
 STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
+# PHONE-ORDER ACCOUNT SPLIT: order checkouts created by this module can run on a
+# Stripe account of their own, separate from the platform account that bills
+# subscriptions. Set STRIPE_PHONE_SECRET_KEY to activate; unset → every path
+# below uses STRIPE_SECRET_KEY exactly as before.
+#
+# Connected accounts belong to the platform that created them, so a
+# stripe_account_id minted under the OLD key is NOT a valid transfer destination
+# under this one (Stripe 403s). _connect_destination() checks membership before
+# routing a destination charge and degrades to the platform-direct charge the
+# unboarded/demo merchants already use, so no order is ever stranded by the split.
+STRIPE_PHONE_SECRET_KEY = os.getenv("STRIPE_PHONE_SECRET_KEY", "")
+# How long a connected-account membership answer is trusted, in seconds.
+CONNECT_MEMBERSHIP_TTL_S = int(os.getenv("STRIPE_PHONE_ACCOUNT_CACHE_TTL", "600") or 600)
 # Meridian's platform fee in basis points (100 = 1%). Default 0 = no fee.
 PLATFORM_FEE_BPS = int(os.getenv("MERIDIAN_PLATFORM_FEE_BPS", "0") or 0)
 # Flat per-order service fee in cents (e.g. the premium voice-agent fee). Taken
@@ -249,11 +263,63 @@ SUCCESS_URL = os.getenv(
 CANCEL_URL = os.getenv("CHECKOUT_CANCEL_URL", f"{PUBLIC_PAY_BASE}/pay/cancel")
 
 
+def _active_stripe_key() -> str:
+    """Key this module charges on: the phone-order account when one is
+    configured, otherwise the platform key (historical behavior)."""
+    return STRIPE_PHONE_SECRET_KEY or STRIPE_SECRET_KEY
+
+
 def _stripe():
     """Lazy stripe client so the module imports with no SDK/key present."""
     import stripe
-    stripe.api_key = STRIPE_SECRET_KEY
+    stripe.api_key = _active_stripe_key()
     return stripe
+
+
+# acct id -> (monotonic timestamp, retrievable under the active key). Positive
+# and definitive-negative answers are cached; transient failures are not, so a
+# Stripe outage can't pin a merchant to platform-direct charges for the full TTL.
+_connect_membership: dict[str, tuple[float, bool]] = {}
+
+
+def _connect_account_owned(acct: str) -> bool:
+    """True when `acct` is retrievable under the active key — i.e. it was created
+    by the platform we're charging on. Always True when no phone key is set (one
+    platform, nothing to check). A failed retrieve returns False rather than
+    raising: the caller degrades to a direct charge instead of failing payment."""
+    if not acct:
+        return False
+    if not STRIPE_PHONE_SECRET_KEY:
+        return True
+    hit = _connect_membership.get(acct)
+    if hit and (time.monotonic() - hit[0]) < CONNECT_MEMBERSHIP_TTL_S:
+        return hit[1]
+    try:
+        _stripe().Account.retrieve(acct, api_key=_active_stripe_key())
+    except Exception as e:  # noqa: BLE001 — never let this fail a payment
+        status = getattr(e, "http_status", None)
+        definitive = status in (400, 401, 403, 404)
+        logger.warning(
+            "Stripe connected account %s not usable under the phone-order key "
+            "(%s%s) — charging on the phone platform account directly",
+            acct, type(e).__name__, f" {status}" if status else "")
+        if definitive:
+            _connect_membership[acct] = (time.monotonic(), False)
+        return False
+    _connect_membership[acct] = (time.monotonic(), True)
+    return True
+
+
+def _connect_destination(merchant_config) -> str:
+    """The connected account to route a destination charge to, or "" for a
+    direct charge on our own platform account (unboarded merchants, the demo,
+    and — under the phone-order key — merchants whose Connect account belongs to
+    the old platform)."""
+    acct = getattr(merchant_config, "stripe_account_id", "")
+    charges_ok = getattr(merchant_config, "stripe_charges_enabled", False)
+    if not (acct and charges_ok):
+        return ""
+    return acct if _connect_account_owned(acct) else ""
 
 
 def _order_amount_cents(order: dict[str, Any]) -> int:
@@ -343,11 +409,9 @@ async def create_checkout(order: dict[str, Any], merchant_config, pos_order_id: 
                 "falling back to default checkout", order.get("merchant_id", ""))
         except Exception as e:  # noqa: BLE001 — never strand the order; fall through
             logger.error("Clover HCO link failed, falling back to default checkout: %s", e)
-    if UNIFIED_PAYMENTS_ENABLED and STRIPE_SECRET_KEY:
+    if UNIFIED_PAYMENTS_ENABLED and _active_stripe_key():
         try:
-            acct = getattr(merchant_config, "stripe_account_id", "")
-            charges_ok = getattr(merchant_config, "stripe_charges_enabled", False)
-            connect_account = acct if (acct and charges_ok) else ""
+            connect_account = _connect_destination(merchant_config)
             return await _stripe_checkout(order, merchant_config, pos_order_id, connect_account)
         except Exception as e:  # noqa: BLE001 — never strand the order; fall back
             logger.error("Stripe checkout failed, falling back to POS link: %s", e)
@@ -372,11 +436,9 @@ async def create_website_checkout(
     through Stripe before the kitchen sees them, so this raises instead of
     degrading. The session carries website_order_id in metadata — the Connect
     webhook uses it to mark the order paid and release the kitchen ticket."""
-    if not (UNIFIED_PAYMENTS_ENABLED and STRIPE_SECRET_KEY):
+    if not (UNIFIED_PAYMENTS_ENABLED and _active_stripe_key()):
         raise RuntimeError("stripe_not_configured")
-    acct = getattr(merchant_config, "stripe_account_id", "")
-    charges_ok = getattr(merchant_config, "stripe_charges_enabled", False)
-    connect_account = acct if (acct and charges_ok) else ""
+    connect_account = _connect_destination(merchant_config)
     return await _stripe_checkout(
         order, merchant_config, "", connect_account,
         extra_metadata={"website_order_id": website_order_id},
@@ -517,7 +579,11 @@ async def _stripe_checkout(
             pi_data["application_fee_amount"] = fee
         kwargs["payment_intent_data"] = pi_data
 
-    session = stripe.checkout.Session.create(**kwargs)
+    # Key passed per request, not just via the module-global stripe.api_key: the
+    # stripe SDK's global is shared with the platform-billing call sites, and an
+    # await between _stripe() and here (the currency lookup) lets another task
+    # reassign it out from under us. Explicit wins.
+    session = stripe.checkout.Session.create(api_key=_active_stripe_key(), **kwargs)
     # Stripe SDK objects are NOT dicts — use subscript access, not .get()
     # (.get raises AttributeError on a StripeObject).
     # Branded short link so the texted URL is "<pay base>/p/<code>" instead of
