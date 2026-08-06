@@ -189,7 +189,8 @@ async def _send_digest(mismatches: list[dict]) -> None:
             "Meridian Billing Monitor",
             f"{len(mismatches)} underpaid phone order(s) — {total_short}¢ total shortfall",
             "A payment-link builder is billing below confirmed order totals "
-            "(tax/modifier drift). Findings:\n" + "\n".join(lines),
+            "(tax/modifier drift). RUN: docs/runbooks/incidents/pay-mismatch.md "
+            "(SEV-1). Findings:\n" + "\n".join(lines),
             severity="high")
     except Exception as e:  # noqa: BLE001 — alerting never breaks the monitor
         logger.error("billing monitor digest email failed: %s", e)

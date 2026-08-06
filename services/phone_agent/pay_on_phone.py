@@ -752,7 +752,8 @@ def _reconcile_paid_amount(row: dict, paid_amount_cents: int,
             f"{merchant_id or row.get('merchant_id')} settled at {paid_amount_cents}¢ "
             f"but was confirmed at {expected}¢ — a payment-link builder is billing "
             f"below the order total (tax/modifier drift). Merchant is being "
-            f"shorted; fix the builder before more orders pay.")
+            f"shorted; fix the builder before more orders pay. "
+            f"RUN: docs/runbooks/incidents/pay-mismatch.md (SEV-1).")
         logger.critical("UNDERPAYMENT DETECTED: %s", detail)
 
         async def _alert():
