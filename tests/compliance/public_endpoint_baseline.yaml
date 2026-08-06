@@ -6,6 +6,7 @@
 # Do NOT bulk-regenerate to make CI pass.
 #
 # Categories: health | webhook | oauth | payment-page | public-form |
+#             public-catalog (static/priced catalog, no tenant data) |
 #             inline-auth (auth enforced in-handler — cite it) | unreviewed
 
 health:
@@ -62,6 +63,21 @@ public-form:
   # (status/pos_status) keyed by an unguessable order UUID — no PII, no items.
   - "GET /api/website/order/{order_id}/status"
 
+public-catalog:
+  # Read-only catalogs of already-public information. No tenant data, no
+  # enumeration surface, no writes — the values are the same for every caller.
+  #
+  # Credit-pack pricing. Mirrors the pricing the marketing site and the
+  # frontend's CREDIT_PACKS table already publish (src/credits/purchase.py:47
+  # says so explicitly); purchase itself is require_jwt (credits.py:214).
+  - "GET /api/credits/packs"
+  # Live pricing dials read from env (service fee, per-minute overage, included
+  # minutes, max call length). Documented public-by-design in the handler
+  # (src/api/routes/phone_dashboard.py:158-166) so changing a Railway variable
+  # updates every displayed price without a redeploy. Merchant-specific
+  # overrides are NOT here — they come from the authenticated config route.
+  - "GET /api/phone/fees"
+
 webhook:
   # Provider-called endpoint; MUST verify a signature/shared secret in the handler (CC6.6 spot tests cover the critical ones).
   - "POST /api/billing/webhook"
@@ -91,13 +107,32 @@ webhook:
   - "POST /twilio/voice"
   - "POST /webhooks/postal"
 
+inline-auth:
+  # Auth enforced inside the handler body, so the dependency scan can't see it.
+  # Each entry MUST cite the check. Both of these authenticate a headless device
+  # that has no Supabase session, using a short-lived HMAC credential that fails
+  # closed when its signing secret is unset.
+  #
+  # LAN connector exchanges a wizard-minted pairing code for a device token. The
+  # code IS the credential: verify_pairing_code() at
+  # src/api/routes/camera_connect.py:211 → 401 on invalid/expired
+  # (src/camera/streaming/tokens.py:45 — HMAC-SHA256, compare_digest, 15-min exp,
+  # returns None when GATEWAY_JWT_SECRET is unset). Minting the code itself is
+  # require_org_access (camera_connect.py:164).
+  - "POST /api/connector/pair"
+  # Browser/phone camera frame ingest. Per-camera HMAC frame token bound to
+  # (camera_id, org_id): verify_frame_token() at
+  # src/api/routes/browser_camera.py:50 → 401 (src/camera/frame_ingest.py:73 —
+  # compare_digest, TTL-checked, False when the secret is unset). Tokens are
+  # minted by the authenticated POST /api/vision/camera/register-browser.
+  # Covered by tests/api/test_browser_camera_frame.py.
+  - "POST /api/vision/camera/frame"
+
 unreviewed:
   # Lacked a recognized auth dependency at baseline time. Each needs review: add auth, document an inline check, or justify as public. Shrinking this list raises CC6.6 readiness; growing it fails CI.
-  - "GET /api/content/director/styles"
-  - "GET /api/content/models"
-  - "GET /api/content/video/debug/{job_id}"
-  - "GET /api/content/video/status/{job_id}"
-  - "GET /api/credits/packs"
-  - "GET /api/phone/fees"
-  - "POST /api/connector/pair"
-  - "POST /api/vision/camera/frame"
+  #
+  # BURNED DOWN 2026-08-06 (fix/route-auth-burndown). The four /api/content/*
+  # GETs gained auth and left this file; the rest moved to public-catalog /
+  # inline-auth above. The ratchet cap is now 0 — nothing may be parked here
+  # again (tests/compliance/test_cc6_6_route_auth_matrix.py).
+  []
