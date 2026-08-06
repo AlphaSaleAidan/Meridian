@@ -146,6 +146,16 @@ async def _notify(transition: str, state: SurfaceState, now: datetime) -> None:
             )
             logger.error("[edge-watch] DOWN %s (%s) — alert sent to %s",
                          state.url, state.last_detail, to)
+            # DEFCON 2 — a public surface is down: page all responders.
+            try:
+                from .defcon_alert import notify_defcon
+                await notify_defcon(
+                    2, f"Surface down: {state.url}",
+                    state.last_detail or "no response",
+                    protocol="server-down.md",
+                    event_key=f"surface-down:{state.url}")
+            except Exception as exc:  # noqa: BLE001
+                logger.error("[edge-watch] DEFCON page failed: %s", exc)
         else:
             await send_edge_recovered_alert(
                 to=to,

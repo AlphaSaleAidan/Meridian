@@ -767,6 +767,14 @@ def _reconcile_paid_amount(row: dict, paid_amount_cents: int,
                     detail, severity="high")
             except Exception as e:  # noqa: BLE001 — alerting never breaks payment
                 logger.error("underpayment alert email failed: %s", e)
+            # DEFCON 1 — a live order settled short: page every responder.
+            try:
+                from src.services.defcon_alert import notify_defcon
+                await notify_defcon(
+                    1, "Live phone order settled below confirmed total",
+                    detail, protocol="pay-mismatch.md", event_key="underpayment")
+            except Exception as e:  # noqa: BLE001
+                logger.error("underpayment DEFCON page failed: %s", e)
 
         import asyncio
         asyncio.ensure_future(_alert())

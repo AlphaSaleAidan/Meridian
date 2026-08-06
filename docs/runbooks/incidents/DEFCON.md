@@ -42,6 +42,18 @@ GAPS**, and closing them is the standing backlog this document generates.
    regression test, a monitor, or an invariant. DEFCON-1/2 postmortems go to
    memory within 24h.
 
+## The pager — who gets woken up
+
+Any detector that finds a DEFCON-1 or DEFCON-2 condition routes through
+`src/services/defcon_alert.py::notify_defcon(level, event, detail, protocol)`,
+which pages **every responder at once** — currently Aidan and Nathan
+(`MERIDIAN_DEFCON_RESPONDERS`, default both) — with the level, what happened,
+and the protocol to open. DEFCON-1 can also fire SMS (`MERIDIAN_DEFCON_SMS`).
+Wired sources today: billing monitor + settlement check (DEFCON 1), edge
+watchdog DOWN (DEFCON 2). It pages only at level ≤ 2 (noise never trains people
+to ignore it), dedupes per event within a cooldown, and is fail-quiet — paging
+never blocks the detector. New detectors page by calling `notify_defcon`.
+
 ## Standing defenses (already automated — the green baseline)
 
 - Edge watchdog (portals, from Railway) — server-down detection.
