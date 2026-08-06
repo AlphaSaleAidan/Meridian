@@ -212,7 +212,7 @@ On any confirmed PII/card exposure (DEFCON 1): **start the clock immediately.**
 
 | Event | DEFCON | Detection | Immediate mitigation | Prevention |
 |---|---|---|---|---|
-| Paid but NO kitchen ticket (customer charged, no food) | 1 | GAP: no paid-vs-pushed alert | manual re-push; refund if unmade | **paid-without-push monitor — top GAP** |
+| Paid but NO kitchen ticket (customer charged, no food) | 1 | kitchen monitor ✅ (paid-vs-pushed sweep, DEFCON-1 page) | manual re-push; refund if unmade | kitchen monitor ✅ |
 | Kitchen ticket wrong items/qty/price | 1 | GAP | merchant calls customer; correct | POS-payload parity test — **GAP** |
 | Double kitchen ticket | 3 | fixed (CAS claim) | void duplicate | claim-then-fanout ✅ |
 | POS OAuth token expired/revoked (silent) | 2 | needs_reconnect banner | reconnect OAuth | token-health poll — partial |
@@ -230,7 +230,11 @@ On any confirmed PII/card exposure (DEFCON 1): **start the clock immediately.**
 | Lightspeed/other rail assumed live but inert | 4 | known (no keys) | don't route to it | capability flag ✅ |
 
 ### Detection gaps (build these)
-- **Paid-without-kitchen-push monitor** (the "charged, no food" nightmare) — **highest POS priority**; alert if a `paid` order has no `pos_push_status=ok` within N minutes.
+- ~~**Paid-without-kitchen-push monitor**~~ — **BUILT** (`src/services/kitchen_monitor.py`):
+  sweeps paid `phone_orders` every 10 min and pages DEFCON 1 when neither the POS
+  push (`pos_success` / `pos_delivery_status` / `fulfillment_*`) nor the merchant
+  SMS fallback (`merchant_notify_status`) delivered a ticket within the grace
+  period. Detection only — re-push stays manual so no order can be double-ticketed.
 - **POS-payload parity test** (items/qty/price/modifiers/tax Meridian→POS).
 - **Menu-sync** + **location-id assertion** + **POS token-health** poll.
 
@@ -279,7 +283,9 @@ them down.
 The high-severity + no-detection intersections — where we'd learn from a victim,
 not a monitor. Build order:
 
-1. **Paid-without-kitchen-push monitor** (DEFCON 1, POS) — charged, no food, merchant blind.
+1. ~~**Paid-without-kitchen-push monitor**~~ (DEFCON 1, POS) — charged, no food, merchant
+   blind. **CLOSED** — `src/services/kitchen_monitor.py`, on by default
+   (`MERIDIAN_KITCHEN_MONITOR=0` disables).
 2. **Overcharge detection** (DEFCON 1, payments) — invariant flags under only; legal exposure.
 3. **Cert + domain expiry monitors** (DEFCON 1–2, infra) — silent until total outage.
 4. **Secret-scan CI + mgmt-token/ENCRYPTION_KEY vault** (DEFCON 1, security).

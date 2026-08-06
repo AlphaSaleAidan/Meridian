@@ -261,8 +261,22 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Billing monitor failed to start: {e}")
 
+    # Start kitchen monitor (paid orders whose kitchen ticket never posted —
+    # the "charged, no food" watch; detection + DEFCON page only, never re-push)
+    _kitchen_monitor_started = False
+    try:
+        from ..services.kitchen_monitor import start_kitchen_monitor
+        _kitchen_monitor_started = start_kitchen_monitor()
+        if _kitchen_monitor_started:
+            logger.info("Kitchen monitor started")
+    except Exception as e:
+        logger.warning(f"Kitchen monitor failed to start: {e}")
+
     yield
 
+    if _kitchen_monitor_started:
+        from ..services.kitchen_monitor import stop_kitchen_monitor
+        stop_kitchen_monitor()
     if _billing_monitor_started:
         from ..services.billing_monitor import stop_billing_monitor
         stop_billing_monitor()
