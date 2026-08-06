@@ -12,6 +12,7 @@ services:
       # Override the local profile URLs to use host.docker.internal 
       # so the container can reach the Supabase services running on the Mac host
       - SPRING_R2DBC_URL=r2dbc:postgresql://host.docker.internal:54322/postgres
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://host.docker.internal:54322/postgres
       - SUPABASE_URL=http://host.docker.internal:54321
     extra_hosts:
       # This ensures host.docker.internal resolves correctly on Linux/Mac

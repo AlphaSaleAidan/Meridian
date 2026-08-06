@@ -8,6 +8,12 @@ spring:
       initial-size: 5
       max-size: 20
 
+  # JDBC DataSource used only by spring-session-jdbc (HTTP session persistence).
+  datasource:
+    url: ${SUPABASE_DB_URL}
+    username: ${SUPABASE_DB_USER}
+    password: ${SUPABASE_DB_PASSWORD}
+
 supabase:
   url: ${SUPABASE_URL}
   key: ${SUPABASE_KEY}

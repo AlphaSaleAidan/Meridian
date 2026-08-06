@@ -8,6 +8,13 @@ import kotlinx.coroutines.asContextElement
  *
  * Provides thread-local storage for request identity and coroutine context propagation
  * across suspension points via [asCoroutineElement].
+ *
+ * WARNING: a plain [get]/[require] inside a suspend call chain is only safe BEFORE the first
+ * suspension point — afterwards the coroutine resumes on another thread and reads null.
+ * Propagation across suspension requires explicitly entering the coroutine context with
+ * `withContext(RequestContextHolder.asCoroutineElement()) { ... }`; nothing does that
+ * automatically. Suspend controllers should prefer a `RequestContext` handler parameter
+ * (see [RequestContextArgumentResolver]) over this holder.
  */
 object RequestContextHolder {
     private val threadLocalContext = ThreadLocal<RequestContext?>()

@@ -1,26 +1,29 @@
-# Note: DatabaseClient / R2DBC connection parameters are configured per environment profile
-# (application-local.yml, application-staging.yml, application-prod.yml). If stricter connection
-# or connection pool controls are required in the future, DatabaseClient can be programmatically
-# configured via a @Configuration bean in code.
+# Note: R2DBC (DatabaseClient) is the application's data-access path. A JDBC DataSource is
+# also configured per environment profile because spring-session-jdbc persists HTTP sessions
+# over JDBC — without it Boot silently falls back to in-container (Tomcat memory) sessions.
+# Connection parameters for both live in application-local.yml / application-staging.yml /
+# application-prod.yml.
 spring:
   application:
     name: meridian-backend
-
-security:
-  csrf:
-    enabled: true
 
   threads:
     virtual:
       enabled: true
 
   session:
-    store-type: jdbc
     jdbc:
-      initialize-schema: always
+      # "embedded" = Boot does NOT create the SPRING_SESSION tables on Postgres.
+      # Local: scripts/sql/init-local-db.sql creates them. Staging/prod: apply the same
+      # DDL as a Supabase migration before cutover.
+      initialize-schema: embedded
 
   jackson:
     default-property-inclusion: non_null
+
+security:
+  csrf:
+    enabled: true
 
 server:
   port: ${PORT:8080}
