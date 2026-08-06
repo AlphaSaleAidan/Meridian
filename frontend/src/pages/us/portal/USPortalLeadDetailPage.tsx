@@ -14,12 +14,11 @@ import QRCode from 'qrcode'
 import POSSystemPicker from '@/components/POSSystemPicker'
 import { type Deal, type DealStage } from '@/lib/canada-sales-demo-data'
 import { usLeadsService } from '@/lib/us-leads-service'
-import { getPlan, closestMonthlyPlan, PLAN_TIERS, REP_PRICE_HEADROOM, type PlanTier } from '@/lib/proposal-plans'
+import { getPlan, closestMonthlyPlan, PLAN_TIERS, REP_PRICE_HEADROOM, WEBSITE_MODULES, type PlanTier } from '@/lib/proposal-plans'
 
-// Website Buildout setup service — flat US$500; toggling it is what sets the
-// setup fee. Creating the customer fires the 48-hour build contest on
-// Meridian Foundry.
-const WEBSITE_ADDON_USD = 500
+// Website Buildout is sold as modular line items (WEBSITE_MODULES) — the
+// one-time modules sum into the setup fee. Creating the customer fires the
+// 48-hour build contest on Meridian Foundry.
 const FOUNDRY_ORDER_URL = 'https://foundry.meridian.tips/agency/api/sites/order'
 const FOUNDRY_JOB_BASE = 'https://foundry.meridian.tips/agency/jobs'
 import { getPosSystem, validateCredentials, serializeCredentials } from '@/lib/pos-credentials'
@@ -131,7 +130,17 @@ export default function USPortalLeadDetailPage() {
   const [websiteBrand, setWebsiteBrand] = useState('')
   const [websiteContent, setWebsiteContent] = useState<'ready' | 'partial' | 'none'>('partial')
   const [websiteContestUrl, setWebsiteContestUrl] = useState('')
-  const setupFee = website ? String(WEBSITE_ADDON_USD) : '0'
+  // Buildout modules — all on by default (the full package); unchecking with
+  // the owner makes the total visibly chosen, not quoted.
+  const [websiteModules, setWebsiteModules] = useState<string[]>(WEBSITE_MODULES.map(m => m.id))
+  function toggleModule(id: string) {
+    const m = WEBSITE_MODULES.find(x => x.id === id)
+    if (!m || m.core) return
+    setWebsiteModules(cur => (cur.includes(id) ? cur.filter(x => x !== id) : [...cur, id]))
+  }
+  const websiteOneTime = WEBSITE_MODULES.filter(m => !m.monthly && websiteModules.includes(m.id)).reduce((t, m) => t + m.price, 0)
+  const websiteMonthly = WEBSITE_MODULES.filter(m => m.monthly && websiteModules.includes(m.id)).reduce((t, m) => t + m.price, 0)
+  const setupFee = website ? String(websiteOneTime) : '0'
   const [firstMonthFree, setFirstMonthFree] = useState(false)
 
   // Seed tier + adjustment from a lead's stored monthly value (legacy values
@@ -351,7 +360,7 @@ export default function USPortalLeadDetailPage() {
               currentUrl: rawUrl ? (/^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`) : '',
               goals: websiteGoals.trim(),
               pages: websitePages.split(',').map(x => x.trim()).filter(Boolean).slice(0, 12),
-              brandNotes: [websiteBrand.trim(), `Sold with Meridian ${selectedPlan.label} (US) by rep ${rep?.name || 'unknown'}.`].filter(Boolean).join(' '),
+              brandNotes: [websiteBrand.trim(), `Modules sold: ${WEBSITE_MODULES.filter(m => websiteModules.includes(m.id)).map(m => m.label).join(', ')}.`, `Sold with Meridian ${selectedPlan.label} (US) by rep ${rep?.name || 'unknown'}.`].filter(Boolean).join(' '),
               contentReady: websiteContent,
               repEmail: '',
             }),
@@ -1133,7 +1142,10 @@ export default function USPortalLeadDetailPage() {
                 <p className="text-[10px] text-[#A1A1A8]">Custom site or rebuild, built in 48 hours on the Meridian network</p>
               </div>
               <div className="flex items-center gap-3">
-                <span className="text-sm font-semibold text-[#17C5B0]">${WEBSITE_ADDON_USD}</span>
+                <span className="text-sm font-semibold text-[#17C5B0]">
+                  ${websiteOneTime}
+                  {websiteMonthly > 0 && <span className="text-[#A1A1A8] font-normal"> + ${websiteMonthly}/mo</span>}
+                </span>
                 <div className={`w-9 h-5 rounded-full transition-colors relative cursor-pointer ${website ? 'bg-[#17C5B0]' : 'bg-[#1F1F23]'}`}
                   onClick={() => setWebsite(!website)}
                 >
@@ -1143,6 +1155,35 @@ export default function USPortalLeadDetailPage() {
             </div>
             {website && (
               <div className="px-4 pb-4 pt-3 space-y-3 border-t border-[#1F1F23]">
+                <div className="space-y-1.5">
+                  {WEBSITE_MODULES.map(m => {
+                    const on = websiteModules.includes(m.id)
+                    return (
+                      <label key={m.id}
+                        className={`flex items-center gap-3 px-3 py-2 rounded-lg border cursor-pointer transition-colors ${
+                          on ? 'border-[#17C5B0]/40 bg-[#17C5B0]/5' : 'border-[#1F1F23]'
+                        } ${m.core ? 'cursor-default' : ''}`}>
+                        <input type="checkbox" checked={on} disabled={m.core}
+                          onChange={() => toggleModule(m.id)}
+                          className="accent-[#17C5B0]" />
+                        <span className="flex-1">
+                          <span className="block text-sm text-white">{m.label}{m.core ? ' (included)' : ''}</span>
+                          <span className="block text-[10px] text-[#A1A1A8]">{m.blurb}</span>
+                        </span>
+                        <span className={`text-sm font-semibold ${on ? 'text-[#17C5B0]' : 'text-[#4a5550]'}`}>
+                          ${m.price}{m.monthly ? '/mo' : ''}
+                        </span>
+                      </label>
+                    )
+                  })}
+                  <div className="flex justify-between px-3 pt-1.5 text-sm">
+                    <span className="text-[#A1A1A8]">Buildout total</span>
+                    <span className="text-white font-semibold">
+                      ${websiteOneTime} one-time
+                      {websiteMonthly > 0 && <span className="text-[#A1A1A8] font-normal"> · ${websiteMonthly}/mo ongoing</span>}
+                    </span>
+                  </div>
+                </div>
                 <input type="text" value={websiteCurrentUrl} onChange={e => setWebsiteCurrentUrl(e.target.value)}
                   className={inputClass} placeholder="Current website — leave empty if none" />
                 <div>

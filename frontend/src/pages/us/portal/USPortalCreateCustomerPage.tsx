@@ -8,7 +8,7 @@ import {
 import { useSalesAuth } from '@/lib/sales-auth'
 import POSSystemPicker from '@/components/POSSystemPicker'
 import { supabase, getAuthHeaders } from '@/lib/supabase'
-import { PLAN_TIERS, getPlan, REP_PRICE_HEADROOM, type PlanTier } from '@/lib/proposal-plans'
+import { PLAN_TIERS, getPlan, REP_PRICE_HEADROOM, WEBSITE_MODULES, type PlanTier } from '@/lib/proposal-plans'
 import { downloadProposalPdf, type ProposalInput } from '@/lib/generate-proposal-pdf'
 import { usVerticalsByGroup, findUsVerticalBySlug, US_DECK_BASE_URL, buildPersonalizedUsDeckUrl } from '@/data/usVerticals'
 
@@ -35,10 +35,9 @@ function generateQrSvg(text: string, size: number = 256): string {
 
 const API_URL = import.meta.env.VITE_API_URL || ''
 
-// Site Sprint website add-on — flat US$500 folded into the setup fee the
-// customer pays. The build runs as a 48-hour contest on Meridian Foundry;
-// creating the customer fires the order.
-const WEBSITE_ADDON_USD = 500
+// Website Buildout is sold as modular line items (WEBSITE_MODULES) — the
+// one-time modules sum into the setup fee; the build runs as a 48-hour
+// contest on Meridian Foundry, fired when the customer is created.
 const FOUNDRY_ORDER_URL = 'https://foundry.meridian.tips/agency/api/sites/order'
 const FOUNDRY_JOB_BASE = 'https://foundry.meridian.tips/agency/jobs'
 
@@ -549,11 +548,23 @@ export default function USPortalCreateCustomerPage() {
     setError(null)
   }
 
+  // Website Buildout modules — all on by default (the full package); the rep
+  // unchecks with the owner so the total is visibly chosen, not quoted.
+  const [websiteModules, setWebsiteModules] = useState<string[]>(WEBSITE_MODULES.map(m => m.id))
+  function toggleModule(id: string) {
+    const m = WEBSITE_MODULES.find(x => x.id === id)
+    if (!m || m.core) return
+    setWebsiteModules(cur => (cur.includes(id) ? cur.filter(x => x !== id) : [...cur, id]))
+  }
+  const websiteOneTime = WEBSITE_MODULES.filter(m => !m.monthly && websiteModules.includes(m.id)).reduce((t, m) => t + m.price, 0)
+  const websiteMonthly = WEBSITE_MODULES.filter(m => m.monthly && websiteModules.includes(m.id)).reduce((t, m) => t + m.price, 0)
+
   const selectedPlan = getPlan(form.plan)
   const price = selectedPlan.price + form.priceBump
-  // Setup fee = the sum of toggled setup services (Website Buildout today,
-  // more coming). The manual rep-entered setup fee is retired (Aidan 08-06).
-  const setupFee = form.website ? WEBSITE_ADDON_USD : 0
+  // Setup fee = the sum of toggled setup services (Website Buildout's
+  // one-time modules today, more services coming). Monthly modules bill
+  // recurring and are disclosed separately, never in the one-time fee.
+  const setupFee = form.website ? websiteOneTime : 0
   const dueToday = (form.firstMonthFree ? 0 : price) + setupFee
   const interval = selectedPlan.interval === 'week' ? '/wk' : '/mo'
 
@@ -672,7 +683,7 @@ export default function USPortalCreateCustomerPage() {
           currentUrl: rawUrl ? (/^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`) : '',
           goals: form.websiteGoals.trim(),
           pages: form.websitePages.split(',').map(p => p.trim()).filter(Boolean).slice(0, 12),
-          brandNotes: [form.websiteBrand.trim(), `Sold with Meridian ${selectedPlan.label} (US) by rep ${rep?.name || 'unknown'}.`].filter(Boolean).join(' '),
+          brandNotes: [form.websiteBrand.trim(), `Modules sold: ${WEBSITE_MODULES.filter(m => websiteModules.includes(m.id)).map(m => m.label).join(', ')}.`, `Sold with Meridian ${selectedPlan.label} (US) by rep ${rep?.name || 'unknown'}.`].filter(Boolean).join(' '),
           contentReady: form.websiteContent,
           repEmail: '',
         }),
@@ -723,7 +734,7 @@ export default function USPortalCreateCustomerPage() {
             stage: 'closed_won',
             monthly_value: price,
             commission_rate: rep?.commission_rate ?? 70,
-            notes: (form.notes || `Plan: ${selectedPlan.label} at $${price}${interval}. Setup fee: $${setupFee}. First month free: ${form.firstMonthFree ? 'Yes' : 'No'}`) + (form.website ? ` Website add-on: $${WEBSITE_ADDON_USD} (48h Foundry build, inside setup fee).` : ''),
+            notes: (form.notes || `Plan: ${selectedPlan.label} at $${price}${interval}. Setup fee: $${setupFee}. First month free: ${form.firstMonthFree ? 'Yes' : 'No'}`) + (form.website ? ` Website Buildout: $${websiteOneTime} one-time (${WEBSITE_MODULES.filter(m => websiteModules.includes(m.id)).map(m => m.label).join(', ')})${websiteMonthly > 0 ? ` + $${websiteMonthly}/mo recurring` : ''}.` : ''),
             rep_id: rep?.rep_id || null,
           }).select('id')
           if (leadErr) setCrmRecordError(leadErr.message)
@@ -1123,7 +1134,10 @@ export default function USPortalCreateCustomerPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="text-[13px] font-semibold text-[#17C5B0]">${WEBSITE_ADDON_USD}</span>
+                    <span className="text-[13px] font-semibold text-[#17C5B0]">
+                      ${websiteOneTime}
+                      {websiteMonthly > 0 && <span className="text-[#A1A1A8] font-normal"> + ${websiteMonthly}/mo</span>}
+                    </span>
                     <button
                       onClick={() => update('website', !form.website)}
                       className={`relative w-12 h-6 rounded-full transition-colors duration-200 ${
@@ -1138,6 +1152,35 @@ export default function USPortalCreateCustomerPage() {
                 </div>
                 {form.website && (
                   <div className="px-4 pb-4 pt-3 space-y-3 border-t border-[#1F1F23]">
+                    <div className="space-y-1.5">
+                      {WEBSITE_MODULES.map(m => {
+                        const on = websiteModules.includes(m.id)
+                        return (
+                          <label key={m.id}
+                            className={`flex items-center gap-3 px-3 py-2 rounded-lg border cursor-pointer transition-colors ${
+                              on ? 'border-[#17C5B0]/40 bg-[#17C5B0]/5' : 'border-[#1F1F23]'
+                            } ${m.core ? 'cursor-default' : ''}`}>
+                            <input type="checkbox" checked={on} disabled={m.core}
+                              onChange={() => toggleModule(m.id)}
+                              className="accent-[#17C5B0]" />
+                            <span className="flex-1">
+                              <span className="block text-[13px] text-white">{m.label}{m.core ? ' (included)' : ''}</span>
+                              <span className="block text-[10px] text-[#A1A1A8]">{m.blurb}</span>
+                            </span>
+                            <span className={`text-[13px] font-semibold ${on ? 'text-[#17C5B0]' : 'text-[#4a5550]'}`}>
+                              ${m.price}{m.monthly ? '/mo' : ''}
+                            </span>
+                          </label>
+                        )
+                      })}
+                      <div className="flex justify-between px-3 pt-1.5 text-[13px]">
+                        <span className="text-[#A1A1A8]">Buildout total</span>
+                        <span className="text-white font-semibold">
+                          ${websiteOneTime} one-time
+                          {websiteMonthly > 0 && <span className="text-[#A1A1A8] font-normal"> · ${websiteMonthly}/mo ongoing</span>}
+                        </span>
+                      </div>
+                    </div>
                     <div>
                       <label className="block text-[11px] font-medium text-[#A1A1A8] mb-1.5">Current website (leave empty for a brand-new site)</label>
                       <input type="text" value={form.websiteCurrentUrl}
@@ -1224,8 +1267,11 @@ export default function USPortalCreateCustomerPage() {
               </div>
               {form.website && (
                 <div className="flex justify-between py-2 border-b border-[#1F1F23]">
-                  <span className="text-[#A1A1A8]">Website build <span className="text-[#4a5550]">(48h, in setup fee)</span></span>
-                  <span className="text-white font-medium">${WEBSITE_ADDON_USD}</span>
+                  <span className="text-[#A1A1A8]">Website Buildout <span className="text-[#4a5550]">(modular, in setup fee)</span></span>
+                  <span className="text-white font-medium">
+                    ${websiteOneTime}
+                    {websiteMonthly > 0 && <span className="text-[#A1A1A8] font-normal"> + ${websiteMonthly}/mo</span>}
+                  </span>
                 </div>
               )}
               {form.firstMonthFree && (
@@ -1679,7 +1725,7 @@ export default function USPortalCreateCustomerPage() {
         repPhone={rep?.phone || undefined}
         checkoutUrl={checkoutUrl}
         onDownloadPdf={handleDownloadPdf}
-        websiteAddon={form.website ? WEBSITE_ADDON_USD : 0}
+        websiteAddon={form.website ? websiteOneTime : 0}
         verticalTitle={selectedVertical?.title}
         deckUrl={
           selectedVertical

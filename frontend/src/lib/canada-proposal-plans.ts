@@ -51,6 +51,25 @@ export const PLAN_TIERS: PlanTier[] = US_PLAN_TIERS.map(p => ({
   ),
 }))
 
+// Website Buildout modules in CAD (≈ US × 1.4, kept to clean price points).
+// All one-time modules together = CA$700 (the package).
+const CAD_MODULE_PRICES: Record<string, number> = {
+  core: 350,
+  scroll: 105,
+  anim3d: 175,
+  forms: 70,
+  maint: 55,
+  host: 50,
+}
+
+export type { WebsiteModule } from './proposal-plans'
+import { WEBSITE_MODULES as US_WEBSITE_MODULES } from './proposal-plans'
+
+export const WEBSITE_MODULES = US_WEBSITE_MODULES.map(m => ({
+  ...m,
+  price: CAD_MODULE_PRICES[m.id] ?? Math.round(m.price * CAD_RATE),
+}))
+
 export function getPlan(id: string): PlanTier {
   return PLAN_TIERS.find(p => p.id === id) || PLAN_TIERS[1]
 }

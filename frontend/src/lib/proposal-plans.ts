@@ -97,6 +97,33 @@ export const PLAN_TIERS: PlanTier[] = [
   },
 ]
 
+/**
+ * Website Buildout modules (Aidan 2026-08-06): the buildout is sold as
+ * modular line items the rep toggles with the owner — each priced, summing
+ * to the package total, so the merchant sees exactly what they're buying.
+ * One-time modules bill into the setup fee; monthly ones are recurring and
+ * listed separately. All one-time modules together = $500 (the package).
+ */
+export interface WebsiteModule {
+  id: string
+  label: string
+  blurb: string
+  price: number
+  /** recurring — shown as /mo, never summed into the one-time setup fee */
+  monthly?: boolean
+  /** the core build — always included, can't be unchecked */
+  core?: boolean
+}
+
+export const WEBSITE_MODULES: WebsiteModule[] = [
+  { id: 'core', label: 'Custom build & launch', blurb: 'Full site designed, built, and launched in 48 hours', price: 250, core: true },
+  { id: 'scroll', label: 'Scrolling animation', blurb: 'Scroll-driven motion and reveal effects', price: 75 },
+  { id: 'anim3d', label: '3D product animation', blurb: 'Interactive 3D showcase of their product or space', price: 125 },
+  { id: 'forms', label: 'Booking & quote form wiring', blurb: 'Forms wired to their email and phone', price: 50 },
+  { id: 'maint', label: 'Meridian Maintenance', blurb: 'Content edits, updates, and fixes handled by us', price: 40, monthly: true },
+  { id: 'host', label: 'Server hosting', blurb: 'Fast managed hosting with SSL', price: 35, monthly: true },
+]
+
 export function getPlan(id: string): PlanTier {
   return PLAN_TIERS.find(p => p.id === id) || PLAN_TIERS[1] // default to Premium
 }
