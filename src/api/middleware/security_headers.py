@@ -2,9 +2,13 @@
 Security headers middleware — adds defensive HTTP headers to every response,
 including unhandled 500 errors.
 """
+import logging
+
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
+
+logger = logging.getLogger("meridian.middleware.security_headers")
 
 _SECURITY_HEADERS = {
     "X-Content-Type-Options": "nosniff",
@@ -43,6 +47,11 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         try:
             response = await call_next(request)
         except Exception:
+            # Log with traceback BEFORE swallowing — a silent 500 here made a
+            # real webhook failure undebuggable (no trace anywhere). The client
+            # still gets a generic message; operators get the cause.
+            logger.exception("Unhandled exception in %s %s",
+                             request.method, request.url.path)
             response = JSONResponse(
                 status_code=500,
                 content={"detail": "Internal server error"},
