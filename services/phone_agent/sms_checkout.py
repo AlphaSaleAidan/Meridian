@@ -6,11 +6,26 @@ verified working for CA delivery).
 import logging
 import os
 import re
+import sys
+from pathlib import Path
 from typing import Any
 
 import httpx
 
 logger = logging.getLogger("meridian.phone_agent.sms_checkout")
+
+# Destination-aware from-number lives in src/sms/. Add the project root to
+# sys.path so this sidecar can import it whether running standalone
+# (python main.py) or mounted under the main API app.
+_PROJECT_ROOT = str(Path(__file__).resolve().parents[2])
+if _PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, _PROJECT_ROOT)
+try:
+    from src.sms.from_number import sms_from_number
+except ImportError:  # fail open — keep the pre-existing single-number behavior
+
+    def sms_from_number(destination: str, default: str | None = None) -> str:  # type: ignore[misc]
+        return default if default is not None else os.getenv("TELNYX_PHONE_NUMBER", "")
 
 
 def _telnyx_cfg() -> tuple[str, str, str]:
@@ -58,9 +73,12 @@ async def send_sms(to: str, body: str) -> dict:
 
 
 async def _send_via_telnyx(phone: str, message: str) -> dict:
-    key, frm, profile = _telnyx_cfg()
+    key, default_frm, profile = _telnyx_cfg()
+    frm = sms_from_number(phone, default_frm)
     payload: dict[str, Any] = {"from": frm, "to": phone, "text": message}
-    if profile:
+    # TELNYX_MESSAGING_PROFILE_ID pins the default number's profile; a
+    # country-specific DID lives on its own, so let Telnyx infer it from `from`.
+    if profile and frm == default_frm:
         payload["messaging_profile_id"] = profile
     try:
         async with httpx.AsyncClient(timeout=10) as client:

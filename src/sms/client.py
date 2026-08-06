@@ -4,6 +4,8 @@ import re
 
 import httpx
 
+from .from_number import sms_from_number
+
 logger = logging.getLogger("meridian.sms")
 
 # Telnyx (primary — cheapest, good CA/US coverage)
@@ -26,8 +28,11 @@ def _normalize_phone(phone: str) -> str:
 
 
 async def _send_telnyx(to: str, message: str) -> dict:
-    payload = {"from": TELNYX_FROM, "to": to, "text": message}
-    if TELNYX_PROFILE_ID:
+    frm = sms_from_number(to, TELNYX_FROM)
+    payload = {"from": frm, "to": to, "text": message}
+    # TELNYX_MESSAGING_PROFILE_ID pins the default number's profile; a
+    # country-specific DID lives on its own, so let Telnyx infer it from `from`.
+    if TELNYX_PROFILE_ID and frm == TELNYX_FROM:
         payload["messaging_profile_id"] = TELNYX_PROFILE_ID
     async with httpx.AsyncClient() as client:
         res = await client.post(
