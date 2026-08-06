@@ -7,6 +7,7 @@ Endpoints for the frontend phone orders page:
   GET    /api/phone/calls/{merchant_id}    → List call logs
   GET    /api/phone/orders/{merchant_id}   → List phone orders
   GET    /api/phone/stats/{merchant_id}    → Aggregated stats
+  GET    /api/phone/order-accuracy/{merchant_id} → Mis-captured order flags
 """
 
 import asyncio
@@ -955,6 +956,56 @@ async def get_phone_stats(
         "total_orders": total_orders,
         "total_revenue": round(total_revenue, 2),
         "avg_duration_seconds": avg_duration,
+    }
+
+
+@router.get("/order-accuracy/{merchant_id}")
+async def get_order_accuracy(
+    merchant_id: str,
+    principal=Depends(require_service_auth),
+    days: int = Query(30, ge=1, le=90),
+    flagged_only: bool = Query(True),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+):
+    """Order-accuracy findings for a merchant — calls where the order the agent
+    captured may not match what the caller asked for.
+
+    Read-only review surface over what scripts/phone_order_accuracy.py wrote.
+    Nothing here changes an order; a flag is a prompt to listen to the call.
+    """
+    await enforce_service_member(principal, merchant_id)
+    _validate_merchant_id(merchant_id)
+    db = get_db()
+
+    since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    filters = {
+        "merchant_id": f"eq.{merchant_id}",
+        "checked_at": f"gte.{since}",
+    }
+    if flagged_only:
+        filters["order_matches"] = "is.false"
+
+    flags = await db.select(
+        "phone_order_accuracy",
+        filters=filters,
+        order="checked_at.desc",
+        limit=limit,
+        offset=offset,
+    )
+
+    by_severity: dict[str, int] = {}
+    for f in flags:
+        sev = f.get("severity") or "none"
+        by_severity[sev] = by_severity.get(sev, 0) + 1
+
+    return {
+        "merchant_id": merchant_id,
+        "days": days,
+        "flagged_only": flagged_only,
+        "flags": flags,
+        "count": len(flags),
+        "by_severity": by_severity,
     }
 
 
