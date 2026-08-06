@@ -8,7 +8,7 @@ import {
 import { useSalesAuth } from '@/lib/sales-auth'
 import POSSystemPicker from '@/components/POSSystemPicker'
 import { supabase, getAuthHeaders } from '@/lib/supabase'
-import { PLAN_TIERS, getPlan, REP_PRICE_HEADROOM, WEBSITE_MODULES, type PlanTier } from '@/lib/proposal-plans'
+import { PLAN_TIERS, getPlan, REP_PRICE_HEADROOM, WEBSITE_MODULES, websiteMonthlyFree, type PlanTier } from '@/lib/proposal-plans'
 import { downloadProposalPdf, type ProposalInput } from '@/lib/generate-proposal-pdf'
 import { usVerticalsByGroup, findUsVerticalBySlug, US_DECK_BASE_URL, buildPersonalizedUsDeckUrl } from '@/data/usVerticals'
 
@@ -561,6 +561,10 @@ export default function USPortalCreateCustomerPage() {
 
   const selectedPlan = getPlan(form.plan)
   const price = selectedPlan.price + form.priceBump
+  // Maintenance + hosting come free with Premium and up — only Standard
+  // pays the buildout's monthly line items.
+  const monthlyFree = websiteMonthlyFree(selectedPlan.id)
+  const websiteMonthlyDue = monthlyFree ? 0 : websiteMonthly
   // Setup fee = the sum of toggled setup services (Website Buildout's
   // one-time modules today, more services coming). Monthly modules bill
   // recurring and are disclosed separately, never in the one-time fee.
@@ -683,7 +687,7 @@ export default function USPortalCreateCustomerPage() {
           currentUrl: rawUrl ? (/^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`) : '',
           goals: form.websiteGoals.trim(),
           pages: form.websitePages.split(',').map(p => p.trim()).filter(Boolean).slice(0, 12),
-          brandNotes: [form.websiteBrand.trim(), `Modules sold: ${WEBSITE_MODULES.filter(m => websiteModules.includes(m.id)).map(m => m.label).join(', ')}.`, `Sold with Meridian ${selectedPlan.label} (US) by rep ${rep?.name || 'unknown'}.`].filter(Boolean).join(' '),
+          brandNotes: [form.websiteBrand.trim(), `Modules sold: ${WEBSITE_MODULES.filter(m => websiteModules.includes(m.id) || (m.monthly && monthlyFree)).map(m => m.label).join(', ')}.`, `Sold with Meridian ${selectedPlan.label} (US) by rep ${rep?.name || 'unknown'}.`].filter(Boolean).join(' '),
           contentReady: form.websiteContent,
           repEmail: '',
         }),
@@ -734,7 +738,7 @@ export default function USPortalCreateCustomerPage() {
             stage: 'closed_won',
             monthly_value: price,
             commission_rate: rep?.commission_rate ?? 70,
-            notes: (form.notes || `Plan: ${selectedPlan.label} at $${price}${interval}. Setup fee: $${setupFee}. First month free: ${form.firstMonthFree ? 'Yes' : 'No'}`) + (form.website ? ` Website Buildout: $${websiteOneTime} one-time (${WEBSITE_MODULES.filter(m => websiteModules.includes(m.id)).map(m => m.label).join(', ')})${websiteMonthly > 0 ? ` + $${websiteMonthly}/mo recurring` : ''}.` : ''),
+            notes: (form.notes || `Plan: ${selectedPlan.label} at $${price}${interval}. Setup fee: $${setupFee}. First month free: ${form.firstMonthFree ? 'Yes' : 'No'}`) + (form.website ? ` Website Buildout: $${websiteOneTime} one-time (${WEBSITE_MODULES.filter(m => websiteModules.includes(m.id) || (m.monthly && monthlyFree)).map(m => m.label).join(', ')})${websiteMonthlyDue > 0 ? ` + $${websiteMonthlyDue}/mo recurring` : monthlyFree ? ` — maintenance & hosting included with ${selectedPlan.label}` : ''}.` : ''),
             rep_id: rep?.rep_id || null,
           }).select('id')
           if (leadErr) setCrmRecordError(leadErr.message)
@@ -1136,7 +1140,7 @@ export default function USPortalCreateCustomerPage() {
                   <div className="flex items-center gap-3">
                     <span className="text-[13px] font-semibold text-[#17C5B0]">
                       ${websiteOneTime}
-                      {websiteMonthly > 0 && <span className="text-[#A1A1A8] font-normal"> + ${websiteMonthly}/mo</span>}
+                      {websiteMonthlyDue > 0 && <span className="text-[#A1A1A8] font-normal"> + ${websiteMonthlyDue}/mo</span>}
                     </span>
                     <button
                       onClick={() => update('website', !form.website)}
@@ -1154,22 +1158,27 @@ export default function USPortalCreateCustomerPage() {
                   <div className="px-4 pb-4 pt-3 space-y-3 border-t border-[#1F1F23]">
                     <div className="space-y-1.5">
                       {WEBSITE_MODULES.map(m => {
-                        const on = websiteModules.includes(m.id)
+                        const included = m.core || (m.monthly && monthlyFree)
+                        const on = websiteModules.includes(m.id) || included
                         return (
                           <label key={m.id}
                             className={`flex items-center gap-3 px-3 py-2 rounded-lg border cursor-pointer transition-colors ${
                               on ? 'border-[#17C5B0]/40 bg-[#17C5B0]/5' : 'border-[#1F1F23]'
                             } ${m.core ? 'cursor-default' : ''}`}>
-                            <input type="checkbox" checked={on} disabled={m.core}
+                            <input type="checkbox" checked={on} disabled={included}
                               onChange={() => toggleModule(m.id)}
                               className="accent-[#17C5B0]" />
                             <span className="flex-1">
                               <span className="block text-[13px] text-white">{m.label}{m.core ? ' (included)' : ''}</span>
                               <span className="block text-[10px] text-[#A1A1A8]">{m.blurb}</span>
                             </span>
-                            <span className={`text-[13px] font-semibold ${on ? 'text-[#17C5B0]' : 'text-[#4a5550]'}`}>
-                              ${m.price}{m.monthly ? '/mo' : ''}
-                            </span>
+                            {m.monthly && monthlyFree ? (
+                              <span className="text-[11px] font-semibold text-[#17C5B0]">Included with {selectedPlan.label}</span>
+                            ) : (
+                              <span className={`text-[13px] font-semibold ${on ? 'text-[#17C5B0]' : 'text-[#4a5550]'}`}>
+                                ${m.price}{m.monthly ? '/mo' : ''}
+                              </span>
+                            )}
                           </label>
                         )
                       })}
@@ -1177,7 +1186,8 @@ export default function USPortalCreateCustomerPage() {
                         <span className="text-[#A1A1A8]">Buildout total</span>
                         <span className="text-white font-semibold">
                           ${websiteOneTime} one-time
-                          {websiteMonthly > 0 && <span className="text-[#A1A1A8] font-normal"> · ${websiteMonthly}/mo ongoing</span>}
+                          {websiteMonthlyDue > 0 && <span className="text-[#A1A1A8] font-normal"> · ${websiteMonthlyDue}/mo ongoing</span>}
+                          {monthlyFree && <span className="text-[#17C5B0] font-normal"> · maintenance &amp; hosting included with {selectedPlan.label}</span>}
                         </span>
                       </div>
                     </div>
@@ -1270,7 +1280,8 @@ export default function USPortalCreateCustomerPage() {
                   <span className="text-[#A1A1A8]">Website Buildout <span className="text-[#4a5550]">(modular, in setup fee)</span></span>
                   <span className="text-white font-medium">
                     ${websiteOneTime}
-                    {websiteMonthly > 0 && <span className="text-[#A1A1A8] font-normal"> + ${websiteMonthly}/mo</span>}
+                    {websiteMonthlyDue > 0 && <span className="text-[#A1A1A8] font-normal"> + ${websiteMonthlyDue}/mo</span>}
+                    {monthlyFree && <span className="text-[#17C5B0] font-normal"> · maint &amp; hosting incl.</span>}
                   </span>
                 </div>
               )}

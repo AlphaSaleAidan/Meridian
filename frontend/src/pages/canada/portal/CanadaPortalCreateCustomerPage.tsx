@@ -8,7 +8,7 @@ import {
 import { useSalesAuth } from '@/lib/sales-auth'
 import { posSystems } from '@/data/pos-systems'
 import { supabase, getAuthHeaders } from '@/lib/supabase'
-import { PLAN_TIERS, getPlan, REP_PRICE_HEADROOM_CAD, WEBSITE_MODULES, type PlanTier } from '@/lib/canada-proposal-plans'
+import { PLAN_TIERS, getPlan, REP_PRICE_HEADROOM_CAD, WEBSITE_MODULES, websiteMonthlyFree, type PlanTier } from '@/lib/canada-proposal-plans'
 import { downloadProposalPdf, type ProposalInput } from '@/lib/generate-proposal-pdf'
 import { verticalsByGroup, findVerticalBySlug, DECK_BASE_URL, buildPersonalizedDeckUrl } from '@/data/cadVerticals'
 
@@ -561,6 +561,10 @@ export default function CanadaPortalCreateCustomerPage() {
 
   const selectedPlan = getPlan(form.plan)
   const price = selectedPlan.price + form.priceBump
+  // Maintenance + hosting come free with Premium and up — only Standard
+  // pays the buildout's monthly line items.
+  const monthlyFree = websiteMonthlyFree(selectedPlan.id)
+  const websiteMonthlyDue = monthlyFree ? 0 : websiteMonthly
   // Setup fee = the sum of toggled setup services (Website Buildout's
   // one-time modules today, more services coming). Monthly modules bill
   // recurring and are disclosed separately, never in the one-time fee.
@@ -684,7 +688,7 @@ export default function CanadaPortalCreateCustomerPage() {
           currentUrl: rawUrl ? (/^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`) : '',
           goals: form.websiteGoals.trim(),
           pages: form.websitePages.split(',').map(p => p.trim()).filter(Boolean).slice(0, 12),
-          brandNotes: [form.websiteBrand.trim(), `Modules sold: ${WEBSITE_MODULES.filter(m => websiteModules.includes(m.id)).map(m => m.label).join(', ')}.`, `Sold with Meridian ${selectedPlan.label} (Canada) by rep ${rep?.name || 'unknown'}.`].filter(Boolean).join(' '),
+          brandNotes: [form.websiteBrand.trim(), `Modules sold: ${WEBSITE_MODULES.filter(m => websiteModules.includes(m.id) || (m.monthly && monthlyFree)).map(m => m.label).join(', ')}.`, `Sold with Meridian ${selectedPlan.label} (Canada) by rep ${rep?.name || 'unknown'}.`].filter(Boolean).join(' '),
           contentReady: form.websiteContent,
           repEmail: '',
         }),
@@ -735,7 +739,7 @@ export default function CanadaPortalCreateCustomerPage() {
             stage: 'closed_won',
             monthly_value: price,
             commission_rate: rep?.commission_rate ?? 70,
-            notes: (form.notes || `Plan: ${selectedPlan.label} at CA$${price}${interval}. Setup fee: CA$${setupFee}. First month free: ${form.firstMonthFree ? 'Yes' : 'No'}`) + (form.website ? ` Website Buildout: CA$${websiteOneTime} one-time (${WEBSITE_MODULES.filter(m => websiteModules.includes(m.id)).map(m => m.label).join(', ')})${websiteMonthly > 0 ? ` + CA$${websiteMonthly}/mo recurring` : ''}.` : ''),
+            notes: (form.notes || `Plan: ${selectedPlan.label} at CA$${price}${interval}. Setup fee: CA$${setupFee}. First month free: ${form.firstMonthFree ? 'Yes' : 'No'}`) + (form.website ? ` Website Buildout: CA$${websiteOneTime} one-time (${WEBSITE_MODULES.filter(m => websiteModules.includes(m.id) || (m.monthly && monthlyFree)).map(m => m.label).join(', ')})${websiteMonthlyDue > 0 ? ` + CA$${websiteMonthlyDue}/mo recurring` : monthlyFree ? ` — maintenance & hosting included with ${selectedPlan.label}` : ''}.` : ''),
             rep_id: rep?.rep_id || null,
           }).select('id')
           if (leadErr) setCrmRecordError(leadErr.message)
@@ -1140,7 +1144,7 @@ export default function CanadaPortalCreateCustomerPage() {
                   <div className="flex items-center gap-3">
                     <span className="text-sm-tight font-semibold text-pm-accent">
                       CA${websiteOneTime}
-                      {websiteMonthly > 0 && <span className="text-pm-canada-text-muted font-normal"> + CA${websiteMonthly}/mo</span>}
+                      {websiteMonthlyDue > 0 && <span className="text-pm-canada-text-muted font-normal"> + CA${websiteMonthlyDue}/mo</span>}
                     </span>
                     <button
                       onClick={() => update('website', !form.website)}
@@ -1158,22 +1162,27 @@ export default function CanadaPortalCreateCustomerPage() {
                   <div className="px-4 pb-4 pt-3 space-y-3 border-t border-pm-canada-border">
                     <div className="space-y-1.5">
                       {WEBSITE_MODULES.map(m => {
-                        const on = websiteModules.includes(m.id)
+                        const included = m.core || (m.monthly && monthlyFree)
+                        const on = websiteModules.includes(m.id) || included
                         return (
                           <label key={m.id}
                             className={`flex items-center gap-3 px-3 py-2 rounded-lg border cursor-pointer transition-colors ${
                               on ? 'border-pm-accent/40 bg-pm-accent/5' : 'border-pm-canada-border'
                             } ${m.core ? 'cursor-default' : ''}`}>
-                            <input type="checkbox" checked={on} disabled={m.core}
+                            <input type="checkbox" checked={on} disabled={included}
                               onChange={() => toggleModule(m.id)}
                               className="accent-pm-accent" />
                             <span className="flex-1">
                               <span className="block text-sm-tight text-white">{m.label}{m.core ? ' (included)' : ''}</span>
                               <span className="block text-2xs text-pm-canada-text-muted">{m.blurb}</span>
                             </span>
-                            <span className={`text-sm-tight font-semibold ${on ? 'text-pm-accent' : 'text-pm-canada-text-faint'}`}>
-                              CA${m.price}{m.monthly ? '/mo' : ''}
-                            </span>
+                            {m.monthly && monthlyFree ? (
+                              <span className="text-2xs font-semibold text-pm-accent">Included with {selectedPlan.label}</span>
+                            ) : (
+                              <span className={`text-sm-tight font-semibold ${on ? 'text-pm-accent' : 'text-pm-canada-text-faint'}`}>
+                                CA${m.price}{m.monthly ? '/mo' : ''}
+                              </span>
+                            )}
                           </label>
                         )
                       })}
@@ -1181,7 +1190,8 @@ export default function CanadaPortalCreateCustomerPage() {
                         <span className="text-pm-canada-text-muted">Buildout total</span>
                         <span className="text-white font-semibold">
                           CA${websiteOneTime} one-time
-                          {websiteMonthly > 0 && <span className="text-pm-canada-text-muted font-normal"> · CA${websiteMonthly}/mo ongoing</span>}
+                          {websiteMonthlyDue > 0 && <span className="text-pm-canada-text-muted font-normal"> · CA${websiteMonthlyDue}/mo ongoing</span>}
+                          {monthlyFree && <span className="text-pm-accent font-normal"> · maintenance &amp; hosting included with {selectedPlan.label}</span>}
                         </span>
                       </div>
                     </div>
@@ -1274,7 +1284,8 @@ export default function CanadaPortalCreateCustomerPage() {
                   <span className="text-pm-canada-text-muted">Website Buildout <span className="text-pm-canada-text-faint">(modular, in setup fee)</span></span>
                   <span className="text-white font-medium">
                     CA${websiteOneTime}
-                    {websiteMonthly > 0 && <span className="text-pm-canada-text-muted font-normal"> + CA${websiteMonthly}/mo</span>}
+                    {websiteMonthlyDue > 0 && <span className="text-pm-canada-text-muted font-normal"> + CA${websiteMonthlyDue}/mo</span>}
+                    {monthlyFree && <span className="text-pm-accent font-normal"> · maint &amp; hosting incl.</span>}
                   </span>
                 </div>
               )}

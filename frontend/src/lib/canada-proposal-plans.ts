@@ -63,6 +63,7 @@ const CAD_MODULE_PRICES: Record<string, number> = {
 }
 
 export type { WebsiteModule } from './proposal-plans'
+export { websiteMonthlyFree } from './proposal-plans'
 import { WEBSITE_MODULES as US_WEBSITE_MODULES } from './proposal-plans'
 
 export const WEBSITE_MODULES = US_WEBSITE_MODULES.map(m => ({

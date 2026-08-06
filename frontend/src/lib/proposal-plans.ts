@@ -124,6 +124,13 @@ export const WEBSITE_MODULES: WebsiteModule[] = [
   { id: 'host', label: 'Server hosting', blurb: 'Fast managed hosting with SSL', price: 35, monthly: true },
 ]
 
+/** The monthly buildout modules (Meridian Maintenance + Server hosting) come
+ *  FREE with the second tier and up (Aidan 2026-08-06) — only Standard pays
+ *  the monthly. Index-based so future tiers above Premium stay included. */
+export function websiteMonthlyFree(planId: string): boolean {
+  return PLAN_TIERS.findIndex(p => p.id === planId) >= 1
+}
+
 export function getPlan(id: string): PlanTier {
   return PLAN_TIERS.find(p => p.id === id) || PLAN_TIERS[1] // default to Premium
 }
