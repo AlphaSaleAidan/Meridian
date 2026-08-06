@@ -8,14 +8,28 @@ const DEMO_LINES = [
   { label: 'Call the US demo line — meet Vinny', display: '+1 380 240 9535', e164: '+13802409535' },
 ]
 
+// The two surfaces this lands on don't share a container idiom: the merchant
+// demo runs on `.card` (#111113/#1F1F23), the rep portal on the translucent
+// white/10 sections its siblings use. Only the outer shell differs.
+const SURFACE = {
+  demo: 'card p-4 sm:p-5',
+  portal: 'rounded-xl border border-white/10 bg-white/[0.02] p-5',
+}
+
+interface Props {
+  /** Themes the icons per surface (merchant #1A8FD6, Canada #17C5B0, US #00d4aa). */
+  accent?: string
+  variant?: keyof typeof SURFACE
+}
+
 /**
- * Live demo lines a rep can hand their phone over for, mid-pitch. The prospect
- * orders out loud, then watches the ticket land and the pay-by-text arrive for
- * real — nothing is ever charged. `accent` lets each portal theme it.
+ * Live demo lines a prospect can call on the spot. They order out loud, then
+ * watch the ticket land and the pay-by-text arrive for real — nothing is ever
+ * charged. Demo surfaces only; never rendered against a live merchant's data.
  */
-export default function DemoCallCard({ accent = '#1A8FD6' }: { accent?: string }) {
+export default function DemoCallCard({ accent = '#1A8FD6', variant = 'demo' }: Props) {
   return (
-    <section className="rounded-xl border border-white/10 bg-white/[0.02] p-5">
+    <section className={SURFACE[variant]}>
       <header className="flex items-center gap-2.5 mb-1">
         <Phone size={16} style={{ color: accent }} />
         <h2 className="text-sm font-bold text-white">Call a Demo Agent</h2>
