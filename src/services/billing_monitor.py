@@ -194,6 +194,16 @@ async def _send_digest(mismatches: list[dict]) -> None:
             severity="high")
     except Exception as e:  # noqa: BLE001 — alerting never breaks the monitor
         logger.error("billing monitor digest email failed: %s", e)
+    # DEFCON 1 — underpaid orders are money + legal exposure: page all responders.
+    try:
+        from .defcon_alert import notify_defcon
+        total_short = sum(m["expected_cents"] - m["paid_cents"] for m in mismatches)
+        await notify_defcon(
+            1, f"{len(mismatches)} underpaid phone order(s) — {total_short}¢ shortfall",
+            "Billing monitor found settled sessions below confirmed totals.",
+            protocol="pay-mismatch.md", event_key="billing-drift")
+    except Exception as e:  # noqa: BLE001
+        logger.error("billing monitor DEFCON page failed: %s", e)
 
 
 async def _loop() -> None:
