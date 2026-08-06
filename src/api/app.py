@@ -250,8 +250,22 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Edge watchdog failed to start: {e}")
 
+    # Start billing monitor (reconciles settled Stripe sessions against
+    # confirmed phone-order totals — the standing watch for billing drift)
+    _billing_monitor_started = False
+    try:
+        from ..services.billing_monitor import start_billing_monitor
+        _billing_monitor_started = start_billing_monitor()
+        if _billing_monitor_started:
+            logger.info("Billing monitor started")
+    except Exception as e:
+        logger.warning(f"Billing monitor failed to start: {e}")
+
     yield
 
+    if _billing_monitor_started:
+        from ..services.billing_monitor import stop_billing_monitor
+        stop_billing_monitor()
     if _edge_watchdog_started:
         from ..services.edge_watchdog import stop_edge_watchdog
         stop_edge_watchdog()
