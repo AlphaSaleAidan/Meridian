@@ -604,7 +604,20 @@ async def _stripe_checkout(
         },
     )
     if connect_account:
-        pi_data: dict[str, Any] = {"transfer_data": {"destination": connect_account}}
+        # on_behalf_of makes the merchant's connected account the SETTLEMENT
+        # MERCHANT: the charge settles in THEIR country + currency (a Canadian
+        # merchant's CAD account settles CAD — no CAD→USD conversion on the
+        # restaurant's money, which is the whole order minus our fee), Canadian
+        # card fees apply, and their name shows on the customer's statement.
+        # Without it, a CAD charge on this US/USD platform converts to USD and
+        # the merchant loses ~1-2% on every order. Only OUR application fee
+        # still lands on the US platform (a few cents of FX — negligible).
+        # Safe: connect_account is only set when the account's charges are
+        # enabled (membership guard), which is on_behalf_of's requirement.
+        pi_data: dict[str, Any] = {
+            "transfer_data": {"destination": connect_account},
+            "on_behalf_of": connect_account,
+        }
         # Auto-take our fee at charge time. Split model: the customer-paid
         # surcharge + 2.99% of the subtotal (merchant-side). Legacy model:
         # flat service fee + optional % + (Case B) Stripe gross-up. Stripe

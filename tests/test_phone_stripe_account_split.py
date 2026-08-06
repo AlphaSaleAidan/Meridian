@@ -142,8 +142,20 @@ async def test_unset_still_destination_charges_on_platform_key():
     assert out["method"] == "stripe"
     cap = _FakeStripe.captured
     assert cap["payment_intent_data"]["transfer_data"]["destination"] == "acct_merchant"
+    # on_behalf_of makes the merchant the settlement merchant → their money
+    # settles in their own currency (no cross-border FX on the order amount).
+    assert cap["payment_intent_data"]["on_behalf_of"] == "acct_merchant"
     assert cap["api_key"] == PLATFORM_KEY
     assert _FakeStripe.retrieves == []  # no membership probe at all
+
+
+@aio
+async def test_direct_charge_has_no_on_behalf_of():
+    # Unboarded/demo merchant → direct charge on the platform, no connected
+    # account to settle on behalf of.
+    out = await pl.create_checkout(ORDER, _cfg(), "ord_obo_direct")
+    assert out["method"] == "stripe"
+    assert "payment_intent_data" not in _FakeStripe.captured
 
 
 @aio
