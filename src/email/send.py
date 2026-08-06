@@ -28,6 +28,7 @@ from .templates import (
     rep_credentials,
     schedule_published,
     update_brief,
+    edge_status,
 )
 from ..compliance.casl_guard import casl_wrapped_send
 
@@ -716,6 +717,40 @@ async def send_quote_request(
         await _log_send(to, "quote_request", subject, result, tag="quote_request")
         results.append({"to": to, **result})
     return results
+
+
+async def send_edge_down_alert(
+    to: str,
+    url: str,
+    detail: str,
+    consecutive_failures: int,
+    checked_at: str,
+) -> dict:
+    """Ops alert: a frontend surface stopped responding to the backend's probe."""
+    html = edge_status.render_down(
+        url=url,
+        detail=detail,
+        consecutive_failures=consecutive_failures,
+        checked_at=checked_at,
+    )
+    subject = f"[DOWN] {url} is unreachable"
+    result = await _client.send(to, subject, html, tag="edge_down")
+    await _log_send(to, "edge_down", subject, result, tag="edge_down")
+    return result
+
+
+async def send_edge_recovered_alert(
+    to: str,
+    url: str,
+    downtime: str,
+    checked_at: str,
+) -> dict:
+    """Ops alert: a previously-down frontend surface is responding again."""
+    html = edge_status.render_recovered(url=url, downtime=downtime, checked_at=checked_at)
+    subject = f"[RECOVERED] {url} is back up"
+    result = await _client.send(to, subject, html, tag="edge_recovered")
+    await _log_send(to, "edge_recovered", subject, result, tag="edge_recovered")
+    return result
 
 
 async def fetch_canada_rep_emails() -> list[str]:
