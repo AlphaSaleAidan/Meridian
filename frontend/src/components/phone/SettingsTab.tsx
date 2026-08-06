@@ -4,13 +4,13 @@ import { ConnectReservationSystem, ORDER_TYPE_OPTIONS, hasOrderType, toggleOrder
 import {
   Settings, Volume2, Link2, Phone, Route,
   CheckCircle2, CreditCard, SendHorizontal, MessageSquare, AlertCircle,
-  PhoneForwarded,
+  PhoneForwarded, VenetianMask, Quote,
 } from 'lucide-react'
 import { VoicePlayButton, VoicePreviewCard } from './VoicePreview'
 import PersonalityPanel from './PersonalityPanel'
 import CashPaymentToggle from './CashPaymentToggle'
 import {
-  VOICE_OPTIONS, DEFAULT_PERSONALITY,
+  VOICE_OPTIONS, CHARACTER_OPTIONS, DEFAULT_PERSONALITY,
   type PhoneBizConfig, type VoicePersonality,
 } from '@/lib/phone-orders-demo-data'
 import {
@@ -152,6 +152,44 @@ export default function SettingsTab({ biz, phoneConfig, onReconfigure, connected
             className="w-full px-3 py-2 bg-[#111113] border border-[#1F1F23] rounded-lg text-sm text-[#F5F5F7] focus:outline-none focus:border-[#1A8FD6]/50 resize-none" />
         </div>
         <div>
+          <div className="flex items-center gap-1.5 mb-1">
+            <VenetianMask size={13} className="text-[#17C5B0]" />
+            <label className="text-xs text-[#A1A1A8]">Agent Character</label>
+          </div>
+          <p className="text-[10px] text-[#A1A1A8]/60 mb-2">
+            Give your agent a personality — a premium natural voice with real charm. Callers love it, and it upsells like an insider.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+            {CHARACTER_OPTIONS.map(c => {
+              const selected = (personality.character || '') === c.id
+              return (
+                <div key={c.id} onClick={() => setPersonality(p => ({ ...p, character: selected ? '' : c.id }))}
+                  role="button" tabIndex={0} aria-pressed={selected}
+                  onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setPersonality(p => ({ ...p, character: selected ? '' : c.id })) } }}
+                  className={clsx('px-3 py-2.5 rounded-lg border text-left transition-all cursor-pointer',
+                    selected ? 'border-[#17C5B0]/40 bg-[#17C5B0]/5' : 'border-[#1F1F23] hover:border-[#2A2A30]')}>
+                  <div className="flex items-center gap-1.5">
+                    <p className={clsx('text-xs font-semibold flex-1', selected ? 'text-[#F5F5F7]' : 'text-[#A1A1A8]')}>{c.label}</p>
+                    {selected && <CheckCircle2 size={12} className="text-[#17C5B0]" />}
+                  </div>
+                  <p className="text-[9px] text-[#A1A1A8]/70 mt-0.5">{c.tagline}</p>
+                  <div className="flex items-start gap-1 mt-1.5">
+                    <Quote size={9} className="text-[#17C5B0]/60 mt-px shrink-0" />
+                    <p className="text-[9px] italic text-[#A1A1A8]/60">{c.catchphrase}</p>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+          <p className="text-[10px] text-[#A1A1A8]/50 mt-1.5">
+            {personality.character
+              ? 'Character selected — it brings its own voice, so the classic voices below are not used. Tap the character again to turn it off.'
+              : 'No character selected — the classic voice below is used.'}
+          </p>
+        </div>
+
+        <div className={clsx(personality.character && 'opacity-40 pointer-events-none select-none')}
+          aria-disabled={!!personality.character}>
           <label className="text-xs text-[#A1A1A8] block mb-2">Agent Voice</label>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {VOICE_OPTIONS.map(v => (
@@ -170,8 +208,9 @@ export default function SettingsTab({ biz, phoneConfig, onReconfigure, connected
           </div>
         </div>
 
-        {/* Voice Preview with waveform — plays the real studio sample */}
-        <VoicePreviewCard voiceId={cfg.voice} />
+        {/* Voice Preview with waveform — plays the real studio sample.
+            Hidden while a character is active (characters bring their own voice). */}
+        {!personality.character && <VoicePreviewCard voiceId={cfg.voice} />}
 
         <div>
           <label className="text-xs text-[#A1A1A8] block mb-2">Order Types</label>
