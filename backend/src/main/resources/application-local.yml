@@ -1,11 +1,18 @@
 spring:
+  r2dbc:
+    url: ${R2DBC_URL:r2dbc:postgresql://127.0.0.1:54322/postgres}
+    username: ${R2DBC_USER:postgres}
+    password: ${R2DBC_PASSWORD:postgres}
+    pool:
+      enabled: true
+      initial-size: 5
+      max-size: 10
+
+  # JDBC DataSource used only by spring-session-jdbc (HTTP session persistence).
   datasource:
-    url: jdbc:postgresql://127.0.0.1:54322/postgres
-    username: postgres
-    password: postgres
-  jpa:
-    hibernate:
-      ddl-auto: update
+    url: ${JDBC_URL:jdbc:postgresql://127.0.0.1:54322/postgres}
+    username: ${JDBC_USER:postgres}
+    password: ${JDBC_PASSWORD:postgres}
 
 supabase:
   url: http://127.0.0.1:54321

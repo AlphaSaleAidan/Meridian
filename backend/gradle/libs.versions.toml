@@ -14,7 +14,10 @@ mockk = "1.13.11"
 [libraries]
 # Security & Auth
 spring-boot-starter-security = { module = "org.springframework.boot:spring-boot-starter-security" }
-spring-session-jdbc = { module = "org.springframework.session:spring-session-jdbc" }
+# Boot 4 module (NOT bare org.springframework.session:spring-session-jdbc): session
+# auto-configuration moved out of spring-boot-autoconfigure — the bare library alone
+# never activates JDBC sessions.
+spring-boot-session-jdbc = { module = "org.springframework.boot:spring-boot-session-jdbc" }
 
 # HTTP Client (Ktor)
 ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
@@ -23,11 +26,13 @@ ktor-client-mock = { module = "io.ktor:ktor-client-mock", version.ref = "ktor" }
 
 # Spring Boot starters
 spring-boot-starter-web = { module = "org.springframework.boot:spring-boot-starter-web" }
-spring-boot-starter-data-jpa = { module = "org.springframework.boot:spring-boot-starter-data-jpa" }
+spring-boot-starter-data-r2dbc = { module = "org.springframework.boot:spring-boot-starter-data-r2dbc" }
+spring-boot-starter-jdbc = { module = "org.springframework.boot:spring-boot-starter-jdbc" }
 spring-boot-starter-actuator = { module = "org.springframework.boot:spring-boot-starter-actuator" }
 spring-boot-starter-validation = { module = "org.springframework.boot:spring-boot-starter-validation" }
 
 # Database
+r2dbc-postgresql = { module = "org.postgresql:r2dbc-postgresql" }
 postgresql = { module = "org.postgresql:postgresql", version.ref = "postgresql" }
 
 # OpenAPI / Swagger
@@ -55,5 +60,4 @@ spring-boot = { id = "org.springframework.boot", version.ref = "spring-boot" }
 spring-dependency-management = { id = "io.spring.dependency-management", version.ref = "spring-dependency-management" }
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlin-spring = { id = "org.jetbrains.kotlin.plugin.spring", version.ref = "kotlin" }
-kotlin-jpa = { id = "org.jetbrains.kotlin.plugin.jpa", version.ref = "kotlin" }
 ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlint-gradle" }

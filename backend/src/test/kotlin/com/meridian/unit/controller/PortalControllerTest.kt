@@ -6,11 +6,10 @@ import com.meridian.dto.PortalResolveResponse
 import com.meridian.dto.PortalTokenResponse
 import com.meridian.exception.NotFoundException
 import com.meridian.service.portal.PortalService
-import io.mockk.every
+import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.mockk
-import io.mockk.verify
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -19,16 +18,16 @@ import java.util.UUID
 
 class PortalControllerTest {
     private val portalService = mockk<PortalService>()
-    private val portalController = PortalController(portalService, Dispatchers.Unconfined)
+    private val portalController = PortalController(portalService)
 
-    private val orgId = UUID.randomUUID().toString()
+    private val businessId = UUID.randomUUID().toString()
 
     @Test
     fun `resolve returns 200 with org details`(): Unit =
-        runBlocking {
+        runTest {
             val resolved =
                 PortalResolveResponse(
-                    orgId = orgId,
+                    businessId = businessId,
                     businessName = "Maple Tandoor",
                     planTier = "starter",
                     portalToken = "valid-token-123",
@@ -36,7 +35,7 @@ class PortalControllerTest {
                     onboarded = false,
                 )
 
-            every { portalService.resolveToken("valid-token-123") } returns resolved
+            coEvery { portalService.resolveToken("valid-token-123") } returns resolved
 
             val response = portalController.resolve("valid-token-123")
 
@@ -44,13 +43,13 @@ class PortalControllerTest {
             assertEquals("success", response.body?.status)
             assertEquals(resolved, response.body?.data)
 
-            verify { portalService.resolveToken("valid-token-123") }
+            coVerify { portalService.resolveToken("valid-token-123") }
         }
 
     @Test
     fun `resolve propagates NotFoundException from service`(): Unit =
-        runBlocking {
-            every { portalService.resolveToken("unknown-token") } throws NotFoundException("Portal link expired or invalid")
+        runTest {
+            coEvery { portalService.resolveToken("unknown-token") } throws NotFoundException("Portal link expired or invalid")
 
             assertThrows<NotFoundException> {
                 portalController.resolve("unknown-token")
@@ -59,16 +58,16 @@ class PortalControllerTest {
 
     @Test
     fun `generate returns 200 with portal token`(): Unit =
-        runBlocking {
-            val request = GeneratePortalTokenRequest(orgId)
+        runTest {
+            val request = GeneratePortalTokenRequest(businessId)
             val tokenResponse =
                 PortalTokenResponse(
                     token = "new-token",
-                    orgId = orgId,
+                    businessId = businessId,
                     portalUrl = "https://canada.meridian.tips/c/new-token",
                 )
 
-            every { portalService.generateToken(request) } returns tokenResponse
+            coEvery { portalService.generateToken(request) } returns tokenResponse
 
             val response = portalController.generate(request)
 
@@ -76,15 +75,15 @@ class PortalControllerTest {
             assertEquals("success", response.body?.status)
             assertEquals(tokenResponse, response.body?.data)
 
-            verify { portalService.generateToken(request) }
+            coVerify { portalService.generateToken(request) }
         }
 
     @Test
     fun `generate propagates NotFoundException from service`(): Unit =
-        runBlocking {
-            val request = GeneratePortalTokenRequest(orgId)
+        runTest {
+            val request = GeneratePortalTokenRequest(businessId)
 
-            every { portalService.generateToken(request) } throws NotFoundException("Business not found")
+            coEvery { portalService.generateToken(request) } throws NotFoundException("Business not found")
 
             assertThrows<NotFoundException> {
                 portalController.generate(request)

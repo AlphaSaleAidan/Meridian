@@ -9,7 +9,6 @@ import com.meridian.exception.NotFoundException
 import com.meridian.repository.BusinessRepository
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
-import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.security.SecureRandom
@@ -30,46 +29,46 @@ class PortalService(
     private val secureRandom = SecureRandom()
 
     @Transactional(readOnly = true)
-    fun resolveToken(token: String): PortalResolveResponse {
-        if (token.length < MIN_TOKEN_LENGTH) {
+    suspend fun resolveToken(token: String): PortalResolveResponse {
+        val cleanToken = token.trim()
+        if (cleanToken.length < MIN_TOKEN_LENGTH) {
             throw BadRequestException("Invalid token")
         }
 
         val business =
-            businessRepository.findByAccessTokenAndStatus(token, ACTIVE_STATUS)
+            businessRepository.findByAccessTokenAndStatus(cleanToken, ACTIVE_STATUS)
                 ?: throw NotFoundException("Portal link expired or invalid")
 
         return PortalResolveResponse(
-            orgId = business.id,
+            businessId = business.id,
             businessName = business.name.orEmpty(),
             planTier = business.planTier ?: DEFAULT_PLAN_TIER,
-            portalToken = token,
+            portalToken = cleanToken,
             posProvider = business.posProvider,
             onboarded = business.onboarded,
         )
     }
 
     @Transactional
-    fun generateToken(request: GeneratePortalTokenRequest): PortalTokenResponse {
+    suspend fun generateToken(request: GeneratePortalTokenRequest): PortalTokenResponse {
         val business =
-            businessRepository.findByIdOrNull(request.orgId)
+            businessRepository.findById(request.businessId)
                 ?: throw NotFoundException("Business not found")
 
         val token = business.accessToken ?: issueToken(business)
 
         return PortalTokenResponse(
             token = token,
-            orgId = business.id,
+            businessId = business.id,
             portalUrl = "$portalBaseUrl/c/$token",
         )
     }
 
-    private fun issueToken(business: Business): String {
+    private suspend fun issueToken(business: Business): String {
         val token = generateSecureToken()
-        business.accessToken = token
-        business.tokenStatus = PENDING_TOKEN_STATUS
-        businessRepository.save(business)
-        log.info("Issued new portal token for org {}", business.id)
+        val updatedBusiness = business.copy(accessToken = token, tokenStatus = PENDING_TOKEN_STATUS)
+        businessRepository.save(updatedBusiness)
+        log.info("Issued new portal token for business {}", business.id)
         return token
     }
 

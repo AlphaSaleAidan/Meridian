@@ -3,7 +3,6 @@ plugins {
     alias(libs.plugins.spring.dependency.management)
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.kotlin.spring)
-    alias(libs.plugins.kotlin.jpa)
     alias(libs.plugins.ktlint)
 }
 
@@ -29,14 +28,17 @@ dependencies {
 
     // Security & Auth
     implementation(libs.spring.boot.starter.security)
-    implementation(libs.spring.session.jdbc)
+    implementation(libs.spring.boot.session.jdbc)
 
     // HTTP Client (Ktor)
     implementation(libs.ktor.client.core)
     implementation(libs.ktor.client.apache5)
 
-    // Database
-    implementation(libs.spring.boot.starter.data.jpa)
+    // Database (R2DBC for application data access)
+    implementation(libs.spring.boot.starter.data.r2dbc)
+    implementation(libs.r2dbc.postgresql)
+    // JDBC DataSource kept solely for spring-session-jdbc (HTTP session persistence)
+    implementation(libs.spring.boot.starter.jdbc)
     runtimeOnly(libs.postgresql)
 
     // Kotlin
