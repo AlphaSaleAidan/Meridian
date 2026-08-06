@@ -498,6 +498,30 @@ async def _stripe_checkout(
                         "product_data": {"name": "Service & processing fee"},
                     },
                 })
+        # BILLING INVARIANT — the customer must be charged exactly what the
+        # order was confirmed at (+ any surcharge). Line-item builders have
+        # silently drifted from the order total before (dropped tax/modifier
+        # lines → merchant undercharged on every itemized order); this is the
+        # structural guard that turns any future drift into a cosmetic receipt
+        # change instead of a wrong charge: on mismatch, bill ONE line at the
+        # exact expected amount and scream in the logs.
+        expected = _order_amount_cents(order) + surcharge
+        billed = sum(int(li["price_data"]["unit_amount"]) * int(li["quantity"])
+                     for li in line_items)
+        if billed != expected:
+            logger.critical(
+                "BILLING INVARIANT VIOLATION: line items bill %d¢ but the "
+                "confirmed order total (+surcharge) is %d¢ (merchant=%s, "
+                "pos_order=%s) — collapsing to a single exact-total line",
+                billed, expected, order.get("merchant_id", ""), pos_order_id)
+            line_items = [{
+                "quantity": 1,
+                "price_data": {
+                    "currency": currency,
+                    "unit_amount": expected,
+                    "product_data": {"name": "Phone order"},
+                },
+            }]
 
     kwargs: dict[str, Any] = dict(
         mode="payment",
@@ -628,12 +652,28 @@ async def _square_payment_link(
     order: dict, access_token: str, location_id: str, pos_order_id: str
 ) -> dict:
     line_items = []
+    items_cents = 0
     for item in order.get("items", []):
+        qty = int(item.get("quantity", 1) or 1)
+        unit_cents = int(item.get("unit_price", 0) * 100)
+        items_cents += unit_cents * qty
         line_items.append({
             "name": item["name"],
-            "quantity": str(item.get("quantity", 1)),
+            "quantity": str(qty),
             "base_price_money": {
-                "amount": int(item.get("unit_price", 0) * 100),
+                "amount": unit_cents,
+                "currency": order.get("currency", "usd"),
+            },
+        })
+    # Same billing invariant as the Stripe rail: unit prices alone drop the
+    # tax + modifier share of the confirmed total — bill the delta explicitly.
+    delta = _order_amount_cents(order) - items_cents
+    if line_items and delta > 0:
+        line_items.append({
+            "name": "Tax & extras",
+            "quantity": "1",
+            "base_price_money": {
+                "amount": delta,
                 "currency": order.get("currency", "usd"),
             },
         })
@@ -773,6 +813,13 @@ def _clover_hco_line_items(order: dict[str, Any], plan_tier: str = "",
         if tax_cents > 0:
             items.append({"name": "Tax", "price": tax_cents, "unitQty": 1})
             subtotal_cents += tax_cents
+        # Modifier (topping) charges live in the order total but not in
+        # unit_price lines — same billing-invariant gap as the Stripe rail.
+        # Bill the remaining delta so HCO charges the confirmed total.
+        extras = _order_amount_cents(order) - subtotal_cents
+        if extras > 0:
+            items.append({"name": "Extras", "price": extras, "unitQty": 1})
+            subtotal_cents += extras
     else:
         # tax-inclusive single line (order total already includes tax)
         subtotal_cents = _order_amount_cents(order)
