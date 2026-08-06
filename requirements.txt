@@ -1,5 +1,8 @@
 # Core
-fastapi>=0.115.6
+# <0.139: under 0.139 app.py's include_router registers 0 of 292 routes
+# (silent empty app — first caught by compliance CI 2026-07-12); 0.133.x is
+# the proven-good line locally and in prod deploys.
+fastapi>=0.115.6,<0.139
 uvicorn[standard]>=0.30.0
 python-multipart>=0.0.9
 httpx==0.27.2
