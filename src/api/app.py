@@ -205,8 +205,21 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning(f"Training scheduler failed to start: {e}")
 
+    # Start edge watchdog (probes the Contabo-hosted frontends from Railway)
+    _edge_watchdog_started = False
+    try:
+        from ..services.edge_watchdog import start_edge_watchdog
+        _edge_watchdog_started = start_edge_watchdog()
+        if _edge_watchdog_started:
+            logger.info("Edge watchdog started")
+    except Exception as e:
+        logger.warning(f"Edge watchdog failed to start: {e}")
+
     yield
 
+    if _edge_watchdog_started:
+        from ..services.edge_watchdog import stop_edge_watchdog
+        stop_edge_watchdog()
     if _trainer_task:
         from ..ai.swarm_trainer import get_swarm_trainer
         get_swarm_trainer().stop()
