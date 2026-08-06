@@ -1,9 +1,10 @@
 """
 Content API — video and image generation via fal.ai.
 
-Routes:
+Routes (all require a Supabase session; job polls are scoped to the job's org):
   POST /api/content/video/generate          → Submit video job (returns jobId)
   GET  /api/content/video/status/{job_id}   → Poll job status
+  GET  /api/content/video/debug/{job_id}    → Raw fal.ai state (admin only)
   POST /api/content/image/generate          → Generate image (sync, fast)
   GET  /api/content/models                  → Available models
 """
@@ -18,7 +19,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, field_validator
 from typing import Optional
 
-from ..auth import is_private_url, require_jwt, require_org_member
+from ..auth import is_private_url, require_admin_jwt, require_jwt, require_org_member
 from ...credits import COSTS, InsufficientCredits, deduct
 
 router = APIRouter(prefix="/api/content", tags=["content"])
@@ -336,6 +337,9 @@ async def generate_video(req: VideoGenRequest, user: dict = Depends(require_jwt)
     job_id = str(uuid.uuid4())[:8]
     _video_jobs[job_id] = {
         "status": "processing",
+        # Owner of the job — status/debug polls are scoped to this org so one
+        # merchant can't read another's prompts, model choice, or video URL.
+        "merchantId": req.merchantId,
         "model": req.model,
         "platform": req.platform,
         "fal_request_id": fal_request_id,
@@ -364,10 +368,11 @@ async def generate_video(req: VideoGenRequest, user: dict = Depends(require_jwt)
 
 
 @router.get("/video/status/{job_id}")
-async def video_status(job_id: str):
+async def video_status(job_id: str, user: dict = Depends(require_jwt)):
     job = _video_jobs.get(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
+    await require_org_member(user, job.get("merchantId") or "")
 
     result: dict = {
         "jobId": job_id,
@@ -395,8 +400,12 @@ async def video_status(job_id: str):
 
 
 @router.get("/video/debug/{job_id}")
-async def video_debug(job_id: str):
-    """Direct fal.ai status check for debugging."""
+async def video_debug(job_id: str, _admin: dict = Depends(require_admin_jwt)):
+    """Direct fal.ai status check for debugging (admin only).
+
+    Returns provider-internal detail — fal.ai request id, queue URLs, and the raw
+    upstream response body — which is operator diagnostics, not merchant data.
+    """
     job = _video_jobs.get(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -585,8 +594,12 @@ async def director_preview(req: DirectorPreviewRequest, user: dict = Depends(req
 
 
 @router.get("/director/styles")
-async def director_styles():
-    """List available Director styles and platform configs."""
+async def director_styles(_user: dict = Depends(require_jwt)):
+    """List available Director styles and platform configs (signed-in studio users).
+
+    Not org-scoped — the catalog is identical for every merchant — but the style
+    profiles and visual-language tables are prompt IP, so they need a session.
+    """
     from ...ai.commercial_director import STYLE_PROFILES, PLATFORM_CONFIG, BUSINESS_VISUAL_LANGUAGE
     return {
         "styles": {k: v for k, v in STYLE_PROFILES.items()},
@@ -917,7 +930,9 @@ RULES:
 
 
 @router.get("/models")
-async def list_models():
+async def list_models(_user: dict = Depends(require_jwt)):
+    """Model catalog for the studio picker. Signed-in only: the values are the
+    provider's internal endpoint paths, which don't need to be world-readable."""
     return {
         "video": [
             {"id": k, "endpoint": v}
