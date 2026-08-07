@@ -209,9 +209,12 @@ async def test_create_checkout_uses_stripe_when_ready(monkeypatch):
     cap = _FakeStripe.captured
     assert cap["mode"] == "payment"
     assert cap["payment_intent_data"]["transfer_data"]["destination"] == "acct_merchant"
-    # 1% of 2250c = 22 (round half-to-even) + Stripe processing gross-up
-    # (2.9% of 2250 = 65, + 30c fixed) so Meridian nets its fee AFTER Stripe (Case B).
-    assert cap["payment_intent_data"]["application_fee_amount"] == 22 + 65 + 30
+    # 1% of 2250c = 22 (round half-to-even) + the 2.9% processing gross-up
+    # (65c). The flat 30c is NOT added: this ORDER is CAD, and Canada's
+    # CA$0.75/order is ALL-IN — Meridian absorbs Stripe's flat fee there
+    # (Aidan 2026-08-07) rather than grossing it onto the merchant. USD orders
+    # still include the 30c — see tests/test_cad_all_in_fee.py.
+    assert cap["payment_intent_data"]["application_fee_amount"] == 22 + 65
     assert cap["metadata"]["pos_order_id"] == "ord_42"
 
 

@@ -65,7 +65,20 @@ STRIPE_FEE_BPS = int(os.getenv("STRIPE_FEE_BPS", "290") or 290)          # 2.9%
 STRIPE_FEE_FIXED_CENTS = int(os.getenv("STRIPE_FEE_FIXED_CENTS", "30") or 30)
 
 
-def application_fee_cents(amount_cents: int, service_fee_cents: int | None = None) -> int:
+# Markets where Meridian ABSORBS Stripe's flat per-transaction fee instead of
+# grossing it up onto the merchant (Aidan 2026-08-07). Canada's advertised
+# CA$0.75/order is ALL-IN — the merchant pays that plus the card-processing
+# percentage they'd pay on any card order, and nothing else. The percentage is
+# still passed through (merchants accept it as processing); only the flat 30¢
+# stops being charged onward, so Meridian nets CA$0.45 there.
+FLAT_FEE_ABSORBED_CURRENCIES = {
+    c.strip().lower() for c in
+    os.getenv("MERIDIAN_ABSORB_STRIPE_FLAT_CURRENCIES", "cad").split(",") if c.strip()
+}
+
+
+def application_fee_cents(amount_cents: int, service_fee_cents: int | None = None,
+                          currency: str = "") -> int:
     """Total application fee on a destination charge of `amount_cents`:
     Meridian's service fee + optional bps + (when grossed up) Stripe's
     estimated processing cost. Always capped below the charge amount.
@@ -74,7 +87,10 @@ def application_fee_cents(amount_cents: int, service_fee_cents: int | None = Non
     base = SERVICE_FEE_CENTS if service_fee_cents is None else int(service_fee_cents)
     fee = base + int(round(amount_cents * PLATFORM_FEE_BPS / 10000))
     if STRIPE_GROSSUP_ENABLED:
-        fee += int(round(amount_cents * STRIPE_FEE_BPS / 10000)) + STRIPE_FEE_FIXED_CENTS
+        fee += int(round(amount_cents * STRIPE_FEE_BPS / 10000))
+        # Flat fee: passed through by default, ABSORBED in all-in markets (CAD).
+        if (currency or "").strip().lower() not in FLAT_FEE_ABSORBED_CURRENCIES:
+            fee += STRIPE_FEE_FIXED_CENTS
     return min(fee, max(amount_cents - 1, 0))
 
 
@@ -632,7 +648,8 @@ async def _stripe_checkout(
         else:
             fee = application_fee_cents(
                 amount,
-                service_fee_cents=getattr(merchant_config, "order_fee_cents", None))
+                service_fee_cents=getattr(merchant_config, "order_fee_cents", None),
+                currency=currency)
         if fee > 0:
             pi_data["application_fee_amount"] = fee
         kwargs["payment_intent_data"] = pi_data
