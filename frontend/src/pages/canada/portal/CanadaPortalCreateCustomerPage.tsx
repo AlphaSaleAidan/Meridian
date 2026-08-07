@@ -3,12 +3,12 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ArrowLeft, ArrowRight, CheckCircle2, Copy, Send, Check,
   Store, User, Mail, Phone, DollarSign, FileDown,
-  Loader2, Eye, Gift, Sparkles, QrCode, ExternalLink, X,
+  Loader2, Eye, Gift, Sparkles, QrCode, ExternalLink, X, Globe,
 } from 'lucide-react'
 import { useSalesAuth } from '@/lib/sales-auth'
 import { posSystems } from '@/data/pos-systems'
 import { supabase, getAuthHeaders } from '@/lib/supabase'
-import { PLAN_TIERS, getPlan, REP_PRICE_HEADROOM_CAD, type PlanTier } from '@/lib/canada-proposal-plans'
+import { PLAN_TIERS, getPlan, REP_PRICE_HEADROOM_CAD, WEBSITE_MODULES, websiteMonthlyFree, type PlanTier } from '@/lib/canada-proposal-plans'
 import { downloadProposalPdf, type ProposalInput } from '@/lib/generate-proposal-pdf'
 import { verticalsByGroup, findVerticalBySlug, DECK_BASE_URL, buildPersonalizedDeckUrl } from '@/data/cadVerticals'
 
@@ -35,6 +35,12 @@ function generateQrSvg(text: string, size: number = 256): string {
 
 const API_URL = import.meta.env.VITE_API_URL || ''
 
+// Website Buildout is sold as modular line items (WEBSITE_MODULES) — the
+// one-time modules sum into the setup fee; the build runs as a 48-hour
+// contest on Meridian Foundry, fired when the customer is created.
+const FOUNDRY_ORDER_URL = 'https://foundry.meridian.tips/agency/api/sites/order'
+const FOUNDRY_JOB_BASE = 'https://foundry.meridian.tips/agency/jobs'
+
 /* ─── Proposal Slide Overlay ─── */
 function ProposalOverlay({
   open,
@@ -52,6 +58,7 @@ function ProposalOverlay({
   onDownloadPdf,
   verticalTitle,
   deckUrl,
+  websiteAddon = 0,
 }: {
   open: boolean
   onClose: () => void
@@ -68,6 +75,8 @@ function ProposalOverlay({
   onDownloadPdf: () => void
   verticalTitle?: string
   deckUrl?: string
+  /** portion of setupFee that is the 48h website build — shown as its own line */
+  websiteAddon?: number
 }) {
   const [currentSlide, setCurrentSlide] = useState(0)
   const totalSlides = 8
@@ -279,10 +288,16 @@ function ProposalOverlay({
                   <span className="text-sm-tight text-pm-canada-text-muted">{plan.label} Plan</span>
                   <span className="text-sm-tight text-white font-medium">CA${price}{interval}</span>
                 </div>
-                {setupFee > 0 && (
+                {setupFee - websiteAddon > 0 && (
                   <div className="flex justify-between py-2 border-b border-pm-canada-border">
                     <span className="text-sm-tight text-pm-canada-text-muted">Setup Fee</span>
-                    <span className="text-sm-tight text-white font-medium">CA${setupFee}</span>
+                    <span className="text-sm-tight text-white font-medium">CA${setupFee - websiteAddon}</span>
+                  </div>
+                )}
+                {websiteAddon > 0 && (
+                  <div className="flex justify-between py-2 border-b border-pm-canada-border">
+                    <span className="text-sm-tight text-pm-canada-text-muted">Custom Website — built in 48 hours</span>
+                    <span className="text-sm-tight text-white font-medium">CA${websiteAddon}</span>
                   </div>
                 )}
                 {firstMonthFree && (
@@ -514,10 +529,17 @@ export default function CanadaPortalCreateCustomerPage() {
     pos: '',
     plan: 'premium',
     priceBump: 0,
-    setupFee: '',
     firstMonthFree: false,
     // Per-order fee handling, set here at close and FIXED for the merchant.
     feeAllocationMode: 'business_pays' as 'business_pays' | 'split_5050' | 'customer_pays',
+    // Website add-on: CA$700 flat on top of the rep's setup fee; the intake
+    // below becomes the brief for the 48-hour Foundry build contest.
+    website: false,
+    websiteCurrentUrl: '',
+    websiteGoals: '',
+    websitePages: 'Home, Services, Contact',
+    websiteBrand: '',
+    websiteContent: 'partial' as 'ready' | 'partial' | 'none',
     notes: '',
   })
 
@@ -526,9 +548,27 @@ export default function CanadaPortalCreateCustomerPage() {
     setError(null)
   }
 
+  // Website Buildout modules — all on by default (the full package); the rep
+  // unchecks with the owner so the total is visibly chosen, not quoted.
+  const [websiteModules, setWebsiteModules] = useState<string[]>(WEBSITE_MODULES.map(m => m.id))
+  function toggleModule(id: string) {
+    const m = WEBSITE_MODULES.find(x => x.id === id)
+    if (!m || m.core) return
+    setWebsiteModules(cur => (cur.includes(id) ? cur.filter(x => x !== id) : [...cur, id]))
+  }
+  const websiteOneTime = WEBSITE_MODULES.filter(m => !m.monthly && websiteModules.includes(m.id)).reduce((t, m) => t + m.price, 0)
+  const websiteMonthly = WEBSITE_MODULES.filter(m => m.monthly && websiteModules.includes(m.id)).reduce((t, m) => t + m.price, 0)
+
   const selectedPlan = getPlan(form.plan)
   const price = selectedPlan.price + form.priceBump
-  const setupFee = form.setupFee ? parseInt(form.setupFee) : 0
+  // Maintenance + hosting come free with Premium and up — only Standard
+  // pays the buildout's monthly line items.
+  const monthlyFree = websiteMonthlyFree(selectedPlan.id)
+  const websiteMonthlyDue = monthlyFree ? 0 : websiteMonthly
+  // Setup fee = the sum of toggled setup services (Website Buildout's
+  // one-time modules today, more services coming). Monthly modules bill
+  // recurring and are disclosed separately, never in the one-time fee.
+  const setupFee = form.website ? websiteOneTime : 0
   const dueToday = (form.firstMonthFree ? 0 : price) + setupFee
   const interval = selectedPlan.interval === 'week' ? '/wk' : '/mo'
 
@@ -626,8 +666,44 @@ export default function CanadaPortalCreateCustomerPage() {
   const [tempPwCopied, setTempPwCopied] = useState(false)
   const [autoSendStatus, setAutoSendStatus] = useState<{ sms: boolean; email: boolean }>({ sms: false, email: false })
   const [crmRecordError, setCrmRecordError] = useState<string | null>(null)
+  const [websiteContestUrl, setWebsiteContestUrl] = useState('')
+  const [websiteContestError, setWebsiteContestError] = useState<string | null>(null)
   // Survives a failed provision → retry doesn't insert a duplicate lead.
   const createdLeadIdRef = useRef<string | null>(null)
+
+  // Website add-on sold → fire the 48-hour build contest on Meridian Foundry
+  // (our own build marketplace — the intake the rep filled becomes the public
+  // brief). Best-effort: a Foundry hiccup must never block the customer
+  // creation the rep just closed; the outcome shows on the confirm screen.
+  async function launchWebsiteSprint() {
+    try {
+      const rawUrl = form.websiteCurrentUrl.trim()
+      const res = await fetch(FOUNDRY_ORDER_URL, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          company: form.businessName,
+          contactName: form.ownerName,
+          email: form.email,
+          currentUrl: rawUrl ? (/^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`) : '',
+          goals: form.websiteGoals.trim(),
+          pages: form.websitePages.split(',').map(p => p.trim()).filter(Boolean).slice(0, 12),
+          brandNotes: [form.websiteBrand.trim(), `Modules sold: ${WEBSITE_MODULES.filter(m => websiteModules.includes(m.id) || (m.monthly && monthlyFree)).map(m => m.label).join(', ')}.`, `Sold with Meridian ${selectedPlan.label} (Canada) by rep ${rep?.name || 'unknown'}.`].filter(Boolean).join(' '),
+          contentReady: form.websiteContent,
+          repEmail: '',
+        }),
+      })
+      const data = await res.json().catch(() => null)
+      if ((res.ok || res.status === 409) && data?.jobId) {
+        // 409 = a sprint is already live for this business (e.g. a retry)
+        setWebsiteContestUrl(`${FOUNDRY_JOB_BASE}/${data.jobId}`)
+      } else {
+        setWebsiteContestError(typeof data?.error === 'string' ? data.error : `Contest launch failed (${res.status})`)
+      }
+    } catch {
+      setWebsiteContestError('Could not reach the Foundry — start the sprint manually at foundry.meridian.tips/agency/website')
+    }
+  }
 
   async function handleCreateCustomer() {
     setSaving(true)
@@ -636,6 +712,9 @@ export default function CanadaPortalCreateCustomerPage() {
     try {
       if (!form.email.trim()) {
         throw new Error('Customer email is required to create their login')
+      }
+      if (form.website && form.websiteGoals.trim().length < 20) {
+        throw new Error('Website goals: give the builders at least one real sentence (20+ characters)')
       }
 
       const token = generateToken()
@@ -660,7 +739,7 @@ export default function CanadaPortalCreateCustomerPage() {
             stage: 'closed_won',
             monthly_value: price,
             commission_rate: rep?.commission_rate ?? 70,
-            notes: form.notes || `Plan: ${selectedPlan.label} at CA$${price}${interval}. Setup fee: CA$${setupFee}. First month free: ${form.firstMonthFree ? 'Yes' : 'No'}`,
+            notes: (form.notes || `Plan: ${selectedPlan.label} at CA$${price}${interval}. Setup fee: CA$${setupFee}. First month free: ${form.firstMonthFree ? 'Yes' : 'No'}`) + (form.website ? ` Website Buildout: CA$${websiteOneTime} one-time (${WEBSITE_MODULES.filter(m => websiteModules.includes(m.id) || (m.monthly && monthlyFree)).map(m => m.label).join(', ')})${websiteMonthlyDue > 0 ? ` + CA$${websiteMonthlyDue}/mo recurring` : monthlyFree ? ` — maintenance & hosting included with ${selectedPlan.label}` : ''}.` : ''),
             rep_id: rep?.rep_id || null,
           }).select('id')
           if (leadErr) setCrmRecordError(leadErr.message)
@@ -734,6 +813,8 @@ export default function CanadaPortalCreateCustomerPage() {
 
       // Reflect actual backend email delivery status. SMS is rep-initiated via the OS handler — no auto-send.
       setAutoSendStatus(s => ({ ...s, email: !!provData.welcome_email_sent }))
+
+      if (form.website) await launchWebsiteSprint()
 
       setStep('confirm')
     } catch (err: any) {
@@ -1049,16 +1130,117 @@ export default function CanadaPortalCreateCustomerPage() {
 
             <div className="mb-4">
               <label className="block text-2xs font-medium text-pm-canada-text-muted mb-1.5">
-                Setup Fee <span className="text-pm-accent">(you keep 100%)</span>
+                Setup Services <span className="text-pm-canada-text-faint">(one-time — billed together as the setup fee)</span>
               </label>
-              <div className="relative">
-                <DollarSign size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-pm-canada-text-faint" />
-                <input type="number" value={form.setupFee}
-                  onChange={e => update('setupFee', e.target.value)}
-                  placeholder="0"
-                  className="w-full pl-8 pr-3 py-2.5 text-sm-tight rounded-lg bg-pm-canada-bg border border-pm-canada-border text-white placeholder-pm-canada-text-faint focus:border-pm-accent/50 focus:outline-none transition-colors" />
+              <div className="rounded-xl border border-pm-canada-border bg-pm-canada-bg">
+                <div className="flex items-center justify-between p-4">
+                  <div className="flex items-center gap-3">
+                    <Globe size={18} className={form.website ? 'text-pm-accent' : 'text-pm-canada-text-faint'} />
+                    <div>
+                      <p className="text-sm-tight font-semibold text-white">Website Buildout</p>
+                      <p className="text-2xs text-pm-canada-text-muted">Custom site or rebuild, built in 48 hours on the Meridian network</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm-tight font-semibold text-pm-accent">
+                      CA${websiteOneTime}
+                      {websiteMonthlyDue > 0 && <span className="text-pm-canada-text-muted font-normal"> + CA${websiteMonthlyDue}/mo</span>}
+                    </span>
+                    <button
+                      onClick={() => update('website', !form.website)}
+                      className={`relative w-12 h-6 rounded-full transition-colors duration-200 ${
+                        form.website ? 'bg-pm-accent' : 'bg-pm-canada-border'
+                      }`}
+                    >
+                      <div className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform duration-200 ${
+                        form.website ? 'translate-x-6' : ''
+                      }`} />
+                    </button>
+                  </div>
+                </div>
+                {form.website && (
+                  <div className="px-4 pb-4 pt-3 space-y-3 border-t border-pm-canada-border">
+                    <div className="space-y-1.5">
+                      {WEBSITE_MODULES.map(m => {
+                        const included = m.core || (m.monthly && monthlyFree)
+                        const on = websiteModules.includes(m.id) || included
+                        return (
+                          <label key={m.id}
+                            className={`flex items-center gap-3 px-3 py-2 rounded-lg border cursor-pointer transition-colors ${
+                              on ? 'border-pm-accent/40 bg-pm-accent/5' : 'border-pm-canada-border'
+                            } ${m.core ? 'cursor-default' : ''}`}>
+                            <input type="checkbox" checked={on} disabled={included}
+                              onChange={() => toggleModule(m.id)}
+                              className="accent-pm-accent" />
+                            <span className="flex-1">
+                              <span className="block text-sm-tight text-white">{m.label}{m.core ? ' (included)' : ''}</span>
+                              <span className="block text-2xs text-pm-canada-text-muted">{m.blurb}</span>
+                            </span>
+                            {m.monthly && monthlyFree ? (
+                              <span className="text-2xs font-semibold text-pm-accent">Included with {selectedPlan.label}</span>
+                            ) : (
+                              <span className={`text-sm-tight font-semibold ${on ? 'text-pm-accent' : 'text-pm-canada-text-faint'}`}>
+                                CA${m.price}{m.monthly ? '/mo' : ''}
+                              </span>
+                            )}
+                          </label>
+                        )
+                      })}
+                      <div className="flex justify-between px-3 pt-1.5 text-sm-tight">
+                        <span className="text-pm-canada-text-muted">Buildout total</span>
+                        <span className="text-white font-semibold">
+                          CA${websiteOneTime} one-time
+                          {websiteMonthlyDue > 0 && <span className="text-pm-canada-text-muted font-normal"> · CA${websiteMonthlyDue}/mo ongoing</span>}
+                          {monthlyFree && <span className="text-pm-accent font-normal"> · maintenance &amp; hosting included with {selectedPlan.label}</span>}
+                        </span>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-2xs font-medium text-pm-canada-text-muted mb-1.5">Current website (leave empty for a brand-new site)</label>
+                      <input type="text" value={form.websiteCurrentUrl}
+                        onChange={e => update('websiteCurrentUrl', e.target.value)}
+                        placeholder="theirbusiness.com"
+                        className="w-full px-3 py-2.5 text-sm-tight rounded-lg bg-pm-canada-surface border border-pm-canada-border text-white placeholder-pm-canada-text-faint focus:border-pm-accent/50 focus:outline-none" />
+                    </div>
+                    <div>
+                      <label className="block text-2xs font-medium text-pm-canada-text-muted mb-1.5">
+                        What must the site do? <span className="text-pm-accent">(required — this is the builders&rsquo; brief)</span>
+                      </label>
+                      <textarea rows={2} value={form.websiteGoals}
+                        onChange={e => update('websiteGoals', e.target.value)}
+                        placeholder="Take pickup orders online, show the menu, rank for local searches..."
+                        className="w-full px-3 py-2.5 text-sm-tight rounded-lg bg-pm-canada-surface border border-pm-canada-border text-white placeholder-pm-canada-text-faint focus:border-pm-accent/50 focus:outline-none resize-none" />
+                      <p className="text-2xs text-pm-canada-text-faint mt-1">Ask the owner on the call — 20+ characters</p>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-2xs font-medium text-pm-canada-text-muted mb-1.5">Pages (comma-separated)</label>
+                        <input type="text" value={form.websitePages}
+                          onChange={e => update('websitePages', e.target.value)}
+                          className="w-full px-3 py-2.5 text-sm-tight rounded-lg bg-pm-canada-surface border border-pm-canada-border text-white focus:border-pm-accent/50 focus:outline-none" />
+                      </div>
+                      <div>
+                        <label className="block text-2xs font-medium text-pm-canada-text-muted mb-1.5">Words &amp; photos</label>
+                        <select value={form.websiteContent}
+                          onChange={e => update('websiteContent', e.target.value)}
+                          className="w-full px-3 py-2.5 text-sm-tight rounded-lg bg-pm-canada-surface border border-pm-canada-border text-white focus:border-pm-accent/50 focus:outline-none">
+                          <option value="ready">Owner has content ready</option>
+                          <option value="partial">Some of it exists</option>
+                          <option value="none">Write it for them</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-2xs font-medium text-pm-canada-text-muted mb-1.5">Brand notes (colors, tone, sites they like)</label>
+                      <input type="text" value={form.websiteBrand}
+                        onChange={e => update('websiteBrand', e.target.value)}
+                        className="w-full px-3 py-2.5 text-sm-tight rounded-lg bg-pm-canada-surface border border-pm-canada-border text-white focus:border-pm-accent/50 focus:outline-none" />
+                    </div>
+                    <p className="text-2xs text-pm-accent/60">When you create the customer, a 48-hour build contest goes live — the owner picks their site from real, clickable previews.</p>
+                  </div>
+                )}
               </div>
-              <p className="text-2xs text-pm-accent/60 mt-1">Custom amount — goes directly to you</p>
+              <p className="text-2xs text-pm-canada-text-faint mt-1.5">More setup services are on the way — each lists its price and adds to the one-time setup fee.</p>
             </div>
 
             <div className="flex items-center justify-between p-4 rounded-xl border border-pm-canada-border bg-pm-canada-bg">
@@ -1097,10 +1279,14 @@ export default function CanadaPortalCreateCustomerPage() {
                 <span className="text-pm-canada-text-muted">Plan</span>
                 <span className="text-white font-medium">{selectedPlan.label} — CA${price}{interval}</span>
               </div>
-              {setupFee > 0 && (
+              {form.website && (
                 <div className="flex justify-between py-2 border-b border-pm-canada-border">
-                  <span className="text-pm-canada-text-muted">Setup Fee <span className="text-pm-accent">(yours)</span></span>
-                  <span className="text-pm-accent font-medium">CA${setupFee}</span>
+                  <span className="text-pm-canada-text-muted">Website Buildout <span className="text-pm-canada-text-faint">(modular, in setup fee)</span></span>
+                  <span className="text-white font-medium">
+                    CA${websiteOneTime}
+                    {websiteMonthlyDue > 0 && <span className="text-pm-canada-text-muted font-normal"> + CA${websiteMonthlyDue}/mo</span>}
+                    {monthlyFree && <span className="text-pm-accent font-normal"> · maint &amp; hosting incl.</span>}
+                  </span>
                 </div>
               )}
               {form.firstMonthFree && (
@@ -1333,7 +1519,7 @@ export default function CanadaPortalCreateCustomerPage() {
               <ArrowLeft size={14} /> Back
             </button>
             <button onClick={() => {
-              setForm({ businessName: '', ownerName: '', email: '', phone: '', vertical: '', pos: '', plan: 'premium', priceBump: 0, setupFee: '', firstMonthFree: false, feeAllocationMode: 'business_pays', notes: '' })
+              setForm({ businessName: '', ownerName: '', email: '', phone: '', vertical: '', pos: '', plan: 'premium', priceBump: 0, firstMonthFree: false, feeAllocationMode: 'business_pays', website: false, websiteCurrentUrl: '', websiteGoals: '', websitePages: 'Home, Services, Contact', websiteBrand: '', websiteContent: 'partial', notes: '' })
               setStep('details')
               setOnboardingLink('')
               setCustomerLoginUrl('')
@@ -1393,6 +1579,7 @@ export default function CanadaPortalCreateCustomerPage() {
                 { label: 'Checkout/payment link generated', done: !!checkoutUrl },
                 { label: 'Proposal shown to customer', done: proposalGenerated },
                 { label: 'POS system selected', done: !!form.pos },
+                { label: '48-hour website contest launched', done: !!websiteContestUrl, skip: !form.website },
               ].filter(item => !('skip' in item && item.skip)).map(item => (
                 <div key={item.label} className="flex items-center gap-3 py-2 px-3 rounded-lg bg-pm-canada-bg border border-pm-canada-border">
                   <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${
@@ -1405,6 +1592,38 @@ export default function CanadaPortalCreateCustomerPage() {
               ))}
             </div>
           </div>
+
+          {/* Website contest status */}
+          {form.website && websiteContestUrl && (
+            <div className="bg-pm-canada-surface rounded-xl p-6 border border-pm-accent/20">
+              <div className="flex items-center gap-2 mb-2">
+                <Globe size={16} className="text-pm-accent" />
+                <p className="text-2xs font-mono text-pm-accent tracking-wider">48-HOUR WEBSITE CONTEST — LIVE</p>
+              </div>
+              <p className="text-2xs text-pm-canada-text-muted mb-3">
+                Builders are on the clock. In 48 hours {form.ownerName.split(' ')[0]} picks their site from
+                real, clickable previews — watch entries arrive here:
+              </p>
+              <div className="flex gap-2">
+                <input type="text" value={websiteContestUrl} readOnly
+                  className="flex-1 px-3 py-2.5 text-xs rounded-lg bg-pm-canada-bg border border-pm-canada-border text-white font-mono truncate" />
+                <a href={websiteContestUrl} target="_blank" rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium rounded-lg border border-pm-accent/30 bg-pm-accent/10 text-pm-accent hover:bg-pm-accent/20 transition-colors">
+                  <ExternalLink size={14} /> Open
+                </a>
+              </div>
+            </div>
+          )}
+          {form.website && websiteContestError && (
+            <div className="bg-pm-amber-orange/10 rounded-xl p-4 border border-pm-amber-orange/20">
+              <p className="text-sm font-semibold text-pm-amber-orange">Website contest not launched</p>
+              <p className="text-xs text-pm-amber-orange/70 mt-1">
+                The customer account was created and the website fee is in their setup fee, but the build
+                contest didn&rsquo;t start ({websiteContestError}). Start it manually at
+                foundry.meridian.tips/agency/website with the same details.
+              </p>
+            </div>
+          )}
 
           {/* Customer Portal URL */}
           {customerPortalUrl && (
@@ -1490,7 +1709,7 @@ export default function CanadaPortalCreateCustomerPage() {
               <ArrowLeft size={14} /> Back to Leads
             </button>
             <button onClick={() => {
-              setForm({ businessName: '', ownerName: '', email: '', phone: '', vertical: '', pos: '', plan: 'premium', priceBump: 0, setupFee: '', firstMonthFree: false, feeAllocationMode: 'business_pays', notes: '' })
+              setForm({ businessName: '', ownerName: '', email: '', phone: '', vertical: '', pos: '', plan: 'premium', priceBump: 0, firstMonthFree: false, feeAllocationMode: 'business_pays', website: false, websiteCurrentUrl: '', websiteGoals: '', websitePages: 'Home, Services, Contact', websiteBrand: '', websiteContent: 'partial', notes: '' })
               setStep('details')
               setOnboardingLink('')
               setCustomerLoginUrl('')
@@ -1523,6 +1742,7 @@ export default function CanadaPortalCreateCustomerPage() {
         repPhone={rep?.phone || undefined}
         checkoutUrl={checkoutUrl}
         onDownloadPdf={handleDownloadPdf}
+        websiteAddon={form.website ? websiteOneTime : 0}
         verticalTitle={selectedVertical?.title}
         deckUrl={
           selectedVertical

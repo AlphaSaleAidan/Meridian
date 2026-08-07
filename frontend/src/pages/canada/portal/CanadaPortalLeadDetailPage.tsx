@@ -12,7 +12,13 @@ import {
   CAD_VERTICALS,
 } from '@/data/cadVerticals'
 import { type Deal, type DealStage } from '@/lib/canada-sales-demo-data'
-import { closestMonthlyPlanCad, getPlan, PLAN_TIERS, REP_PRICE_HEADROOM_CAD, CAD_RATE, type PlanTier } from '@/lib/canada-proposal-plans'
+import { closestMonthlyPlanCad, getPlan, PLAN_TIERS, REP_PRICE_HEADROOM_CAD, CAD_RATE, WEBSITE_MODULES, websiteMonthlyFree, VOICE_INCLUDED_MINUTES, VOICE_OVERAGE_PER_MIN, VOICE_MAX_CALL_MINUTES, type PlanTier } from '@/lib/canada-proposal-plans'
+
+// Website Buildout is sold as modular line items (WEBSITE_MODULES) — the
+// one-time modules sum into the setup fee. Creating the customer fires the
+// 48-hour build contest on Meridian Foundry.
+const FOUNDRY_ORDER_URL = 'https://foundry.meridian.tips/agency/api/sites/order'
+const FOUNDRY_JOB_BASE = 'https://foundry.meridian.tips/agency/jobs'
 import { canadaLeadsService } from '@/lib/canada-leads-service'
 import {
   useCanadaLead,
@@ -144,7 +150,30 @@ export default function CanadaPortalLeadDetailPage() {
   const monthlyPrice = selectedPlan.price + priceBump
   const orderFeeFloorCents = Math.round(selectedPlan.orderFeeFloor * 100)
   const orderFeeMaxCents = Math.round(selectedPlan.orderFee * 100)
-  const [setupFee, setSetupFee] = useState('0')
+  // Setup Services (Aidan 08-06): the manual setup fee is retired — the fee
+  // is the sum of toggled services (Website Buildout today, more soon).
+  const [website, setWebsite] = useState(false)
+  const [websiteCurrentUrl, setWebsiteCurrentUrl] = useState('')
+  const [websiteGoals, setWebsiteGoals] = useState('')
+  const [websitePages, setWebsitePages] = useState('Home, Services, Contact')
+  const [websiteBrand, setWebsiteBrand] = useState('')
+  const [websiteContent, setWebsiteContent] = useState<'ready' | 'partial' | 'none'>('partial')
+  const [websiteContestUrl, setWebsiteContestUrl] = useState('')
+  // Buildout modules — all on by default (the full package); unchecking with
+  // the owner makes the total visibly chosen, not quoted.
+  const [websiteModules, setWebsiteModules] = useState<string[]>(WEBSITE_MODULES.map(m => m.id))
+  function toggleModule(id: string) {
+    const m = WEBSITE_MODULES.find(x => x.id === id)
+    if (!m || m.core) return
+    setWebsiteModules(cur => (cur.includes(id) ? cur.filter(x => x !== id) : [...cur, id]))
+  }
+  const websiteOneTime = WEBSITE_MODULES.filter(m => !m.monthly && websiteModules.includes(m.id)).reduce((t, m) => t + m.price, 0)
+  const websiteMonthly = WEBSITE_MODULES.filter(m => m.monthly && websiteModules.includes(m.id)).reduce((t, m) => t + m.price, 0)
+  // Maintenance + hosting come free with Premium and up — only Standard
+  // pays the buildout's monthly line items.
+  const monthlyFree = websiteMonthlyFree(selectedPlan.id)
+  const websiteMonthlyDue = monthlyFree ? 0 : websiteMonthly
+  const setupFee = website ? String(websiteOneTime) : '0'
   const [firstMonthFree, setFirstMonthFree] = useState(false)
 
   // Proposal state
@@ -215,6 +244,12 @@ export default function CanadaPortalLeadDetailPage() {
       setCustomerCreating(false)
       return
     }
+    if (website && websiteGoals.trim().length < 20) {
+      setCustomerError('Website Buildout is on but the goals are empty — give the builders at least one real sentence (20+ characters).')
+      creatingRef.current = false
+      setCustomerCreating(false)
+      return
+    }
 
     try {
       if (!supabase) throw new Error('Database not connected')
@@ -249,6 +284,37 @@ export default function CanadaPortalLeadDetailPage() {
       // forced reset on first login. Surface it so the rep can share it directly.
       const data = await res.json().catch(() => ({}))
       setCustomerCredentials({ email, tempPassword: data.temporary_password || '' })
+
+      // Website Buildout sold → fire the 48-hour build contest on Meridian
+      // Foundry (best-effort: a Foundry hiccup never blocks the account).
+      if (website) {
+        try {
+          const rawUrl = websiteCurrentUrl.trim()
+          const sprintRes = await fetch(FOUNDRY_ORDER_URL, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              company: deal.business_name,
+              contactName: deal.contact_name,
+              email,
+              currentUrl: rawUrl ? (/^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`) : '',
+              goals: websiteGoals.trim(),
+              pages: websitePages.split(',').map(x => x.trim()).filter(Boolean).slice(0, 12),
+              brandNotes: [websiteBrand.trim(), `Modules sold: ${WEBSITE_MODULES.filter(m => websiteModules.includes(m.id) || (m.monthly && monthlyFree)).map(m => m.label).join(', ')}.`, `Sold with Meridian ${selectedPlan.label} (Canada) by rep ${rep?.name || 'unknown'}.`].filter(Boolean).join(' '),
+              contentReady: websiteContent,
+              repEmail: '',
+            }),
+          })
+          const sprintData = await sprintRes.json().catch(() => null)
+          if ((sprintRes.ok || sprintRes.status === 409) && sprintData?.jobId) {
+            setWebsiteContestUrl(`${FOUNDRY_JOB_BASE}/${sprintData.jobId}`)
+          } else {
+            setCustomerError('Account created, but the website build contest did not launch — start it manually at foundry.meridian.tips/agency/website.')
+          }
+        } catch {
+          setCustomerError('Account created, but the website build contest did not launch — start it manually at foundry.meridian.tips/agency/website.')
+        }
+      }
       // The fee seed is best-effort server-side — if it failed, creation still
       // succeeded but the merchant is on the tier default fee. Tell the rep.
       if (selectedPlan.phoneAgent && data.fee_seeded === false) {
@@ -518,10 +584,19 @@ export default function CanadaPortalLeadDetailPage() {
         region: deal.province || 'Ontario',
         posSystem: 'N/A',
         repName: rep.name || 'Sales Representative',
-        planName: closestMonthlyPlanCad(monthlyPrice).label,
+        planName: selectedPlan.label,
         monthlyPriceCents: monthlyPrice * 100,
         setupFeeCents: (Number(setupFee) || 0) * 100,
         firstMonthFree,
+        ...(selectedPlan.phoneAgent ? {
+          phoneAgent: {
+            orderFeeCents: Math.round(selectedPlan.orderFee * 100),
+            includedMinutes: VOICE_INCLUDED_MINUTES,
+            overageCentsPerMin: Math.round(VOICE_OVERAGE_PER_MIN * 100),
+            maxCallMinutes: VOICE_MAX_CALL_MINUTES,
+          },
+        } : {}),
+        ...(website ? { websiteMonthlyCents: websiteMonthlyDue * 100, websiteMonthlyIncluded: monthlyFree } : {}),
         startDate: new Date().toISOString().slice(0, 10),
       }
       const blob = await generateSlaDocument(slaInput)
@@ -566,10 +641,19 @@ export default function CanadaPortalLeadDetailPage() {
         region: deal.province || 'Ontario',
         posSystem: 'N/A',
         repName: rep.name || 'Sales Representative',
-        planName: closestMonthlyPlanCad(monthlyPrice).label,
+        planName: selectedPlan.label,
         monthlyPriceCents: monthlyPrice * 100,
         setupFeeCents: (Number(setupFee) || 0) * 100,
         firstMonthFree,
+        ...(selectedPlan.phoneAgent ? {
+          phoneAgent: {
+            orderFeeCents: Math.round(selectedPlan.orderFee * 100),
+            includedMinutes: VOICE_INCLUDED_MINUTES,
+            overageCentsPerMin: Math.round(VOICE_OVERAGE_PER_MIN * 100),
+            maxCallMinutes: VOICE_MAX_CALL_MINUTES,
+          },
+        } : {}),
+        ...(website ? { websiteMonthlyCents: websiteMonthlyDue * 100, websiteMonthlyIncluded: monthlyFree } : {}),
         startDate: new Date().toISOString().slice(0, 10),
         clientSignature: slaSignature,
       }
@@ -1041,28 +1125,12 @@ export default function CanadaPortalLeadDetailPage() {
           </div>
           <p className="text-2xs text-pm-canada-text-faint mt-1">~US${Math.round(monthlyPrice / CAD_RATE).toLocaleString()}/mo. Base price is the floor — no discounts.</p>
 
-          {/* Per-order fee slider — phone-agent tiers only. Slides DOWN from the
-              tier's standard rate to the redline; the backend clamps to the
-              same floor so the redline is enforced server-side too. */}
+          {/* Per-order fee — fixed per tier (the negotiation slider is retired;
+              every deal sells at the tier rate). */}
           {selectedPlan.phoneAgent && (
             <div className="mt-4">
-              <label className="text-xs text-pm-canada-text-muted block mb-1.5">
-                Per-Order Fee <span className="text-pm-canada-text-faint">(redline CA${selectedPlan.orderFeeFloor.toFixed(2)}/order)</span>
-              </label>
-              <div className="flex items-center gap-3">
-                <input
-                  type="range"
-                  min={orderFeeFloorCents}
-                  max={orderFeeMaxCents}
-                  step={1}
-                  value={Math.min(Math.max(orderFeeCents, orderFeeFloorCents), orderFeeMaxCents)}
-                  onChange={e => setOrderFeeCents(Number(e.target.value))}
-                  className="flex-1 h-2 bg-pm-canada-border rounded-full appearance-none cursor-pointer accent-pm-accent"
-                />
-                <span className="text-sm font-semibold text-pm-amber-gold w-28 text-right">CA${(orderFeeCents / 100).toFixed(2)}/order</span>
-              </div>
-              <p className="text-2xs text-pm-canada-text-faint mt-1">
-                Standard rate CA${selectedPlan.orderFee.toFixed(2)} — negotiate down only, never below the redline.
+              <p className="text-xs text-pm-canada-text-muted">
+                Per-order fee: <span className="font-semibold text-pm-amber-gold">CA${selectedPlan.orderFee.toFixed(2)}/order</span> — fixed for this tier
               </p>
               <p className="text-2xs text-pm-canada-text-muted mt-1.5 px-2.5 py-1.5 rounded-md bg-pm-canada-bg border border-pm-canada-border">
                 Voice calls: first 3 minutes of every call included, then <span className="font-semibold text-pm-amber-gold">CA$0.45/min</span> billed automatically to the merchant's Meridian account. Calls end automatically at 5 minutes, so overage never exceeds CA$0.90/call.
@@ -1071,16 +1139,90 @@ export default function CanadaPortalLeadDetailPage() {
           )}
         </div>
 
-        {/* Setup Fee */}
+        {/* Setup Services — priced toggles; their sum is the setup fee */}
         <div>
-          <label className="text-xs text-pm-canada-text-muted block mb-1.5">Setup Fee</label>
-          <input
-            type="text"
-            value={setupFee}
-            onChange={e => setSetupFee(e.target.value)}
-            className={inputClass}
-            placeholder="e.g. 250"
-          />
+          <label className="text-xs text-pm-canada-text-muted block mb-1.5">
+            Setup Services <span className="text-pm-canada-text-faint">(one-time — billed together as the setup fee)</span>
+          </label>
+          <div className="rounded-xl border border-pm-canada-border bg-pm-canada-bg">
+            <div className="flex items-center justify-between p-4">
+              <div>
+                <p className="text-sm font-semibold text-white">Website Buildout</p>
+                <p className="text-2xs text-pm-canada-text-muted">Custom site or rebuild, built in 48 hours on the Meridian network</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-semibold text-pm-accent">
+                  CA${websiteOneTime}
+                  {websiteMonthlyDue > 0 && <span className="text-pm-canada-text-muted font-normal"> + CA${websiteMonthlyDue}/mo</span>}
+                </span>
+                <div className={`w-9 h-5 rounded-full transition-colors relative cursor-pointer ${website ? 'bg-pm-accent' : 'bg-pm-canada-border'}`}
+                  onClick={() => setWebsite(!website)}
+                >
+                  <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${website ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                </div>
+              </div>
+            </div>
+            {website && (
+              <div className="px-4 pb-4 pt-3 space-y-3 border-t border-pm-canada-border">
+                <div className="space-y-1.5">
+                  {WEBSITE_MODULES.map(m => {
+                    const included = m.core || (m.monthly && monthlyFree)
+                    const on = websiteModules.includes(m.id) || included
+                    return (
+                      <label key={m.id}
+                        className={`flex items-center gap-3 px-3 py-2 rounded-lg border cursor-pointer transition-colors ${
+                          on ? 'border-pm-accent/40 bg-pm-accent/5' : 'border-pm-canada-border'
+                        } ${m.core ? 'cursor-default' : ''}`}>
+                        <input type="checkbox" checked={on} disabled={included}
+                          onChange={() => toggleModule(m.id)}
+                          className="accent-pm-accent" />
+                        <span className="flex-1">
+                          <span className="block text-sm text-white">{m.label}{m.core ? ' (included)' : ''}</span>
+                          <span className="block text-2xs text-pm-canada-text-muted">{m.blurb}</span>
+                        </span>
+                        {m.monthly && monthlyFree ? (
+                          <span className="text-2xs font-semibold text-pm-accent">Included with {selectedPlan.label}</span>
+                        ) : (
+                          <span className={`text-sm font-semibold ${on ? 'text-pm-accent' : 'text-pm-canada-text-faint'}`}>
+                            CA${m.price}{m.monthly ? '/mo' : ''}
+                          </span>
+                        )}
+                      </label>
+                    )
+                  })}
+                  <div className="flex justify-between px-3 pt-1.5 text-sm">
+                    <span className="text-pm-canada-text-muted">Buildout total</span>
+                    <span className="text-white font-semibold">
+                      CA${websiteOneTime} one-time
+                      {websiteMonthlyDue > 0 && <span className="text-pm-canada-text-muted font-normal"> · CA${websiteMonthlyDue}/mo ongoing</span>}
+                      {monthlyFree && <span className="text-pm-accent font-normal"> · maintenance &amp; hosting included with {selectedPlan.label}</span>}
+                    </span>
+                  </div>
+                </div>
+                <input type="text" value={websiteCurrentUrl} onChange={e => setWebsiteCurrentUrl(e.target.value)}
+                  className={inputClass} placeholder="Current website — leave empty if none" />
+                <div>
+                  <textarea rows={2} value={websiteGoals} onChange={e => setWebsiteGoals(e.target.value)}
+                    className={`${inputClass} resize-none`} placeholder="What must the site do? (required — the builders' brief)" />
+                  <p className="text-2xs text-pm-canada-text-faint mt-1">Ask the owner on the call — 20+ characters</p>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <input type="text" value={websitePages} onChange={e => setWebsitePages(e.target.value)}
+                    className={inputClass} placeholder="Pages (comma-separated)" />
+                  <select value={websiteContent} onChange={e => setWebsiteContent(e.target.value as 'ready' | 'partial' | 'none')}
+                    className={inputClass}>
+                    <option value="ready">Owner has content ready</option>
+                    <option value="partial">Some of it exists</option>
+                    <option value="none">Write it for them</option>
+                  </select>
+                </div>
+                <input type="text" value={websiteBrand} onChange={e => setWebsiteBrand(e.target.value)}
+                  className={inputClass} placeholder="Brand notes — colors, tone, sites they like" />
+                <p className="text-2xs text-pm-accent/60">Creating the customer launches a 48-hour build contest — the owner picks their site from real, clickable previews.</p>
+              </div>
+            )}
+          </div>
+          <p className="text-2xs text-pm-canada-text-faint mt-1.5">More setup services are on the way — each lists its price and adds to the one-time setup fee.</p>
         </div>
 
         {/* First month free */}
@@ -1613,6 +1755,15 @@ export default function CanadaPortalLeadDetailPage() {
 
           {customerCredentials ? (
             <div className="space-y-3">
+              {websiteContestUrl && (
+                <div className="p-4 rounded-lg bg-pm-accent/5 border border-pm-accent/20">
+                  <p className="text-2xs font-mono text-pm-accent tracking-wider mb-1.5">48-HOUR WEBSITE CONTEST — LIVE</p>
+                  <a href={websiteContestUrl} target="_blank" rel="noopener noreferrer"
+                    className="text-xs text-white underline decoration-pm-accent/60 break-all">
+                    {websiteContestUrl}
+                  </a>
+                </div>
+              )}
               <div className="p-4 rounded-lg bg-pm-canada-bg border border-pm-canada-border space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-pm-canada-text-muted">Email</span>
