@@ -1144,7 +1144,7 @@ export default function CanadaPortalLeadDetailPage() {
                 Per-order fee: <span className="font-semibold text-pm-amber-gold">CA${selectedPlan.orderFee.toFixed(2)}/order</span> — fixed for this tier
               </p>
               <p className="text-2xs text-pm-canada-text-muted mt-1.5 px-2.5 py-1.5 rounded-md bg-pm-canada-bg border border-pm-canada-border">
-                Voice calls: <span className="font-semibold text-pm-amber-gold">no per-minute charge</span> — call time is not billed. Calls end automatically at {VOICE_MAX_CALL_MINUTES} minutes.
+                Voice calls: <span className="font-semibold text-pm-amber-gold">no per-minute charge</span> — call time is not billed. Calls end automatically at {VOICE_MAX_CALL_MINUTES} minutes. Phone orders are charged in <span className="font-semibold text-pm-amber-gold">Canadian dollars (CAD)</span>.
               </p>
             </div>
           )}

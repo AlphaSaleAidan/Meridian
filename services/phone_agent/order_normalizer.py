@@ -4,9 +4,29 @@ standardized order structure suitable for POS API submission.
 Matches items against the merchant's menu, resolves sizes, and calculates totals.
 """
 import logging
+import os
 from typing import Any
 
 from merchant_config import MerchantPhoneConfig
+
+# Phone orders are CANADA-FIRST (Aidan 2026-08-07): every live phone-agent
+# merchant is Canadian, so an order with no positive market signal is billed in
+# CAD.
+#
+# This default is load-bearing, not cosmetic. MerchantPhoneConfig carries no
+# `country` and no `currency` field — only `language` — so the getattr() probes
+# below BOTH miss and the fallback decides the charge currency for every real
+# order. That fallback used to be a hardcoded 'usd', which silently priced and
+# charged every English-language merchant in US dollars, the Canadian pilot
+# included, while order_router's own comment said "Stripe (CAD…)".
+#
+# Flip MERIDIAN_PHONE_DEFAULT_CURRENCY when US phone orders go live. A merchant
+# that has provisioned billing terms is still resolved by market in
+# payment_links._merchant_currency ('us' → usd); this only governs the case
+# where nothing upstream knows the market.
+PHONE_DEFAULT_CURRENCY = (
+    os.getenv("MERIDIAN_PHONE_DEFAULT_CURRENCY", "cad") or "cad"
+).strip().lower()
 
 logger = logging.getLogger("meridian.phone_agent.normalizer")
 
@@ -139,8 +159,11 @@ def normalize_order(raw_order: dict[str, Any], config: MerchantPhoneConfig) -> d
                     raw_order.get("customer_name", "?"))
         order_type = "pickup"
 
-    # Derive currency from merchant config.  Explicit config.currency wins;
-    # otherwise infer from country/language indicators (CA/fr → cad).
+    # Derive currency from merchant config. Explicit config.currency wins;
+    # otherwise infer from country/language indicators; with NO signal at all,
+    # fall back to PHONE_DEFAULT_CURRENCY (CAD — see the module note).
+    # NB: config carries neither `country` nor `currency` today, so in practice
+    # it is the fallback that decides, which is why it must not be 'usd'.
     _cfg_currency = getattr(config, 'currency', None)
     if _cfg_currency:
         order_currency = _cfg_currency.lower()
@@ -149,8 +172,10 @@ def normalize_order(raw_order: dict[str, Any], config: MerchantPhoneConfig) -> d
         _language = (getattr(config, 'language', '') or '').lower()
         if _country in ('CA', 'CAN', 'CANADA') or _language == 'fr':
             order_currency = 'cad'
-        else:
+        elif _country in ('US', 'USA', 'UNITED STATES'):
             order_currency = 'usd'
+        else:
+            order_currency = PHONE_DEFAULT_CURRENCY
 
     return {
         "merchant_id": config.merchant_id,
