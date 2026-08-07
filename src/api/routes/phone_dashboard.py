@@ -167,7 +167,8 @@ async def get_fee_settings():
     import os
     return {
         "service_fee_cents": int(os.getenv("MERIDIAN_SERVICE_FEE_CENTS", "0") or 0),
-        "overage_cents_per_min": int(os.getenv("MERIDIAN_VOICE_OVERAGE_CENTS_PER_MIN", "45") or 45),
+        # 0 = call time is not billed; calls simply end at max_call_minutes.
+        "overage_cents_per_min": int(os.getenv("MERIDIAN_VOICE_OVERAGE_CENTS_PER_MIN", "0") or 0),
         "included_minutes": int(os.getenv("MERIDIAN_VOICE_INCLUDED_MIN", "3") or 3),
         # Hard cap DEFAULT: Vapi force-ends calls at this length (0 = no cap).
         # Merchants can override per-account via phone_agent_config.max_call_minutes.

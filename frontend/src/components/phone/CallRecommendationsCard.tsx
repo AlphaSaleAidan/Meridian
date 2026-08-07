@@ -67,7 +67,9 @@ function fmtEvidence(key: string, value: number): string | null {
     case 'included_minutes':
       return `${value} min included`
     case 'overage_cents_per_min':
-      return `${value}¢/min overage`
+      // 0 = call time isn't billed; rendering "0¢/min overage" would imply a
+      // charge exists. Drop the chip entirely in that case.
+      return value > 0 ? `${value}¢/min overage` : null
     case 'total_calls':
       return `${value} calls`
     default:

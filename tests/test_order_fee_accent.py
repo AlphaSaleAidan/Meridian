@@ -286,14 +286,23 @@ def test_cap_disabled_when_zero(monkeypatch):
     assert "end automatically" not in a["model"]["messages"][0]["content"]
 
 
-def test_worst_case_overage_under_cap():
-    """With a 5-min cap and 3 included minutes, the max billable overage per
-    call is 2 min × 45¢ = 90¢ — the number disclosed on the rep pages."""
+def test_call_time_is_not_billed_by_default():
+    """Overage retired 2026-08-07 (Aidan): call time carries no charge, so the
+    worst case a merchant can be billed for duration is 0. Guards against the
+    per-minute rate being silently reintroduced via the env default."""
     import math
     import src.api.routes.vapi_webhook as vw
     cap_min, over_rate, included = 5, vw.VOICE_OVERAGE_CENTS_PER_MIN, vw.VOICE_INCLUDED_MIN
-    worst = max(0, math.ceil(cap_min) - included) * over_rate
-    assert worst == 90
+    assert over_rate == 0
+    assert max(0, math.ceil(cap_min) - included) * over_rate == 0
+
+
+def test_worst_case_overage_still_capped_if_a_rate_is_reinstated():
+    """The cap arithmetic must stay correct for a bespoke per-merchant rate."""
+    import math
+    import src.api.routes.vapi_webhook as vw
+    cap_min, included = 5, vw.VOICE_INCLUDED_MIN
+    assert max(0, math.ceil(cap_min) - included) * 45 == 90
 
 
 @aio

@@ -48,7 +48,7 @@ import os
 VOICE_INCLUDED_MIN = int(os.getenv("MERIDIAN_VOICE_INCLUDED_MIN", "3") or 3)
 VOICE_MAX_CALL_MIN = int(os.getenv("MERIDIAN_VOICE_MAX_CALL_MIN", "5") or 5)
 VOICE_OVERAGE_CENTS_PER_MIN = int(
-    os.getenv("MERIDIAN_VOICE_OVERAGE_CENTS_PER_MIN", "45") or 45
+    os.getenv("MERIDIAN_VOICE_OVERAGE_CENTS_PER_MIN", "0") or 0
 )
 
 # ── thresholds (tunable, but fixed for deterministic recs) ───────────────────
@@ -158,7 +158,13 @@ def recommend_for_merchant(merchant: dict) -> list[dict]:
                 "cutoff_without_order_rate": round(cutoff_rate, 4),
                 "overage_cents_per_min": VOICE_OVERAGE_CENTS_PER_MIN,
             },
+            # With the overage retired the only lever left is the cap itself, so
+            # the copy must not advertise a 0¢/min charge.
             "suggested_change": (
+                f"Calls average {avg_dur}s ({VOICE_INCLUDED_MIN}-min block included) "
+                "with almost no cutoffs — room to revisit included minutes or the "
+                f"{VOICE_MAX_CALL_MIN}-min call cap."
+                if not VOICE_OVERAGE_CENTS_PER_MIN else
                 f"Calls average {avg_dur}s ({VOICE_INCLUDED_MIN}-min block included) "
                 "with almost no cutoffs — room to revisit included minutes or the "
                 f"{VOICE_OVERAGE_CENTS_PER_MIN}¢/min overage."

@@ -36,10 +36,15 @@ MARKETS = ("us", "ca")
 PLAN_TIER_IDS = ("standard", "premium", "command")
 
 # Env-default call terms (mirrors vapi_webhook VOICE_INCLUDED_MIN /
-# VOICE_OVERAGE_CENTS_PER_MIN defaults). Both markets currently bill the same
-# nominal overage figure in their local currency.
+# VOICE_OVERAGE_CENTS_PER_MIN defaults).
+#
+# Overage RETIRED 2026-08-07 (Aidan): calls are hard-capped at
+# MERIDIAN_VOICE_MAX_CALL_MIN instead of billing per-minute past the included
+# block, so the standard product bills 0¢/min. The per-merchant
+# `call_overage_cents_per_min` override is intentionally left intact for any
+# bespoke deal that reinstates it.
 DEFAULT_INCLUDED_CALL_MIN = 3
-DEFAULT_CALL_OVERAGE_CENTS_PER_MIN = 45
+DEFAULT_CALL_OVERAGE_CENTS_PER_MIN = 0
 
 # Fee terms fields shared by canada_leads/us_leads and merchant_billing_terms.
 FEE_TERM_FIELDS = (

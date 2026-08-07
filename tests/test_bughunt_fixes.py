@@ -183,12 +183,28 @@ async def test_missing_call_id_gets_stable_synthesized_ref(monkeypatch):
 
 
 @aio
-async def test_overage_clamped_to_disclosed_max(monkeypatch):
+async def test_no_call_time_billed_by_default(monkeypatch):
+    """Overage retired 2026-08-07 (Aidan): the standard product bills nothing
+    for call duration, so a long call must produce NO ledger credit at all."""
     monkeypatch.setattr(vw, "VOICE_MAX_CALL_MIN", 5)
-    # grace/rounding lands the call at 5:20 → ceil 6 min; unclamped would be
-    # 3 min over = 135¢, above the disclosed 90¢ maximum
+    monkeypatch.setattr(vw, "VOICE_OVERAGE_CENTS_PER_MIN", 0)
     led = await _run_eoc(monkeypatch, _eoc_msg(durationSeconds=320))
-    assert led.credits[0]["cents"] == 2 * vw.VOICE_OVERAGE_CENTS_PER_MIN
+    assert led.credits == []
+
+
+@aio
+async def test_overage_clamped_to_disclosed_max_when_a_rate_is_in_force(monkeypatch):
+    """The clamp still has to hold for a bespoke merchant that reinstates a
+    per-minute rate via merchant_billing_terms — so it keeps its coverage even
+    though the default rate is now 0.
+
+    Grace/rounding lands the call at 5:20 → ceil 6 min; unclamped that would be
+    3 min over = 135¢, above the disclosed (cap − included) × rate maximum.
+    """
+    monkeypatch.setattr(vw, "VOICE_MAX_CALL_MIN", 5)
+    monkeypatch.setattr(vw, "VOICE_OVERAGE_CENTS_PER_MIN", 45)
+    led = await _run_eoc(monkeypatch, _eoc_msg(durationSeconds=320))
+    assert led.credits[0]["cents"] == 2 * 45
 
 
 @aio

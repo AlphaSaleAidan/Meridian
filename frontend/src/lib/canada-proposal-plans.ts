@@ -55,7 +55,6 @@ export const PLAN_TIERS: PlanTier[] = US_PLAN_TIERS.map(p => ({
     f
       .replace('$0.65 per-order transaction fee', 'CA$0.75 per-order service fee')
       .replace('$0.45 service fee per order', 'CA$0.60 service fee per order')
-      .replace('then $0.45/min', 'then CA$0.45/min')
   ),
 }))
 
@@ -75,8 +74,9 @@ export { websiteMonthlyFree } from './proposal-plans'
 // Custom CRM build is rep-priced per deal, so there is no fixed CAD price to
 // convert — the definition and the amount parser are shared verbatim.
 export { CUSTOM_CRM_SERVICE, parseSetupServiceAmount } from './proposal-plans'
-// Voice-call billing dials are identical in CAD (CA$0.45/min — deliberately
-// not FX-converted, matches the plan feature copy and backend env).
+// Voice-call terms are market-independent: call time is not billed in either
+// market (overage retired 2026-08-07), so there is nothing to FX-convert —
+// only the shared included-minutes and hard call cap carry over.
 export { VOICE_INCLUDED_MINUTES, VOICE_OVERAGE_PER_MIN, VOICE_MAX_CALL_MINUTES } from './proposal-plans'
 import { WEBSITE_MODULES as US_WEBSITE_MODULES } from './proposal-plans'
 
