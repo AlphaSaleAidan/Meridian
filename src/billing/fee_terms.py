@@ -83,13 +83,12 @@ ORDER_FEE_CAP_CENTS: dict[str, int] = {
 
 # ── Canonical tier table ─────────────────────────────────────────────────────
 # Values mirror the frontend plan files (see module docstring):
-#   US: Standard $250 / Premium $350 ($1.49/order, floor $0.65)
-#       / Command $500 ($1.00/order, floor $0.45)
-#   CA: Standard CA$350 / Premium CA$500 (CA$1.99/order, floor CA$0.90)
-#       / Command CA$700 (CA$1.39/order, floor CA$0.60)
-# order_fee_floor_cents = the rep-slider redline (canada.py clamps to the same
-# values, referenced from ORDER_FEE_FLOOR_CENTS above so there is exactly one
-# copy); order_fee_cents = the tier's standard (maximum) rate.
+#   US: Standard $250 / Premium $350 ($0.65/order) / Command $500 ($0.45/order)
+#   CA: Standard CA$350 / Premium CA$500 (CA$0.90/order)
+#       / Command CA$700 (CA$0.60/order)
+# 2026-08-06 (Aidan): per-order fees adjusted DOWN to the former redlines and
+# FIXED — the rep fee slider is retired, so order_fee_cents == the floor.
+# canada.py still clamps client-sent fees to ORDER_FEE_FLOOR_CENTS.
 CANONICAL_FEE_TERMS: dict[str, dict[str, dict[str, int]]] = {
     "us": {
         "standard": {
@@ -101,14 +100,14 @@ CANONICAL_FEE_TERMS: dict[str, dict[str, dict[str, int]]] = {
         },
         "premium": {
             "monthly_fee_cents": 35000,
-            "order_fee_cents": 149,
+            "order_fee_cents": 65,
             "order_fee_floor_cents": ORDER_FEE_FLOOR_CENTS["us"]["premium"],
             "call_overage_cents_per_min": DEFAULT_CALL_OVERAGE_CENTS_PER_MIN,
             "included_call_min": DEFAULT_INCLUDED_CALL_MIN,
         },
         "command": {
             "monthly_fee_cents": 50000,
-            "order_fee_cents": 100,
+            "order_fee_cents": 45,
             "order_fee_floor_cents": ORDER_FEE_FLOOR_CENTS["us"]["command"],
             "call_overage_cents_per_min": DEFAULT_CALL_OVERAGE_CENTS_PER_MIN,
             "included_call_min": DEFAULT_INCLUDED_CALL_MIN,
@@ -124,14 +123,14 @@ CANONICAL_FEE_TERMS: dict[str, dict[str, dict[str, int]]] = {
         },
         "premium": {
             "monthly_fee_cents": 50000,
-            "order_fee_cents": 199,
+            "order_fee_cents": 90,
             "order_fee_floor_cents": ORDER_FEE_FLOOR_CENTS["ca"]["premium"],
             "call_overage_cents_per_min": DEFAULT_CALL_OVERAGE_CENTS_PER_MIN,
             "included_call_min": DEFAULT_INCLUDED_CALL_MIN,
         },
         "command": {
             "monthly_fee_cents": 70000,
-            "order_fee_cents": 139,
+            "order_fee_cents": 60,
             "order_fee_floor_cents": ORDER_FEE_FLOOR_CENTS["ca"]["command"],
             "call_overage_cents_per_min": DEFAULT_CALL_OVERAGE_CENTS_PER_MIN,
             "included_call_min": DEFAULT_INCLUDED_CALL_MIN,
