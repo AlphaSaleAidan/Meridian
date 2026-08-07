@@ -126,9 +126,9 @@ export default function USPortalLeadDetailPage() {
   const [website, setWebsite] = useState(false)
   const [websiteCurrentUrl, setWebsiteCurrentUrl] = useState('')
   const [websiteGoals, setWebsiteGoals] = useState('')
-  const [websitePages, setWebsitePages] = useState('Home, Services, Contact')
+  const [websitePages, setWebsitePages] = useState('')
   const [websiteBrand, setWebsiteBrand] = useState('')
-  const [websiteContent, setWebsiteContent] = useState<'ready' | 'partial' | 'none'>('partial')
+  const [websiteContent, setWebsiteContent] = useState<'ready' | 'none'>('none')
   const [websiteContestUrl, setWebsiteContestUrl] = useState('')
   // Buildout modules — all on by default (the full package); unchecking with
   // the owner makes the total visibly chosen, not quoted.
@@ -310,8 +310,8 @@ export default function USPortalLeadDetailPage() {
       setCustomerCreating(false)
       return
     }
-    if (website && websiteGoals.trim().length < 20) {
-      setCustomerError('Website Buildout is on but the goals are empty — give the builders at least one real sentence (20+ characters).')
+    if (website && !websiteGoals.trim()) {
+      setCustomerError('Website Buildout is on but the goals are empty — give the builders something to work from.')
       creatingRef.current = false
       setCustomerCreating(false)
       return
@@ -1157,7 +1157,7 @@ export default function USPortalLeadDetailPage() {
                 Per-order fee: <span className="font-semibold text-[#f0b429]">${selectedPlan.orderFee.toFixed(2)}/order</span> — fixed for this tier
               </p>
               <p className="text-[10px] text-[#A1A1A8] mt-1.5 px-2.5 py-1.5 rounded-md bg-[#0A0A0B] border border-[#1F1F23]">
-                Voice calls: first 3 minutes of every call included, then <span className="font-semibold text-[#f0b429]">$0.45/min</span> billed automatically to the merchant's Meridian account. Calls end automatically at 5 minutes, so overage never exceeds $0.90/call.
+                Voice calls: <span className="font-semibold text-[#f0b429]">no per-minute charge</span> — call time is not billed. Calls end automatically at {VOICE_MAX_CALL_MINUTES} minutes.
               </p>
             </div>
           )}
@@ -1225,18 +1225,14 @@ export default function USPortalLeadDetailPage() {
                 </div>
                 <input type="text" value={websiteCurrentUrl} onChange={e => setWebsiteCurrentUrl(e.target.value)}
                   className={inputClass} placeholder="Current website — leave empty if none" />
-                <div>
-                  <textarea rows={2} value={websiteGoals} onChange={e => setWebsiteGoals(e.target.value)}
-                    className={`${inputClass} resize-none`} placeholder="What must the site do? (required — the builders' brief)" />
-                  <p className="text-[10px] text-[#4a5550] mt-1">Ask the owner on the call — 20+ characters</p>
-                </div>
+                <textarea rows={2} value={websiteGoals} onChange={e => setWebsiteGoals(e.target.value)}
+                  className={`${inputClass} resize-none`} placeholder="What must the site do? (required — the builders' brief)" />
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <input type="text" value={websitePages} onChange={e => setWebsitePages(e.target.value)}
                     className={inputClass} placeholder="Pages (comma-separated)" />
-                  <select value={websiteContent} onChange={e => setWebsiteContent(e.target.value as 'ready' | 'partial' | 'none')}
+                  <select value={websiteContent} onChange={e => setWebsiteContent(e.target.value as 'ready' | 'none')}
                     className={inputClass}>
                     <option value="ready">Owner has content ready</option>
-                    <option value="partial">Some of it exists</option>
                     <option value="none">Write it for them</option>
                   </select>
                 </div>

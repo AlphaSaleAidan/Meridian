@@ -63,14 +63,14 @@ TELNYX_FALLBACK_NUMBER = os.getenv("TELNYX_FALLBACK_NUMBER", "").strip()
 _floor_raw = os.getenv("VOICE_BALANCE_FLOOR_CENTS", "").strip()
 VOICE_BALANCE_FLOOR_CENTS = int(_floor_raw) if _floor_raw.lstrip("-").isdigit() else None
 
-# Per-order fee = flat MERIDIAN_SERVICE_FEE_CENTS ($2.50). On top of that, calls
-# longer than VOICE_INCLUDED_MIN minutes of AI time bill an overage of
-# VOICE_OVERAGE_CENTS_PER_MIN ($0.45) per minute over the included block. The
-# overage is computed at end-of-call (the order's Stripe fee is locked mid-call,
-# before the duration is known), so it's tracked per-merchant in the voice ledger
-# as billable revenue rather than added to the customer's order charge.
+# Per-order fee = flat MERIDIAN_SERVICE_FEE_CENTS. Call time itself is NOT
+# billed: the overage was retired 2026-08-07 (Aidan) in favour of the hard cap
+# below — a call simply ends at MERIDIAN_VOICE_MAX_CALL_MIN rather than running
+# up a per-minute charge. The rate stays wired (defaulting to 0) so a bespoke
+# per-merchant deal can reinstate it via merchant_billing_terms without a code
+# change; at 0 the `if overage > 0` guard below issues no ledger credit.
 VOICE_INCLUDED_MIN = int(os.getenv("MERIDIAN_VOICE_INCLUDED_MIN", "3") or 3)
-VOICE_OVERAGE_CENTS_PER_MIN = int(os.getenv("MERIDIAN_VOICE_OVERAGE_CENTS_PER_MIN", "45") or 45)
+VOICE_OVERAGE_CENTS_PER_MIN = int(os.getenv("MERIDIAN_VOICE_OVERAGE_CENTS_PER_MIN", "0") or 0)
 # Hard call cap: Vapi force-ends the call at this length (maxDurationSeconds on
 # the assistant), so the worst case a merchant is billed per call is
 # (cap − included) × overage — 5 min ⇒ 2 min over ⇒ 90¢ — and our own Vapi

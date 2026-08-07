@@ -537,9 +537,9 @@ export default function USPortalCreateCustomerPage() {
     website: false,
     websiteCurrentUrl: '',
     websiteGoals: '',
-    websitePages: 'Home, Services, Contact',
+    websitePages: '',
     websiteBrand: '',
-    websiteContent: 'partial' as 'ready' | 'partial' | 'none',
+    websiteContent: 'none' as 'ready' | 'none',
     // Custom CRM build: same setup fee, but rep-priced — scope varies per deal.
     crm: false,
     crmAmount: '',
@@ -716,8 +716,8 @@ export default function USPortalCreateCustomerPage() {
       if (!form.email.trim()) {
         throw new Error('Customer email is required to create their login')
       }
-      if (form.website && form.websiteGoals.trim().length < 20) {
-        throw new Error('Website goals: give the builders at least one real sentence (20+ characters)')
+      if (form.website && !form.websiteGoals.trim()) {
+        throw new Error('Website goals: give the builders something to work from')
       }
       if (form.crm && crmOneTime <= 0) {
         throw new Error('Custom CRM build is on but has no price — enter the amount you quoted')
@@ -1213,7 +1213,6 @@ export default function USPortalCreateCustomerPage() {
                         onChange={e => update('websiteGoals', e.target.value)}
                         placeholder="Take pickup orders online, show the menu, rank for local searches..."
                         className="w-full px-3 py-2.5 text-[13px] rounded-lg bg-[#111113] border border-[#1F1F23] text-white placeholder-[#4a5550] focus:border-[#17C5B0]/50 focus:outline-none resize-none" />
-                      <p className="text-[10px] text-[#4a5550] mt-1">Ask the owner on the call — 20+ characters</p>
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
@@ -1228,7 +1227,6 @@ export default function USPortalCreateCustomerPage() {
                           onChange={e => update('websiteContent', e.target.value)}
                           className="w-full px-3 py-2.5 text-[13px] rounded-lg bg-[#111113] border border-[#1F1F23] text-white focus:border-[#17C5B0]/50 focus:outline-none">
                           <option value="ready">Owner has content ready</option>
-                          <option value="partial">Some of it exists</option>
                           <option value="none">Write it for them</option>
                         </select>
                       </div>
@@ -1569,7 +1567,7 @@ export default function USPortalCreateCustomerPage() {
               <ArrowLeft size={14} /> Back
             </button>
             <button onClick={() => {
-              setForm({ businessName: '', ownerName: '', email: '', phone: '', vertical: '', pos: '', plan: 'premium', priceBump: 0, firstMonthFree: false, feeAllocationMode: 'business_pays', website: false, websiteCurrentUrl: '', websiteGoals: '', websitePages: 'Home, Services, Contact', websiteBrand: '', websiteContent: 'partial', crm: false, crmAmount: '', notes: '' })
+              setForm({ businessName: '', ownerName: '', email: '', phone: '', vertical: '', pos: '', plan: 'premium', priceBump: 0, firstMonthFree: false, feeAllocationMode: 'business_pays', website: false, websiteCurrentUrl: '', websiteGoals: '', websitePages: '', websiteBrand: '', websiteContent: 'none', crm: false, crmAmount: '', notes: '' })
               setStep('details')
               setOnboardingLink('')
               setCustomerLoginUrl('')
@@ -1756,7 +1754,7 @@ export default function USPortalCreateCustomerPage() {
               <ArrowLeft size={14} /> Back to Leads
             </button>
             <button onClick={() => {
-              setForm({ businessName: '', ownerName: '', email: '', phone: '', vertical: '', pos: '', plan: 'premium', priceBump: 0, firstMonthFree: false, feeAllocationMode: 'business_pays', website: false, websiteCurrentUrl: '', websiteGoals: '', websitePages: 'Home, Services, Contact', websiteBrand: '', websiteContent: 'partial', crm: false, crmAmount: '', notes: '' })
+              setForm({ businessName: '', ownerName: '', email: '', phone: '', vertical: '', pos: '', plan: 'premium', priceBump: 0, firstMonthFree: false, feeAllocationMode: 'business_pays', website: false, websiteCurrentUrl: '', websiteGoals: '', websitePages: '', websiteBrand: '', websiteContent: 'none', crm: false, crmAmount: '', notes: '' })
               setStep('details')
               setOnboardingLink('')
               setCustomerLoginUrl('')

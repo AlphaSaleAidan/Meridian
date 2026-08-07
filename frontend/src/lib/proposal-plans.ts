@@ -34,14 +34,15 @@ export interface PlanTier {
 /** Max amount (in the plan's currency) a rep can add on top of a tier's base price. */
 export const REP_PRICE_HEADROOM = 100
 
-/** Voice-call overage billing — every call includes the first
- *  VOICE_INCLUDED_MINUTES; each additional (whole) minute bills at
- *  VOICE_OVERAGE_PER_MIN to the merchant's Meridian account. Mirrors the
- *  live backend dials (GET /api/phone/fees); shown wherever pricing is. */
+/** Voice-call terms. Call time is NOT billed — the overage was retired
+ *  2026-08-07 (Aidan) in favour of the hard cap below: a call simply ends at
+ *  VOICE_MAX_CALL_MINUTES rather than running up a per-minute charge. Mirrors
+ *  the live backend dials (GET /api/phone/fees); shown wherever pricing is. */
 export const VOICE_INCLUDED_MINUTES = 3
-export const VOICE_OVERAGE_PER_MIN = 0.45
-/** Hard cap — Vapi force-ends every call at this length, so per-call overage
- *  never exceeds (cap − included) × rate = $0.90. */
+/** 0 = call time is not billed. Kept so the SLA/proposal surfaces can render a
+ *  rate if a bespoke per-merchant deal ever reinstates one. */
+export const VOICE_OVERAGE_PER_MIN = 0
+/** Hard cap — Vapi force-ends every call at this length. */
 export const VOICE_MAX_CALL_MINUTES = 5
 
 export const PLAN_TIERS: PlanTier[] = [
@@ -76,7 +77,7 @@ export const PLAN_TIERS: PlanTier[] = [
       'AI phone agent — answers calls + takes orders',
       'Pay-by-text checkout',
       '$0.65 per-order transaction fee',
-      'Calls: first 3 min included, then $0.45/min (calls are capped at 5 min)',
+      'Calls: no per-minute charge (calls are capped at 5 min)',
     ],
   },
   {
@@ -90,7 +91,7 @@ export const PLAN_TIERS: PlanTier[] = [
     features: [
       'Everything in Premium',
       'Lowest per-order rate — $0.45 service fee per order',
-      'Calls: first 3 min included, then $0.45/min (calls are capped at 5 min)',
+      'Calls: no per-minute charge (calls are capped at 5 min)',
       'Multi-location support',
       'Dedicated account manager',
     ],

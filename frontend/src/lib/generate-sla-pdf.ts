@@ -109,7 +109,15 @@ function buildSlaHtml(input: SlaInput): string {
   }
   if (input.phoneAgent) {
     const pa = input.phoneAgent
-    feeClauses.push(`<strong>Phone Agent Usage Fees.</strong> In addition to the Monthly Service Fee, each order placed through the AI phone agent incurs a fixed per-order transaction fee of <strong>${formatMoney(input.country, pa.orderFeeCents)}</strong>. Every call includes the first ${pa.includedMinutes} minutes of call time at no additional charge; call time beyond the included minutes is billed at <strong>${formatMoney(input.country, pa.overageCentsPerMin)}</strong> per additional minute. Calls are automatically concluded at ${pa.maxCallMinutes} minutes, which caps the maximum per-call overage. Usage fees are calculated per order and per call and are billed to the Client&rsquo;s Meridian account.`)
+    // Call-time overage retired 2026-08-07 (Aidan): the standard product bills
+    // nothing for call duration and simply ends the call at the cap. The
+    // overage sentence is emitted ONLY when a rate is actually in force, so the
+    // contract never discloses a charge the Client will not be billed.
+    feeClauses.push(`<strong>Phone Agent Usage Fees.</strong> In addition to the Monthly Service Fee, each order placed through the AI phone agent incurs a fixed per-order transaction fee of <strong>${formatMoney(input.country, pa.orderFeeCents)}</strong>. ${
+      pa.overageCentsPerMin > 0
+        ? `Every call includes the first ${pa.includedMinutes} minutes of call time at no additional charge; call time beyond the included minutes is billed at <strong>${formatMoney(input.country, pa.overageCentsPerMin)}</strong> per additional minute. Calls are automatically concluded at ${pa.maxCallMinutes} minutes, which caps the maximum per-call overage.`
+        : `Call time itself is not billed: there is no per-minute charge for calls handled by the AI phone agent, and calls are automatically concluded at ${pa.maxCallMinutes} minutes.`
+    } Usage fees are calculated per order and are billed to the Client&rsquo;s Meridian account.`)
   }
   if (websiteSold && input.websiteMonthlyIncluded) {
     feeClauses.push(`<strong>Website Maintenance &amp; Hosting.</strong> Ongoing website maintenance and managed hosting are included in the Client&rsquo;s plan at no additional recurring charge. The one-time website buildout is billed as part of the Setup Fee above.`)

@@ -26,10 +26,13 @@ class MockDB:
         return res(filters) if callable(res) else list(res)
 
 
+# call_overage_cents_per_min 0 = the current standard: call time is not billed
+# (overage retired 2026-08-07, Aidan). A LEGACY row still carrying 45 is a real
+# drift and must be reported — see test_check_merchant_flags_legacy_overage_terms.
 TERMS_ROW = {
     "merchant_id": "org-1", "plan_tier": "premium",
     "monthly_fee_cents": 50000, "order_fee_cents": 199,
-    "call_overage_cents_per_min": 45, "included_call_min": 3,
+    "call_overage_cents_per_min": 0, "included_call_min": 3,
 }
 
 
@@ -72,6 +75,26 @@ async def test_check_merchant_healthy(monkeypatch):
         "merchant_websites": [],
     })
     assert await fr.check_merchant(db, "org-1") == []
+
+
+async def test_check_merchant_flags_legacy_overage_terms(monkeypatch):
+    """Merchants provisioned before the overage was retired still carry
+    call_overage_cents_per_min=45 in merchant_billing_terms while the live
+    config applies 0. That IS a drift and must surface — the reconciler is how
+    we find the rows that need their terms superseded."""
+    monkeypatch.setenv("MERIDIAN_SERVICE_FEE_CENTS", "0")
+    db = MockDB({
+        "merchant_billing_terms": [dict(TERMS_ROW, call_overage_cents_per_min=45)],
+        "subscriptions": [{"org_id": "org-1", "status": "active", "monthly_price_cents": 50000}],
+        "phone_agent_config": [{"merchant_id": "org-1", "order_fee_cents": 199, "plan_tier": "premium"}],
+        "merchant_websites": [],
+    })
+    diffs = await fr.check_merchant(db, "org-1")
+    overage = [d for d in diffs if d["field"] == "call_overage_cents_per_min"]
+    assert len(overage) == 1
+    assert overage[0]["contracted"] == 45
+    assert overage[0]["applied"] == 0
+    assert overage[0]["delta"] == -45      # underbilled vs the legacy contract
 
 
 async def test_check_merchant_flags_monthly_drift(monkeypatch):

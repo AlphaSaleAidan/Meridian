@@ -187,7 +187,7 @@ export default function PhoneSetupWizard() {
   const [scriptPack, setScriptPack] = useState('legacy')
   // Live pricing dials for the disclosure card (env-tunable server-side).
   // Fallbacks mirror the backend defaults so the card never shows blanks.
-  const [feeDials, setFeeDials] = useState({ included_minutes: 3, overage_cents_per_min: 45, max_call_minutes: 8 })
+  const [feeDials, setFeeDials] = useState({ included_minutes: 3, overage_cents_per_min: 0, max_call_minutes: 8 })
   useEffect(() => {
     const API_BASE = import.meta.env.VITE_API_URL || ''
     fetch(`${API_BASE}/api/phone/fees`)
@@ -755,8 +755,14 @@ export default function PhoneSetupWizard() {
               <p className="text-[11px] font-semibold text-[#F5F5F7] mb-1">Call &amp; order pricing</p>
               <ul className="text-[10px] text-[#A1A1A8] space-y-0.5">
                 <li>• Per-order fee: <span className="text-[#F5F5F7] font-medium">{phoneConfig?.order_fee_cents != null ? `${isCanadaMount() ? 'CA$' : '$'}${(phoneConfig.order_fee_cents / 100).toFixed(2)}` : 'per your plan'}</span> on each paid phone order</li>
-                <li>• Every call includes the first <span className="text-[#F5F5F7] font-medium">{feeDials.included_minutes} minutes</span> free of call charges</li>
-                <li>• After that: <span className="text-[#F5F5F7] font-medium">{isCanadaMount() ? 'CA$' : '$'}{(feeDials.overage_cents_per_min / 100).toFixed(2)}/min</span>, billed automatically to your Meridian account</li>
+                {feeDials.overage_cents_per_min > 0 ? (
+                  <>
+                    <li>• Every call includes the first <span className="text-[#F5F5F7] font-medium">{feeDials.included_minutes} minutes</span> free of call charges</li>
+                    <li>• After that: <span className="text-[#F5F5F7] font-medium">{isCanadaMount() ? 'CA$' : '$'}{(feeDials.overage_cents_per_min / 100).toFixed(2)}/min</span>, billed automatically to your Meridian account</li>
+                  </>
+                ) : (
+                  <li>• <span className="text-[#F5F5F7] font-medium">No per-minute charge</span> — call time is not billed</li>
+                )}
                 {feeDials.max_call_minutes > 0 && (
                   <li>• Calls end automatically at <span className="text-[#F5F5F7] font-medium">{feeDials.max_call_minutes} minutes</span> — the agent wraps up and submits the order before then</li>
                 )}

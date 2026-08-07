@@ -63,7 +63,9 @@ def test_canonical_table_matches_frontend_plans(market, tier, monthly, order_fee
     assert base["monthly_fee_cents"] == monthly
     assert base["order_fee_cents"] == order_fee
     assert base["order_fee_floor_cents"] == floor
-    assert base["call_overage_cents_per_min"] == 45
+    # 0 = call time is not billed (overage retired 2026-08-07, Aidan); calls
+    # are hard-capped instead. Mirrors VOICE_OVERAGE_PER_MIN in proposal-plans.ts.
+    assert base["call_overage_cents_per_min"] == 0
     assert base["included_call_min"] == 3
 
 
