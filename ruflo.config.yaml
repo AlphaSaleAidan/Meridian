@@ -2,7 +2,7 @@ name: meridian-pos-intelligence
 version: 3.0.0
 description: 37-agent POS + Vision + Cross-Reference Intelligence swarm for Meridian analytics platform
 
-model: claude-haiku-3-5-20251001
+model: claude-haiku-4-5-20251001
 max_tokens: 4096
 
 topology: hierarchical
@@ -437,7 +437,7 @@ training:
 reasoning:
   required_fields:
     - raw_data: The data points supporting the insight
-    - reasoning_chain: "If X then Y because Z" logic
+    - reasoning_chain: '"If X then Y because Z" logic'
     - expected_impact: Revenue, retention, or efficiency impact
     - confidence_score: 0-100 percentage
     - priority_level: Critical | High | Medium | Low
