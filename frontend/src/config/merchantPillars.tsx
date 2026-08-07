@@ -1,6 +1,7 @@
 import type { ComponentType, LazyExoticComponent } from 'react'
 import {
   LayoutDashboard, Zap, Layers, Users, Phone, Video, Settings, Receipt,
+  TrendingUp, Contact, Lightbulb, Globe,
 } from 'lucide-react'
 import { lazyRetry } from '@/components/ErrorBoundary'
 import type { ModuleFlags } from '@/config/moduleFlags'
@@ -43,6 +44,11 @@ const CameraIntelligencePage = lazyRetry(() => import('@/pages/CameraIntelligenc
 const LiveCamerasPage = lazyRetry(() => import('@/pages/LiveCamerasPage'))
 const SettingsPage = lazyRetry(() => import('@/pages/SettingsPage'))
 const NotificationsPage = lazyRetry(() => import('@/pages/NotificationsPage'))
+// Coming Soon previews — Canada demo only (see comingSoonPillars).
+const RevenuePage = lazyRetry(() => import('@/pages/RevenuePage'))
+const CustomersPage = lazyRetry(() => import('@/pages/CustomersPage'))
+const InsightsPage = lazyRetry(() => import('@/pages/InsightsPage'))
+const MyWebsitePage = lazyRetry(() => import('@/pages/MyWebsitePage'))
 
 export interface PillarSegment {
   view: string
@@ -58,6 +64,14 @@ export interface Pillar {
   icon: typeof LayoutDashboard
   /** Camera is a secondary tab, grouped apart from the money pillars. */
   secondary?: boolean
+  /**
+   * Roadmap preview — shown only in the Canada demo, under its own "Coming
+   * Soon" heading, and never in a paying merchant's portal. The page renders
+   * for real behind a banner saying it isn't live yet.
+   */
+  comingSoon?: boolean
+  /** Coming Soon pages that render figures — the banner then says they're synthetic. */
+  sampleData?: boolean
   segments: PillarSegment[]
   /** When set, the pillar is hidden if the corresponding module flag is false. */
   flag?: keyof ModuleFlags
@@ -152,5 +166,67 @@ export const demoMerchantPillars: Pillar[] = merchantPillars.map(p =>
     : p,
 )
 
+/**
+ * Roadmap previews for the Canada demo only.
+ *
+ * These are built pages that the trimmed product does not ship yet, so a
+ * prospect can see where Meridian is going without a paying merchant finding
+ * a half-finished tab in their portal. They never enter `merchantPillars`, so
+ * the live /canada/merchant and /us/merchant navs are untouched, and the
+ * module flags stay off — this is a demo surface, not a soft launch.
+ *
+ * `Taxes & Expenses` reuses the `tax` path already defined above; the entry
+ * here wins for the demo so it renders under the Coming Soon heading instead
+ * of as a money pillar.
+ */
+export const comingSoonPillars: Pillar[] = [
+  {
+    path: 'revenue',
+    label: 'Revenue',
+    icon: TrendingUp,
+    comingSoon: true,
+    sampleData: true,
+    segments: [{ view: 'revenue', label: 'Revenue', Component: RevenuePage }],
+  },
+  {
+    path: 'insights',
+    label: 'Insights',
+    icon: Lightbulb,
+    comingSoon: true,
+    sampleData: true,
+    segments: [{ view: 'insights', label: 'Insights', Component: InsightsPage }],
+  },
+  {
+    path: 'customers',
+    label: 'Customers',
+    icon: Contact,
+    comingSoon: true,
+    sampleData: true,
+    segments: [{ view: 'customers', label: 'Customers', Component: CustomersPage }],
+  },
+  {
+    path: 'tax',
+    label: 'Taxes & Expenses',
+    icon: Receipt,
+    comingSoon: true,
+    sampleData: true,
+    segments: [{ view: 'handoff', label: 'CPA Handoff', Component: CPAHandoffPage }],
+  },
+  {
+    path: 'my-website',
+    label: 'My Website',
+    icon: Globe,
+    comingSoon: true,
+    segments: [{ view: 'site', label: 'My Website', Component: MyWebsitePage }],
+  },
+]
+
+/** Canada demo route set: the shipped demo pillars plus the roadmap previews. */
+export const canadaDemoPillars: Pillar[] = [
+  ...demoMerchantPillars.filter(p => !comingSoonPillars.some(c => c.path === p.path)),
+  ...comingSoonPillars,
+]
+
 export const MERCHANT_BASE_PATH = '/canada/merchant'
 export const US_MERCHANT_BASE_PATH = '/us/merchant'
+export const CANADA_DEMO_BASE_PATH = '/canada/demo'

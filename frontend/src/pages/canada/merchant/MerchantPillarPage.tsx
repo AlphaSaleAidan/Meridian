@@ -3,6 +3,7 @@ import { useParams, useSearchParams } from 'react-router-dom'
 import { clsx } from 'clsx'
 import { useMobile } from '@/hooks/useMobile'
 import { PortalLoadingSkeleton } from '@/pages/canada/portal/PortalPage'
+import ComingSoonBanner from '@/components/ComingSoonBanner'
 import type { Pillar } from '@/config/merchantPillars'
 
 /**
@@ -30,6 +31,7 @@ export default function MerchantPillarPage({ pillar }: { pillar: Pillar }) {
 
   return (
     <div className="space-y-5">
+      {pillar.comingSoon && <ComingSoonBanner label={pillar.label} sampleData={pillar.sampleData} />}
       {segments.length > 1 && (
         <div className="flex items-center gap-1 overflow-x-auto no-scrollbar -mx-1 px-1">
           {segments.map(seg => (
