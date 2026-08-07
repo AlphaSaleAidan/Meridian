@@ -118,6 +118,13 @@ function buildSlaHtml(input: SlaInput): string {
         ? `Every call includes the first ${pa.includedMinutes} minutes of call time at no additional charge; call time beyond the included minutes is billed at <strong>${formatMoney(input.country, pa.overageCentsPerMin)}</strong> per additional minute. Calls are automatically concluded at ${pa.maxCallMinutes} minutes, which caps the maximum per-call overage.`
         : `Call time itself is not billed: there is no per-minute charge for calls handled by the AI phone agent, and calls are automatically concluded at ${pa.maxCallMinutes} minutes.`
     } Usage fees are calculated per order and are billed to the Client&rsquo;s Meridian account.`)
+    // Phone ordering is Canada-first (Aidan 2026-08-07): the charge currency is
+    // set globally (MERIDIAN_PHONE_DEFAULT_CURRENCY), not per merchant, so it
+    // is CAD in BOTH markets today. Disclosed here because the Client's own
+    // customers are the ones charged, and a US merchant would otherwise
+    // reasonably assume USD. Remove this clause when per-market phone currency
+    // ships.
+    feeClauses.push(`<strong>Phone Order Currency.</strong> Orders placed through the AI phone agent are processed in <strong>Canadian dollars (CAD)</strong>. This applies to all phone orders at present, irrespective of the Client&rsquo;s location, and is independent of the currency in which the Monthly Service Fee is billed. Meridian will notify the Client in advance of any change to the phone order processing currency.`)
   }
   if (websiteSold && input.websiteMonthlyIncluded) {
     feeClauses.push(`<strong>Website Maintenance &amp; Hosting.</strong> Ongoing website maintenance and managed hosting are included in the Client&rsquo;s plan at no additional recurring charge. The one-time website buildout is billed as part of the Setup Fee above.`)

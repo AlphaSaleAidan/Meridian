@@ -1157,7 +1157,7 @@ export default function USPortalLeadDetailPage() {
                 Per-order fee: <span className="font-semibold text-[#f0b429]">${selectedPlan.orderFee.toFixed(2)}/order</span> — fixed for this tier
               </p>
               <p className="text-[10px] text-[#A1A1A8] mt-1.5 px-2.5 py-1.5 rounded-md bg-[#0A0A0B] border border-[#1F1F23]">
-                Voice calls: <span className="font-semibold text-[#f0b429]">no per-minute charge</span> — call time is not billed. Calls end automatically at {VOICE_MAX_CALL_MINUTES} minutes.
+                Voice calls: <span className="font-semibold text-[#f0b429]">no per-minute charge</span> — call time is not billed. Calls end automatically at {VOICE_MAX_CALL_MINUTES} minutes. Phone ordering is Canada-first: phone orders are charged in <span className="font-semibold text-[#f0b429]">Canadian dollars (CAD)</span> for now, whichever market the merchant is in.
               </p>
             </div>
           )}

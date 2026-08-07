@@ -766,6 +766,12 @@ export default function PhoneSetupWizard() {
                 {feeDials.max_call_minutes > 0 && (
                   <li>• Calls end automatically at <span className="text-[#F5F5F7] font-medium">{feeDials.max_call_minutes} minutes</span> — the agent wraps up and submits the order before then</li>
                 )}
+                {/* Currency is not a per-merchant setting yet: phone ordering is
+                    Canada-first, so every phone order is charged in CAD
+                    (MERIDIAN_PHONE_DEFAULT_CURRENCY). Stated explicitly so a
+                    merchant is never guessing what currency their customer is
+                    charged in. */}
+                <li>• All phone orders are charged in <span className="text-[#F5F5F7] font-medium">Canadian dollars (CAD)</span></li>
               </ul>
             </div>
 
