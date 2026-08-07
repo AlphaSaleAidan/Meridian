@@ -2,10 +2,10 @@
  * Meridian plan tiers — single source of truth for pricing and features.
  *
  * Three tiers (USD). Every tier includes all Meridian features; the axis is
- * the AI phone agent and the per-order Meridian fee:
+ * the AI phone agent and the per-order service fee:
  *   Standard $250 — everything except the phone agent, no per-order fee
- *   Premium  $350 — phone agent included, $0.65 Meridian fee per order
- *   Command  $500 — phone agent included, $0.45 Meridian fee per order
+ *   Premium  $350 — phone agent included, $0.65 service fee per order
+ *   Command  $500 — phone agent included, $0.45 service fee per order
  *
  * 2026-08-06 (Aidan): per-order fees adjusted DOWN to the former redlines and
  * FIXED — the rep fee slider is retired, so orderFee === orderFeeFloor.
@@ -23,7 +23,7 @@ export interface PlanTier {
   features: string[]
   /** AI phone agent included in this tier. */
   phoneAgent: boolean
-  /** Per-order Meridian fee in the plan's currency (0 = no per-order fee). */
+  /** Per-order service fee in the plan's currency (0 = no per-order fee). */
   orderFee: number
   /** Server-side floor for the per-order fee. The fee slider is retired
    *  (Aidan 2026-08-06) — the tier rate IS the floor; the backend still
@@ -89,7 +89,7 @@ export const PLAN_TIERS: PlanTier[] = [
     orderFeeFloor: 0.45,
     features: [
       'Everything in Premium',
-      'Lowest per-order rate — $0.45 Meridian fee per order',
+      'Lowest per-order rate — $0.45 service fee per order',
       'Calls: first 3 min included, then $0.45/min (calls are capped at 5 min)',
       'Multi-location support',
       'Dedicated account manager',

@@ -71,10 +71,18 @@ def cad_fee_cents(usd_cents: int) -> int:
 ORDER_FEE_FLOOR_CENTS_USD: dict[str, int] = {"standard": 0, "premium": 65, "command": 45}
 ORDER_FEE_CAP_CENTS_USD = 500
 
+# CAD overrides that deliberately BREAK the ×1.4 derivation (Aidan 2026-08-07).
+# CA premium is CA$0.75 ALL-IN: that is the merchant's total per-order cost
+# including Stripe's flat 30¢, which Meridian now absorbs instead of passing
+# through (STRIPE_FEE_FIXED_CENTS=0) — so Meridian nets CA$0.45. Derivation
+# would say 90¢; the cut is a deliberate CA-only price move, not a rounding.
+ORDER_FEE_FLOOR_CENTS_CAD_OVERRIDE: dict[str, int] = {"premium": 75}
+
 # Market-keyed views ('us' | 'ca') — the only floor/cap tables consumers read.
 ORDER_FEE_FLOOR_CENTS: dict[str, dict[str, int]] = {
     "us": ORDER_FEE_FLOOR_CENTS_USD,
-    "ca": {tier: cad_fee_cents(v) for tier, v in ORDER_FEE_FLOOR_CENTS_USD.items()},
+    "ca": {tier: ORDER_FEE_FLOOR_CENTS_CAD_OVERRIDE.get(tier, cad_fee_cents(v))
+           for tier, v in ORDER_FEE_FLOOR_CENTS_USD.items()},
 }
 ORDER_FEE_CAP_CENTS: dict[str, int] = {
     "us": ORDER_FEE_CAP_CENTS_USD,
@@ -123,7 +131,7 @@ CANONICAL_FEE_TERMS: dict[str, dict[str, dict[str, int]]] = {
         },
         "premium": {
             "monthly_fee_cents": 50000,
-            "order_fee_cents": 90,
+            "order_fee_cents": 75,
             "order_fee_floor_cents": ORDER_FEE_FLOOR_CENTS["ca"]["premium"],
             "call_overage_cents_per_min": DEFAULT_CALL_OVERAGE_CENTS_PER_MIN,
             "included_call_min": DEFAULT_INCLUDED_CALL_MIN,

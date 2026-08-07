@@ -563,7 +563,7 @@ function GetPaidTab({ calls, biz, orgId, isDemo }: {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {[
             { label: 'Gross Collected',    value: fmtMoney(totals.gross, biz.currency),        color: 'text-amber-400' },
-            { label: 'Meridian Fees',      value: `−${fmtMoney(totals.meridianFees, biz.currency)}`, color: 'text-red-400' },
+            { label: 'Service Fees',      value: `−${fmtMoney(totals.meridianFees, biz.currency)}`, color: 'text-red-400' },
             { label: 'Stripe Fees (est.)', value: `−${fmtMoney(totals.stripeFees, biz.currency)}`,   color: 'text-red-400' },
             { label: 'You Receive',        value: fmtMoney(Math.max(totals.net, 0), biz.currency),   color: 'text-[#17C5B0]' },
           ].map(card => (
@@ -600,7 +600,7 @@ function GetPaidTab({ calls, biz, orgId, isDemo }: {
                 <tr>
                   <th className="text-left">Order</th>
                   <th className="text-right">Customer Pays</th>
-                  <th className="text-right">−Meridian Fee</th>
+                  <th className="text-right">−Service Fee</th>
                   <th className="text-right">−Stripe Fee</th>
                   <th className="text-right">You Receive</th>
                   <th className="text-left">Status</th>

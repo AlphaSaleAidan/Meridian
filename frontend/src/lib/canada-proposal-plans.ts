@@ -4,8 +4,8 @@
  *
  * Standard US$250 → CA$350 · Premium US$350 → CA$500 · Command US$500 → CA$700
  *
- * Per-order Meridian fees are set explicitly (not formula-derived) so they
- * keep sane price points: Premium CA$0.90/order, Command CA$0.60/order
+ * Per-order service fees are set explicitly (not formula-derived) so they
+ * keep sane price points: Premium CA$0.75/order, Command CA$0.60/order
  * (2026-08-06, Aidan: adjusted DOWN to the former redlines and FIXED — the
  * rep fee slider is retired).
  */
@@ -20,8 +20,16 @@ export type { PlanTier }
 
 const CAD_ORDER_FEES: Record<PlanTier['id'], number> = {
   standard: 0,
-  premium: 0.9,
+  premium: 0.75,
   command: 0.6,
+}
+
+// CAD overrides that deliberately BREAK the x1.4 derivation (Aidan 2026-08-07).
+// CA premium is CA$0.75 ALL-IN — the merchant's total per-order cost including
+// Stripe's flat 30c, which Meridian absorbs rather than passing through.
+// Derivation would say CA$0.90. Mirrors fee_terms.ORDER_FEE_FLOOR_CENTS_CAD_OVERRIDE.
+const CAD_ORDER_FEE_FLOOR_OVERRIDE: Partial<Record<PlanTier['id'], number>> = {
+  premium: 0.75,
 }
 
 // REDLINES for the rep fee slider — DERIVED from the US floors ($0.65/$0.45)
@@ -42,11 +50,11 @@ export const PLAN_TIERS: PlanTier[] = US_PLAN_TIERS.map(p => ({
   ...p,
   price: roundToNearest50(p.price * CAD_RATE),
   orderFee: CAD_ORDER_FEES[p.id],
-  orderFeeFloor: cadOrderFeeFloor(p.orderFeeFloor),
+  orderFeeFloor: CAD_ORDER_FEE_FLOOR_OVERRIDE[p.id] ?? cadOrderFeeFloor(p.orderFeeFloor),
   features: p.features.map(f =>
     f
-      .replace('$0.65 per-order transaction fee', 'CA$0.90 per-order transaction fee')
-      .replace('$0.45 Meridian fee per order', 'CA$0.60 Meridian fee per order')
+      .replace('$0.65 per-order transaction fee', 'CA$0.75 per-order service fee')
+      .replace('$0.45 service fee per order', 'CA$0.60 service fee per order')
       .replace('then $0.45/min', 'then CA$0.45/min')
   ),
 }))

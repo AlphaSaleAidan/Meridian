@@ -43,7 +43,7 @@ export interface PhoneConfig {
   language?: string
   // Accent group picked in the wizard (north_american | indian | east_asian).
   accent?: string
-  // Rep-negotiated per-order Meridian fee override (cents). null/undefined =
+  // Rep-negotiated per-order service fee override (cents). null/undefined =
   // plan default. Read-only here — set from the sales portal, shown in the
   // wizard's pricing disclosure.
   order_fee_cents?: number | null
