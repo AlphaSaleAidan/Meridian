@@ -34,7 +34,9 @@ const tooltipStyle = {
 }
 
 export default function RevenuePage() {
-  const [days, setDays] = useState(365)
+  // 30 days by default: the lightest query, the fastest first paint, and the
+  // same window the Overview card reports. 90D/1Y are one click away.
+  const [days, setDays] = useState(30)
   const [drillDate, setDrillDate] = useState<string | null>(null)
   const [view3D, setView3D] = useState(false)
   const orgId = useOrgId()
@@ -43,7 +45,9 @@ export default function RevenuePage() {
   const posConnected = !!org?.pos_connected
   const revenue = useApi(() => api.revenue(orgId, days), [orgId, days])
 
-  const daily = revenue.data?.daily ?? []
+  // Memoised so the derivations below keep a stable input while the first
+  // request is in flight (`?? []` would hand them a new array every render).
+  const daily = useMemo(() => revenue.data?.daily ?? [], [revenue.data])
 
   const chartData = useMemo(() => daily.map(d => ({
     rawDate: d.date,
@@ -56,10 +60,30 @@ export default function RevenuePage() {
     discounts: d.discount_cents / 100,
   })), [daily])
 
-  const totalRevenue = useMemo(() => daily.reduce((s, d) => s + (d.revenue_cents || 0), 0), [daily])
-  const totalTxns = useMemo(() => daily.reduce((s, d) => s + (d.transactions || 0), 0), [daily])
-  const totalRefunds = useMemo(() => daily.reduce((s, d) => s + (d.refund_cents || 0), 0), [daily])
-  const totalTips = useMemo(() => daily.reduce((s, d) => s + (d.tip_cents || 0), 0), [daily])
+  // One pass for all four totals rather than four walks of the same array.
+  const { totalRevenue, totalTxns, totalRefunds, totalTips } = useMemo(() => {
+    let revenueCents = 0, txns = 0, refunds = 0, tips = 0
+    for (const d of daily) {
+      revenueCents += d.revenue_cents || 0
+      txns += d.transactions || 0
+      refunds += d.refund_cents || 0
+      tips += d.tip_cents || 0
+    }
+    return { totalRevenue: revenueCents, totalTxns: txns, totalRefunds: refunds, totalTips: tips }
+  }, [daily])
+
+  // The 3D view charts the last 14 days, coloured against the period average.
+  // Computing that average inside the map made this O(n²) — a full 365-day
+  // walk per bar, on every render while the 3D toggle was open.
+  const revenue3DData = useMemo(() => {
+    if (daily.length === 0) return []
+    const avg = totalRevenue / daily.length
+    return daily.slice(-14).map(d => ({
+      label: new Date(d.date).toLocaleDateString('en', { weekday: 'short' }),
+      value: d.revenue_cents,
+      color: d.revenue_cents > avg ? '#0066FF' : '#1F1F23',
+    }))
+  }, [daily, totalRevenue])
 
   const handleBarClick = useCallback((barData: any) => {
     if (barData?.activePayload?.[0]?.payload?.rawDate) {
@@ -183,16 +207,7 @@ export default function RevenuePage() {
           </div>
           {view3D ? (
             <Suspense fallback={<div className="h-[300px] bg-[#111113] rounded-xl animate-pulse" />}>
-              <Revenue3D
-                data={data.daily.slice(-14).map(d => {
-                  const avgRevenue = data.daily.reduce((s, r) => s + r.revenue_cents, 0) / data.daily.length
-                  return {
-                    label: new Date(d.date).toLocaleDateString('en', { weekday: 'short' }),
-                    value: d.revenue_cents,
-                    color: d.revenue_cents > avgRevenue ? '#0066FF' : '#1F1F23',
-                  }
-                })}
-              />
+              <Revenue3D data={revenue3DData} />
             </Suspense>
           ) : (
             <ResponsiveContainer width="100%" height={280}>

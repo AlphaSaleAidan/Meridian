@@ -1,7 +1,7 @@
 import type { ComponentType, LazyExoticComponent } from 'react'
 import {
   LayoutDashboard, Zap, Layers, Users, Phone, Video, Settings, Receipt,
-  TrendingUp, Contact, Lightbulb, Globe,
+  Contact, Lightbulb, Globe,
 } from 'lucide-react'
 import { lazyRetry } from '@/components/ErrorBoundary'
 import type { ModuleFlags } from '@/config/moduleFlags'
@@ -10,7 +10,7 @@ import type { ModuleFlags } from '@/config/moduleFlags'
  * Merchant-portal information architecture for the trimmed Canada product.
  *
  * Three money pillars (INVENTORY, SCHEDULE, PHONE CALLS) + CAMERA (secondary)
- * + HOME + SETTINGS. Each pillar exposes segmented sub-views via `?view=`,
+ * + OVERVIEW (Home / Revenue) + SETTINGS. Each exposes sub-views via `?view=`,
  * composed from existing dashboard pages — no rewrites (disable-never-delete).
  *
  * The first segment is the pillar default. Pillars with a single segment hide
@@ -44,11 +44,12 @@ const CameraIntelligencePage = lazyRetry(() => import('@/pages/CameraIntelligenc
 const LiveCamerasPage = lazyRetry(() => import('@/pages/LiveCamerasPage'))
 const SettingsPage = lazyRetry(() => import('@/pages/SettingsPage'))
 const NotificationsPage = lazyRetry(() => import('@/pages/NotificationsPage'))
-// Coming Soon previews — Canada demo only (see comingSoonPillars).
 const RevenuePage = lazyRetry(() => import('@/pages/RevenuePage'))
+// Coming Soon previews — Canada demo only (see comingSoonPillars).
 const CustomersPage = lazyRetry(() => import('@/pages/CustomersPage'))
 const InsightsPage = lazyRetry(() => import('@/pages/InsightsPage'))
 const MyWebsitePage = lazyRetry(() => import('@/pages/MyWebsitePage'))
+const SiteCarePage = lazyRetry(() => import('@/pages/canada/merchant/SiteCarePage'))
 
 export interface PillarSegment {
   view: string
@@ -80,9 +81,12 @@ export interface Pillar {
 export const merchantPillars: Pillar[] = [
   {
     path: '',
-    label: 'Home',
+    label: 'Overview',
     icon: LayoutDashboard,
-    segments: [{ view: 'home', label: 'Home', Component: MerchantHomePage }],
+    segments: [
+      { view: 'home', label: 'Home', Component: MerchantHomePage },
+      { view: 'revenue', label: 'Revenue', Component: RevenuePage },
+    ],
   },
   {
     path: 'actions',
@@ -181,14 +185,6 @@ export const demoMerchantPillars: Pillar[] = merchantPillars.map(p =>
  */
 export const comingSoonPillars: Pillar[] = [
   {
-    path: 'revenue',
-    label: 'Revenue',
-    icon: TrendingUp,
-    comingSoon: true,
-    sampleData: true,
-    segments: [{ view: 'revenue', label: 'Revenue', Component: RevenuePage }],
-  },
-  {
     path: 'insights',
     label: 'Insights',
     icon: Lightbulb,
@@ -217,7 +213,12 @@ export const comingSoonPillars: Pillar[] = [
     label: 'My Website',
     icon: Globe,
     comingSoon: true,
-    segments: [{ view: 'site', label: 'My Website', Component: MyWebsitePage }],
+    segments: [
+      // Managed sites first — that is the offer. The DIY builder stays visible
+      // as the second segment; it is still under construction behind its own flag.
+      { view: 'care', label: 'Site Care', Component: SiteCarePage },
+      { view: 'builder', label: 'Builder', Component: MyWebsitePage },
+    ],
   },
 ]
 
