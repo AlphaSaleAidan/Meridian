@@ -14,7 +14,7 @@ import QRCode from 'qrcode'
 import POSSystemPicker from '@/components/POSSystemPicker'
 import { type Deal, type DealStage } from '@/lib/canada-sales-demo-data'
 import { usLeadsService } from '@/lib/us-leads-service'
-import { getPlan, closestMonthlyPlan, PLAN_TIERS, REP_PRICE_HEADROOM, WEBSITE_MODULES, websiteMonthlyFree, VOICE_INCLUDED_MINUTES, VOICE_OVERAGE_PER_MIN, VOICE_MAX_CALL_MINUTES, type PlanTier } from '@/lib/proposal-plans'
+import { getPlan, closestMonthlyPlan, PLAN_TIERS, REP_PRICE_HEADROOM, WEBSITE_MODULES, websiteMonthlyFree, CUSTOM_CRM_SERVICE, parseSetupServiceAmount, VOICE_INCLUDED_MINUTES, VOICE_OVERAGE_PER_MIN, VOICE_MAX_CALL_MINUTES, type PlanTier } from '@/lib/proposal-plans'
 
 // Website Buildout is sold as modular line items (WEBSITE_MODULES) — the
 // one-time modules sum into the setup fee. Creating the customer fires the
@@ -144,7 +144,12 @@ export default function USPortalLeadDetailPage() {
   // pays the buildout's monthly line items.
   const monthlyFree = websiteMonthlyFree(selectedPlan.id)
   const websiteMonthlyDue = monthlyFree ? 0 : websiteMonthly
-  const setupFee = website ? String(websiteOneTime) : '0'
+  // Custom CRM build — a Setup Service like the buildout, but rep-priced:
+  // the build is scoped per deal, so the rep enters the amount they quoted.
+  const [crm, setCrm] = useState(false)
+  const [crmAmount, setCrmAmount] = useState('')
+  const crmOneTime = crm ? parseSetupServiceAmount(crmAmount) : 0
+  const setupFee = String((website ? websiteOneTime : 0) + crmOneTime)
   const [firstMonthFree, setFirstMonthFree] = useState(false)
 
   // Seed tier + adjustment from a lead's stored monthly value (legacy values
@@ -307,6 +312,12 @@ export default function USPortalLeadDetailPage() {
     }
     if (website && websiteGoals.trim().length < 20) {
       setCustomerError('Website Buildout is on but the goals are empty — give the builders at least one real sentence (20+ characters).')
+      creatingRef.current = false
+      setCustomerCreating(false)
+      return
+    }
+    if (crm && crmOneTime <= 0) {
+      setCustomerError(`${CUSTOM_CRM_SERVICE.label} is on but has no price — enter the amount you quoted.`)
       creatingRef.current = false
       setCustomerCreating(false)
       return
@@ -1232,6 +1243,27 @@ export default function USPortalLeadDetailPage() {
                 <input type="text" value={websiteBrand} onChange={e => setWebsiteBrand(e.target.value)}
                   className={inputClass} placeholder="Brand notes — colors, tone, sites they like" />
                 <p className="text-[10px] text-[#17C5B0]/60">Creating the customer launches a 48-hour build contest — the owner picks their site from real, clickable previews.</p>
+              </div>
+            )}
+            <div className="flex items-center justify-between p-4 border-t border-[#1F1F23]">
+              <div>
+                <p className="text-sm font-semibold text-white">{CUSTOM_CRM_SERVICE.label}</p>
+                <p className="text-[10px] text-[#A1A1A8]">{CUSTOM_CRM_SERVICE.blurb}</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-semibold text-[#17C5B0]">${crmOneTime}</span>
+                <div className={`w-9 h-5 rounded-full transition-colors relative cursor-pointer ${crm ? 'bg-[#17C5B0]' : 'bg-[#1F1F23]'}`}
+                  onClick={() => setCrm(!crm)}
+                >
+                  <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${crm ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                </div>
+              </div>
+            </div>
+            {crm && (
+              <div className="px-4 pb-4 pt-3 space-y-2 border-t border-[#1F1F23]">
+                <input type="number" min={0} value={crmAmount} onChange={e => setCrmAmount(e.target.value)}
+                  className={inputClass} placeholder="Build price — the amount you quoted (required)" />
+                <p className="text-[10px] text-[#4a5550]">Scoped per deal. Adds to the one-time setup fee.</p>
               </div>
             )}
           </div>
