@@ -124,6 +124,30 @@ export const WEBSITE_MODULES: WebsiteModule[] = [
   { id: 'host', label: 'Server hosting', blurb: 'Fast managed hosting with SSL', price: 35, monthly: true },
 ]
 
+/**
+ * Custom CRM build — a Setup Service alongside Website Buildout, billed into
+ * the same one-time setup fee. Unlike the website modules its price is NOT
+ * fixed: the build is scoped per deal, so the rep enters the amount they
+ * quoted. Same currency as the page it renders on (no FX — nothing to
+ * convert on a rep-entered figure).
+ */
+export const CUSTOM_CRM_SERVICE = {
+  id: 'crm',
+  label: 'Custom CRM build',
+  blurb: 'Pipeline, contacts and follow-ups built around how they actually sell',
+} as const
+
+/**
+ * Parse a rep-typed setup-service amount into whole currency units. Blank and
+ * unparseable input is 0, never NaN — the result is summed into the setup fee
+ * that reaches the onboarding link, the invoice, the SLA and Stripe.
+ */
+export function parseSetupServiceAmount(raw: string | null | undefined): number {
+  if (raw == null) return 0
+  const parsed = parseInt(String(raw).trim(), 10)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0
+}
+
 /** The monthly buildout modules (Meridian Maintenance + Server hosting) come
  *  FREE with the second tier and up (Aidan 2026-08-06) — only Standard pays
  *  the monthly. Index-based so future tiers above Premium stay included. */

@@ -3,12 +3,12 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ArrowLeft, ArrowRight, CheckCircle2, Copy, Send, Check,
   Store, User, Mail, Phone, DollarSign, FileDown,
-  Loader2, Eye, Gift, Sparkles, QrCode, ExternalLink, X, Globe,
+  Loader2, Eye, Gift, Sparkles, QrCode, ExternalLink, X, Globe, Users,
 } from 'lucide-react'
 import { useSalesAuth } from '@/lib/sales-auth'
 import POSSystemPicker from '@/components/POSSystemPicker'
 import { supabase, getAuthHeaders } from '@/lib/supabase'
-import { PLAN_TIERS, getPlan, REP_PRICE_HEADROOM, WEBSITE_MODULES, websiteMonthlyFree, type PlanTier } from '@/lib/proposal-plans'
+import { PLAN_TIERS, getPlan, REP_PRICE_HEADROOM, WEBSITE_MODULES, websiteMonthlyFree, CUSTOM_CRM_SERVICE, parseSetupServiceAmount, type PlanTier } from '@/lib/proposal-plans'
 import { downloadProposalPdf, type ProposalInput } from '@/lib/generate-proposal-pdf'
 import { usVerticalsByGroup, findUsVerticalBySlug, US_DECK_BASE_URL, buildPersonalizedUsDeckUrl } from '@/data/usVerticals'
 
@@ -540,6 +540,9 @@ export default function USPortalCreateCustomerPage() {
     websitePages: 'Home, Services, Contact',
     websiteBrand: '',
     websiteContent: 'partial' as 'ready' | 'partial' | 'none',
+    // Custom CRM build: same setup fee, but rep-priced — scope varies per deal.
+    crm: false,
+    crmAmount: '',
     notes: '',
   })
 
@@ -568,7 +571,8 @@ export default function USPortalCreateCustomerPage() {
   // Setup fee = the sum of toggled setup services (Website Buildout's
   // one-time modules today, more services coming). Monthly modules bill
   // recurring and are disclosed separately, never in the one-time fee.
-  const setupFee = form.website ? websiteOneTime : 0
+  const crmOneTime = form.crm ? parseSetupServiceAmount(form.crmAmount) : 0
+  const setupFee = (form.website ? websiteOneTime : 0) + crmOneTime
   const dueToday = (form.firstMonthFree ? 0 : price) + setupFee
   const interval = selectedPlan.interval === 'week' ? '/wk' : '/mo'
 
@@ -715,6 +719,9 @@ export default function USPortalCreateCustomerPage() {
       if (form.website && form.websiteGoals.trim().length < 20) {
         throw new Error('Website goals: give the builders at least one real sentence (20+ characters)')
       }
+      if (form.crm && crmOneTime <= 0) {
+        throw new Error('Custom CRM build is on but has no price — enter the amount you quoted')
+      }
 
       const token = generateToken()
       const apiUrl = import.meta.env.VITE_API_URL || ''
@@ -738,7 +745,7 @@ export default function USPortalCreateCustomerPage() {
             stage: 'closed_won',
             monthly_value: price,
             commission_rate: rep?.commission_rate ?? 70,
-            notes: (form.notes || `Plan: ${selectedPlan.label} at $${price}${interval}. Setup fee: $${setupFee}. First month free: ${form.firstMonthFree ? 'Yes' : 'No'}`) + (form.website ? ` Website Buildout: $${websiteOneTime} one-time (${WEBSITE_MODULES.filter(m => websiteModules.includes(m.id) || (m.monthly && monthlyFree)).map(m => m.label).join(', ')})${websiteMonthlyDue > 0 ? ` + $${websiteMonthlyDue}/mo recurring` : monthlyFree ? ` — maintenance & hosting included with ${selectedPlan.label}` : ''}.` : ''),
+            notes: (form.notes || `Plan: ${selectedPlan.label} at $${price}${interval}. Setup fee: $${setupFee}. First month free: ${form.firstMonthFree ? 'Yes' : 'No'}`) + (form.website ? ` Website Buildout: $${websiteOneTime} one-time (${WEBSITE_MODULES.filter(m => websiteModules.includes(m.id) || (m.monthly && monthlyFree)).map(m => m.label).join(', ')})${websiteMonthlyDue > 0 ? ` + $${websiteMonthlyDue}/mo recurring` : monthlyFree ? ` — maintenance & hosting included with ${selectedPlan.label}` : ''}.` : '') + (form.crm ? ` ${CUSTOM_CRM_SERVICE.label}: $${crmOneTime} one-time.` : ''),
             rep_id: rep?.rep_id || null,
           }).select('id')
           if (leadErr) setCrmRecordError(leadErr.message)
@@ -1235,6 +1242,47 @@ export default function USPortalCreateCustomerPage() {
                     <p className="text-[10px] text-[#17C5B0]/60">When you create the customer, a 48-hour build contest goes live — the owner picks their site from real, clickable previews.</p>
                   </div>
                 )}
+                {/* Custom CRM build — same setup fee, rep-priced: the build is
+                    scoped per deal, so the rep types the amount they quoted. */}
+                <div className="flex items-center justify-between p-4 border-t border-[#1F1F23]">
+                  <div className="flex items-center gap-3">
+                    <Users size={18} className={form.crm ? 'text-[#17C5B0]' : 'text-[#4a5550]'} />
+                    <div>
+                      <p className="text-[13px] font-semibold text-white">{CUSTOM_CRM_SERVICE.label}</p>
+                      <p className="text-[11px] text-[#A1A1A8]">{CUSTOM_CRM_SERVICE.blurb}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-[13px] font-semibold text-[#17C5B0]">${crmOneTime}</span>
+                    <button
+                      onClick={() => update('crm', !form.crm)}
+                      className={`relative w-12 h-6 rounded-full transition-colors duration-200 ${
+                        form.crm ? 'bg-[#17C5B0]' : 'bg-[#1F1F23]'
+                      }`}
+                    >
+                      <div className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform duration-200 ${
+                        form.crm ? 'translate-x-6' : ''
+                      }`} />
+                    </button>
+                  </div>
+                </div>
+                {form.crm && (
+                  <div className="px-4 pb-4 pt-3 space-y-3 border-t border-[#1F1F23]">
+                    <div>
+                      <label className="block text-[11px] font-medium text-[#A1A1A8] mb-1.5">
+                        Build price <span className="text-[#17C5B0]">(required — scoped per deal, you set it)</span>
+                      </label>
+                      <div className="relative">
+                        <DollarSign size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#4a5550]" />
+                        <input type="number" min={0} value={form.crmAmount}
+                          onChange={e => update('crmAmount', e.target.value)}
+                          placeholder="0"
+                          className="w-full pl-8 pr-3 py-2.5 text-[13px] rounded-lg bg-[#111113] border border-[#1F1F23] text-white placeholder-[#4a5550] focus:border-[#17C5B0]/50 focus:outline-none" />
+                      </div>
+                      <p className="text-[10px] text-[#4a5550] mt-1">In USD. Adds to the one-time setup fee — quote it from the scope you agreed on the call.</p>
+                    </div>
+                  </div>
+                )}
               </div>
               <p className="text-[10px] text-[#4a5550] mt-1.5">More setup services are on the way — each lists its price and adds to the one-time setup fee.</p>
             </div>
@@ -1283,6 +1331,12 @@ export default function USPortalCreateCustomerPage() {
                     {websiteMonthlyDue > 0 && <span className="text-[#A1A1A8] font-normal"> + ${websiteMonthlyDue}/mo</span>}
                     {monthlyFree && <span className="text-[#17C5B0] font-normal"> · maint &amp; hosting incl.</span>}
                   </span>
+                </div>
+              )}
+              {form.crm && (
+                <div className="flex justify-between py-2 border-b border-[#1F1F23]">
+                  <span className="text-[#A1A1A8]">{CUSTOM_CRM_SERVICE.label} <span className="text-[#4a5550]">(in setup fee)</span></span>
+                  <span className="text-white font-medium">${crmOneTime}</span>
                 </div>
               )}
               {form.firstMonthFree && (
@@ -1515,7 +1569,7 @@ export default function USPortalCreateCustomerPage() {
               <ArrowLeft size={14} /> Back
             </button>
             <button onClick={() => {
-              setForm({ businessName: '', ownerName: '', email: '', phone: '', vertical: '', pos: '', plan: 'premium', priceBump: 0, firstMonthFree: false, feeAllocationMode: 'business_pays', website: false, websiteCurrentUrl: '', websiteGoals: '', websitePages: 'Home, Services, Contact', websiteBrand: '', websiteContent: 'partial', notes: '' })
+              setForm({ businessName: '', ownerName: '', email: '', phone: '', vertical: '', pos: '', plan: 'premium', priceBump: 0, firstMonthFree: false, feeAllocationMode: 'business_pays', website: false, websiteCurrentUrl: '', websiteGoals: '', websitePages: 'Home, Services, Contact', websiteBrand: '', websiteContent: 'partial', crm: false, crmAmount: '', notes: '' })
               setStep('details')
               setOnboardingLink('')
               setCustomerLoginUrl('')
@@ -1702,7 +1756,7 @@ export default function USPortalCreateCustomerPage() {
               <ArrowLeft size={14} /> Back to Leads
             </button>
             <button onClick={() => {
-              setForm({ businessName: '', ownerName: '', email: '', phone: '', vertical: '', pos: '', plan: 'premium', priceBump: 0, firstMonthFree: false, feeAllocationMode: 'business_pays', website: false, websiteCurrentUrl: '', websiteGoals: '', websitePages: 'Home, Services, Contact', websiteBrand: '', websiteContent: 'partial', notes: '' })
+              setForm({ businessName: '', ownerName: '', email: '', phone: '', vertical: '', pos: '', plan: 'premium', priceBump: 0, firstMonthFree: false, feeAllocationMode: 'business_pays', website: false, websiteCurrentUrl: '', websiteGoals: '', websitePages: 'Home, Services, Contact', websiteBrand: '', websiteContent: 'partial', crm: false, crmAmount: '', notes: '' })
               setStep('details')
               setOnboardingLink('')
               setCustomerLoginUrl('')

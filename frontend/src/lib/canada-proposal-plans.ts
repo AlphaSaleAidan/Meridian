@@ -64,6 +64,9 @@ const CAD_MODULE_PRICES: Record<string, number> = {
 
 export type { WebsiteModule } from './proposal-plans'
 export { websiteMonthlyFree } from './proposal-plans'
+// Custom CRM build is rep-priced per deal, so there is no fixed CAD price to
+// convert — the definition and the amount parser are shared verbatim.
+export { CUSTOM_CRM_SERVICE, parseSetupServiceAmount } from './proposal-plans'
 // Voice-call billing dials are identical in CAD (CA$0.45/min — deliberately
 // not FX-converted, matches the plan feature copy and backend env).
 export { VOICE_INCLUDED_MINUTES, VOICE_OVERAGE_PER_MIN, VOICE_MAX_CALL_MINUTES } from './proposal-plans'

@@ -3,12 +3,12 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   ArrowLeft, ArrowRight, CheckCircle2, Copy, Send, Check,
   Store, User, Mail, Phone, DollarSign, FileDown,
-  Loader2, Eye, Gift, Sparkles, QrCode, ExternalLink, X, Globe,
+  Loader2, Eye, Gift, Sparkles, QrCode, ExternalLink, X, Globe, Users,
 } from 'lucide-react'
 import { useSalesAuth } from '@/lib/sales-auth'
 import { posSystems } from '@/data/pos-systems'
 import { supabase, getAuthHeaders } from '@/lib/supabase'
-import { PLAN_TIERS, getPlan, REP_PRICE_HEADROOM_CAD, WEBSITE_MODULES, websiteMonthlyFree, type PlanTier } from '@/lib/canada-proposal-plans'
+import { PLAN_TIERS, getPlan, REP_PRICE_HEADROOM_CAD, WEBSITE_MODULES, websiteMonthlyFree, CUSTOM_CRM_SERVICE, parseSetupServiceAmount, type PlanTier } from '@/lib/canada-proposal-plans'
 import { downloadProposalPdf, type ProposalInput } from '@/lib/generate-proposal-pdf'
 import { verticalsByGroup, findVerticalBySlug, DECK_BASE_URL, buildPersonalizedDeckUrl } from '@/data/cadVerticals'
 
@@ -540,6 +540,9 @@ export default function CanadaPortalCreateCustomerPage() {
     websitePages: 'Home, Services, Contact',
     websiteBrand: '',
     websiteContent: 'partial' as 'ready' | 'partial' | 'none',
+    // Custom CRM build: same setup fee, but rep-priced — scope varies per deal.
+    crm: false,
+    crmAmount: '',
     notes: '',
   })
 
@@ -568,7 +571,8 @@ export default function CanadaPortalCreateCustomerPage() {
   // Setup fee = the sum of toggled setup services (Website Buildout's
   // one-time modules today, more services coming). Monthly modules bill
   // recurring and are disclosed separately, never in the one-time fee.
-  const setupFee = form.website ? websiteOneTime : 0
+  const crmOneTime = form.crm ? parseSetupServiceAmount(form.crmAmount) : 0
+  const setupFee = (form.website ? websiteOneTime : 0) + crmOneTime
   const dueToday = (form.firstMonthFree ? 0 : price) + setupFee
   const interval = selectedPlan.interval === 'week' ? '/wk' : '/mo'
 
@@ -716,6 +720,9 @@ export default function CanadaPortalCreateCustomerPage() {
       if (form.website && form.websiteGoals.trim().length < 20) {
         throw new Error('Website goals: give the builders at least one real sentence (20+ characters)')
       }
+      if (form.crm && crmOneTime <= 0) {
+        throw new Error('Custom CRM build is on but has no price — enter the amount you quoted')
+      }
 
       const token = generateToken()
       const apiUrl = import.meta.env.VITE_API_URL || ''
@@ -739,7 +746,7 @@ export default function CanadaPortalCreateCustomerPage() {
             stage: 'closed_won',
             monthly_value: price,
             commission_rate: rep?.commission_rate ?? 70,
-            notes: (form.notes || `Plan: ${selectedPlan.label} at CA$${price}${interval}. Setup fee: CA$${setupFee}. First month free: ${form.firstMonthFree ? 'Yes' : 'No'}`) + (form.website ? ` Website Buildout: CA$${websiteOneTime} one-time (${WEBSITE_MODULES.filter(m => websiteModules.includes(m.id) || (m.monthly && monthlyFree)).map(m => m.label).join(', ')})${websiteMonthlyDue > 0 ? ` + CA$${websiteMonthlyDue}/mo recurring` : monthlyFree ? ` — maintenance & hosting included with ${selectedPlan.label}` : ''}.` : ''),
+            notes: (form.notes || `Plan: ${selectedPlan.label} at CA$${price}${interval}. Setup fee: CA$${setupFee}. First month free: ${form.firstMonthFree ? 'Yes' : 'No'}`) + (form.website ? ` Website Buildout: CA$${websiteOneTime} one-time (${WEBSITE_MODULES.filter(m => websiteModules.includes(m.id) || (m.monthly && monthlyFree)).map(m => m.label).join(', ')})${websiteMonthlyDue > 0 ? ` + CA$${websiteMonthlyDue}/mo recurring` : monthlyFree ? ` — maintenance & hosting included with ${selectedPlan.label}` : ''}.` : '') + (form.crm ? ` ${CUSTOM_CRM_SERVICE.label}: CA$${crmOneTime} one-time.` : ''),
             rep_id: rep?.rep_id || null,
           }).select('id')
           if (leadErr) setCrmRecordError(leadErr.message)
@@ -1239,6 +1246,47 @@ export default function CanadaPortalCreateCustomerPage() {
                     <p className="text-2xs text-pm-accent/60">When you create the customer, a 48-hour build contest goes live — the owner picks their site from real, clickable previews.</p>
                   </div>
                 )}
+                {/* Custom CRM build — same setup fee, rep-priced: the build is
+                    scoped per deal, so the rep types the amount they quoted. */}
+                <div className="flex items-center justify-between p-4 border-t border-pm-canada-border">
+                  <div className="flex items-center gap-3">
+                    <Users size={18} className={form.crm ? 'text-pm-accent' : 'text-pm-canada-text-faint'} />
+                    <div>
+                      <p className="text-sm-tight font-semibold text-white">{CUSTOM_CRM_SERVICE.label}</p>
+                      <p className="text-2xs text-pm-canada-text-muted">{CUSTOM_CRM_SERVICE.blurb}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm-tight font-semibold text-pm-accent">CA${crmOneTime}</span>
+                    <button
+                      onClick={() => update('crm', !form.crm)}
+                      className={`relative w-12 h-6 rounded-full transition-colors duration-200 ${
+                        form.crm ? 'bg-pm-accent' : 'bg-pm-canada-border'
+                      }`}
+                    >
+                      <div className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform duration-200 ${
+                        form.crm ? 'translate-x-6' : ''
+                      }`} />
+                    </button>
+                  </div>
+                </div>
+                {form.crm && (
+                  <div className="px-4 pb-4 pt-3 space-y-3 border-t border-pm-canada-border">
+                    <div>
+                      <label className="block text-2xs font-medium text-pm-canada-text-muted mb-1.5">
+                        Build price <span className="text-pm-accent">(required — scoped per deal, you set it)</span>
+                      </label>
+                      <div className="relative">
+                        <DollarSign size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-pm-canada-text-faint" />
+                        <input type="number" min={0} value={form.crmAmount}
+                          onChange={e => update('crmAmount', e.target.value)}
+                          placeholder="0"
+                          className="w-full pl-8 pr-3 py-2.5 text-sm-tight rounded-lg bg-pm-canada-surface border border-pm-canada-border text-white placeholder-pm-canada-text-faint focus:border-pm-accent/50 focus:outline-none" />
+                      </div>
+                      <p className="text-2xs text-pm-canada-text-faint mt-1">In CAD. Adds to the one-time setup fee — quote it from the scope you agreed on the call.</p>
+                    </div>
+                  </div>
+                )}
               </div>
               <p className="text-2xs text-pm-canada-text-faint mt-1.5">More setup services are on the way — each lists its price and adds to the one-time setup fee.</p>
             </div>
@@ -1287,6 +1335,12 @@ export default function CanadaPortalCreateCustomerPage() {
                     {websiteMonthlyDue > 0 && <span className="text-pm-canada-text-muted font-normal"> + CA${websiteMonthlyDue}/mo</span>}
                     {monthlyFree && <span className="text-pm-accent font-normal"> · maint &amp; hosting incl.</span>}
                   </span>
+                </div>
+              )}
+              {form.crm && (
+                <div className="flex justify-between py-2 border-b border-pm-canada-border">
+                  <span className="text-pm-canada-text-muted">{CUSTOM_CRM_SERVICE.label} <span className="text-pm-canada-text-faint">(in setup fee)</span></span>
+                  <span className="text-white font-medium">CA${crmOneTime}</span>
                 </div>
               )}
               {form.firstMonthFree && (
@@ -1519,7 +1573,7 @@ export default function CanadaPortalCreateCustomerPage() {
               <ArrowLeft size={14} /> Back
             </button>
             <button onClick={() => {
-              setForm({ businessName: '', ownerName: '', email: '', phone: '', vertical: '', pos: '', plan: 'premium', priceBump: 0, firstMonthFree: false, feeAllocationMode: 'business_pays', website: false, websiteCurrentUrl: '', websiteGoals: '', websitePages: 'Home, Services, Contact', websiteBrand: '', websiteContent: 'partial', notes: '' })
+              setForm({ businessName: '', ownerName: '', email: '', phone: '', vertical: '', pos: '', plan: 'premium', priceBump: 0, firstMonthFree: false, feeAllocationMode: 'business_pays', website: false, websiteCurrentUrl: '', websiteGoals: '', websitePages: 'Home, Services, Contact', websiteBrand: '', websiteContent: 'partial', crm: false, crmAmount: '', notes: '' })
               setStep('details')
               setOnboardingLink('')
               setCustomerLoginUrl('')
@@ -1709,7 +1763,7 @@ export default function CanadaPortalCreateCustomerPage() {
               <ArrowLeft size={14} /> Back to Leads
             </button>
             <button onClick={() => {
-              setForm({ businessName: '', ownerName: '', email: '', phone: '', vertical: '', pos: '', plan: 'premium', priceBump: 0, firstMonthFree: false, feeAllocationMode: 'business_pays', website: false, websiteCurrentUrl: '', websiteGoals: '', websitePages: 'Home, Services, Contact', websiteBrand: '', websiteContent: 'partial', notes: '' })
+              setForm({ businessName: '', ownerName: '', email: '', phone: '', vertical: '', pos: '', plan: 'premium', priceBump: 0, firstMonthFree: false, feeAllocationMode: 'business_pays', website: false, websiteCurrentUrl: '', websiteGoals: '', websitePages: 'Home, Services, Contact', websiteBrand: '', websiteContent: 'partial', crm: false, crmAmount: '', notes: '' })
               setStep('details')
               setOnboardingLink('')
               setCustomerLoginUrl('')
