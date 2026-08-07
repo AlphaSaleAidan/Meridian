@@ -45,6 +45,8 @@ async def run_incremental(org_id: str, provider: str, connection: dict):
             result = await _sync_clover(org_id, conn_id, connection, since)
         elif provider == "toast":
             result = await _sync_toast(org_id, conn_id, connection, since)
+        elif provider == "stripe":
+            result = await _sync_stripe(org_id, conn_id, connection, since)
         else:
             result = await _sync_generic(org_id, conn_id, connection, provider, since)
             if result is None:
@@ -139,6 +141,32 @@ async def _sync_toast(org_id, conn_id, connection, since):
         restaurant_guid=decrypted.get("restaurant_guid", ""),
     ) as client:
         engine = ToastSyncEngine(client=client, org_id=org_id, pos_connection_id=conn_id)
+        return await engine.run_incremental_sync(since=since)
+
+
+def stripe_pos_credentials(connection: dict) -> tuple[str, str]:
+    """(api_key, account_id) for a Stripe POS connection.
+
+    Preferred: platform secret key (STRIPE_POS_CLIENT_SECRET — Stripe's OAuth
+    client_secret IS the secret key) + Stripe-Account header with the connected
+    acct_… id. Fallback when the env is unset: the per-account access_token the
+    OAuth exchange stored, used bare (legacy pattern, still honored by Stripe).
+    """
+    import os
+    account_id = connection.get("external_merchant_id", "") or ""
+    platform_key = os.environ.get("STRIPE_POS_CLIENT_SECRET", "")
+    if platform_key and account_id.startswith("acct_"):
+        return platform_key, account_id
+    return decrypt_token(connection.get("access_token_enc", "") or ""), ""
+
+
+async def _sync_stripe(org_id, conn_id, connection, since):
+    from ..stripe_pos.client import StripePOSClient
+    from ..stripe_pos.sync_engine import StripePOSSyncEngine
+
+    api_key, account_id = stripe_pos_credentials(connection)
+    async with StripePOSClient(api_key=api_key, account_id=account_id) as client:
+        engine = StripePOSSyncEngine(client=client, org_id=org_id, pos_connection_id=conn_id)
         return await engine.run_incremental_sync(since=since)
 
 

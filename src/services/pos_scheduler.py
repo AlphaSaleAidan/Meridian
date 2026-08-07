@@ -21,6 +21,7 @@ PROVIDER_SYNC_MINUTES = {
     "square": 15,
     "toast": 30,
     "clover": 30,
+    "stripe": 30,
     # All other API systems default to 60 minutes via .get(provider, 60)
 }
 
@@ -59,6 +60,17 @@ async def _recover_backfill(org_id: str, provider: str, conn: dict):
     skipped forever and never sync new sales. Re-run the backfill: on success it
     sets historical_import_complete=true and incremental sync takes over; on
     failure run_backfill marks status=error so this won't loop."""
+    if provider == "stripe":
+        # Stripe's backfill is queued by the OAuth callback; this recovers a
+        # connection whose initial import errored or was interrupted, which
+        # would otherwise be stranded (the loop above skips incomplete imports).
+        logger.info(f"Recovery backfill for {org_id}/stripe (historical_import_complete=false)")
+        try:
+            from ..api.routes.pos_connections import run_stripe_backfill
+            await run_stripe_backfill(org_id, conn["id"], conn)
+        except Exception as e:
+            logger.error(f"Stripe recovery backfill failed for {org_id}: {e}")
+        return
     if provider != "square":
         return  # only Square backfill is wired here; others heal via their own paths
     logger.info(f"Recovery backfill for {org_id}/{provider} (historical_import_complete=false)")

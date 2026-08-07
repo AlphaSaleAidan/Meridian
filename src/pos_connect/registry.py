@@ -82,6 +82,31 @@ _REGISTRY: dict[str, ProviderConfig] = {
             market_note="Self-serve OAuth2. Real US restaurant + retail footprint.",
             docs_url="https://x-series-api.lightspeedhq.com/docs/authorization",
         ),
+        # Stripe — merchant connects their EXISTING Stripe account (Connect
+        # OAuth, standard accounts, read_only). client_id is the platform's
+        # ca_… Connect id; client_secret is the platform SECRET KEY (that's
+        # Stripe's OAuth contract). Deliberately STRIPE_POS_* env names — the
+        # payments rails (stripe_connect.py / stripe_checkout.py) own
+        # STRIPE_SECRET_KEY and may be a different Stripe account.
+        # Unlike a POS, Stripe has charges only (no items/menu/labor); the sync
+        # engine lives in src/stripe_pos/.
+        ProviderConfig(
+            key="stripe",
+            label="Stripe",
+            authorize_url="https://connect.stripe.com/oauth/authorize",
+            token_url="https://connect.stripe.com/oauth/token",
+            scopes=["read_only"],
+            client_id_env="STRIPE_POS_CLIENT_ID",
+            client_secret_env="STRIPE_POS_CLIENT_SECRET",
+            # Token response carries stripe_user_id = acct_… directly.
+            merchant_id_strategy="token:stripe_user_id",
+            verified=False,
+            market_note="Payment processor, not full POS — revenue analytics only (no menu/labor).",
+            docs_url="https://docs.stripe.com/connect/oauth-reference",
+            # Send merchants to the sign-in flavor of the consent screen —
+            # they're connecting an account they already have.
+            extra_authorize_params={"stripe_landing": "login"},
+        ),
         # SumUp — self-serve OAuth2. Small in US restaurants (mobile card reader),
         # but a clean, simple connector; good framework proof.
         ProviderConfig(

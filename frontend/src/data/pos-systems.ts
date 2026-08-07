@@ -296,6 +296,65 @@ export const posSystems: POSSystem[] = [
     notesForSR: 'Clover auto-detects the Merchant ID during OAuth — the manual field is a fallback. Canada uses the same Clover API but the app may need separate approval for Clover.com vs Clover.ca. Works with any Clover plan.',
     category: 'multi_vertical',
   },
+  {
+    // Stripe as a payments connector — merchant links their EXISTING Stripe
+    // account (Connect OAuth, read-only). Distinct from 'stripe-terminal'
+    // below, which is the manual/CSV contingency entry for Terminal hardware.
+    key: 'stripe',
+    name: 'Stripe',
+    logo: '',
+    brandColor: '#635BFF',
+    logoInitials: 'ST',
+    website: 'https://stripe.com',
+    status: 'integrated',
+    tier: 1,
+    integrationStatus: {
+      apiAvailable: true,
+      oauthSupported: true,
+      webhooksSupported: true,
+      sandboxAvailable: true,
+      estimatedIntegrationEffort: 'low',
+      notes: 'One-click Connect OAuth (read-only). Payment processor, not full POS — revenue and payment analytics; no menu items, inventory, or labor.',
+    },
+    contingencyPlan: {
+      workaround: 'Not needed — native integration available',
+      dataExportFormat: 'N/A',
+      exportInstructions: 'Use native OAuth connection instead',
+      manualUploadSupported: true,
+      thirdPartyBridge: null,
+      estimatedSetupTime: '2 minutes',
+      limitations: ['No menu item detail (payment totals only)', 'No inventory', 'No labor/employee data'],
+    },
+    connectionRequirements: {
+      requiredCredentials: ['Stripe account login'],
+      requiredPermissions: ['read_only'],
+      hardwareRequired: null,
+      planRequired: 'Any Stripe account (standard pricing, no monthly fee)',
+      stepByStepInstructions: [
+        'Click "Connect Stripe" below',
+        'Log in to your Stripe account',
+        'Approve Meridian\'s read-only access',
+        'Done — payment history flows in automatically',
+      ],
+    },
+    verticals: ['restaurant', 'retail', 'coffee', 'ecommerce'],
+    dataAvailable: {
+      sales: true,
+      inventory: false,
+      employees: false,
+      customers: true,
+      menuItems: false,
+      realTime: false,
+      historicalDays: 540,
+    },
+    authMethod: 'oauth2',
+    developerDocsUrl: 'https://docs.stripe.com/connect/oauth-reference',
+    partnerProgramRequired: false,
+    estimatedSetupMinutes: 2,
+    canadaAvailable: true,
+    notesForSR: 'Best fit for merchants who take payments through Stripe (online ordering, invoicing, Stripe Terminal). Read-only: Meridian can never move money or change their Stripe account. Pairs well with a CSV menu upload for item-level insight.',
+    category: 'multi_vertical',
+  },
 
   // ═══════════════════════════════════════════════════════════
   // TIER 2 — High Priority (Coming Soon)
