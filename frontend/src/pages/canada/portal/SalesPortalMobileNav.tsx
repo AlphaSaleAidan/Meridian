@@ -6,7 +6,8 @@ import {
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
-import { useSalesAuth } from '@/lib/sales-auth'
+import { useSalesAuth, repTier, type RepTier } from '@/lib/sales-auth'
+import { isLeaderboardHidden } from '@/lib/leaderboard-flags'
 
 const ADMIN_EMAILS = [
   'apierce@alphasale.co',
@@ -22,11 +23,21 @@ const PRIMARY_TABS = [
   { path: '/canada/portal/accounts', icon: Building2, label: 'Accounts' },
 ]
 
-function getMoreItems(isAdmin: boolean) {
+// Mirrors the desktop sidebar: admins get Team, managers My Team, and a plain
+// rep gets the Leaderboard — or nothing at all while the board is hidden,
+// since /team has no rep-facing content without it.
+function getMoreItems(tier: RepTier) {
+  const teamItem = tier === 'admin'
+    ? { path: '/canada/portal/team', icon: Users, label: 'Team' }
+    : tier === 'manager'
+      ? { path: '/canada/portal/team', icon: Users, label: 'My Team' }
+      : isLeaderboardHidden()
+        ? null
+        : { path: '/canada/portal/team', icon: Trophy, label: 'Leaderboard' }
   return [
     { path: '/canada/portal/training', icon: GraduationCap, label: 'Training' },
     { path: '/canada/portal/proposals', icon: FileText, label: 'Proposals' },
-    { path: '/canada/portal/team', icon: isAdmin ? Users : Trophy, label: isAdmin ? 'Team' : 'Leaderboard' },
+    ...(teamItem ? [teamItem] : []),
     { path: '/canada/portal/badge', icon: CreditCard, label: 'My Badge' },
     { path: '/canada/portal/settings', icon: Settings, label: 'Settings' },
   ]
@@ -36,8 +47,8 @@ export default function SalesPortalMobileNav() {
   const [moreOpen, setMoreOpen] = useState(false)
   const location = useLocation()
   const { rep } = useSalesAuth()
-  const isAdmin = rep?.email && ADMIN_EMAILS.some(a => a.toLowerCase() === rep.email.toLowerCase())
-  const MORE_ITEMS = getMoreItems(!!isAdmin)
+  const emailIsAdmin = !!rep?.email && ADMIN_EMAILS.some(a => a.toLowerCase() === rep.email.toLowerCase())
+  const MORE_ITEMS = getMoreItems(emailIsAdmin ? 'admin' : repTier(rep))
 
   useEffect(() => { setMoreOpen(false) }, [location.pathname])
 
