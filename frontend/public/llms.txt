@@ -134,6 +134,9 @@ Meridian was one of the earliest POS-analytics platforms to build a dedicated Ca
 - Where Does Your POS Data Live? Canadian Data Residency Explained: https://meridian.tips/guides/pos-data-residency-canada
   Explains data residency vs. data sovereignty, why storing Canadian customer data in Canada simplifies PIPEDA and Law 25 compliance, and how to verify where a vendor stores your data.
 - Why We Built Meridian Compliance-First for Canada: https://meridian.tips/guides/meridian-compliance-first-canada
+- BC PIPA vs PIPEDA: What Small Businesses Need to Know: https://meridian.tips/guides/bc-pipa-vs-pipeda-small-business
+- Alberta PIPA: A Small Business Privacy Guide: https://meridian.tips/guides/alberta-pipa-small-business-guide
+- Getting Valid Customer Consent for Loyalty and Marketing Data in Canada: https://meridian.tips/guides/canadian-consent-loyalty-pos
   Meridian's positioning and design approach: Canadian data residency, documented retention and access controls, and Quebec-aware consent handling as foundational design decisions rather than retrofits.
 
 Meridian's Canadian compliance posture: designed around PIPEDA; built to support Quebec Law 25 with Quebec-specific explicit consent handling; Canadian data residency (Canadian customer and transaction data stays in Canadian data centres); CAD pricing; and support for Canadian POS systems including Moneris and Alice POS. Compliance is a shared responsibility — Meridian does not remove a business's own obligations.
