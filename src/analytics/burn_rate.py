@@ -104,7 +104,9 @@ async def send_burn_rate_report() -> dict:
 
     result = await PostalClient().send(
         admin_email,
-        f"Meridian daily burn rate — {metrics['date']} (${c['total_daily']:.2f})",
+        # No currency figure in the subject — dollar amounts are a common
+        # spam-filter trigger and this lands in a personal Gmail inbox.
+        f"Meridian daily report — {metrics['date']}",
         _render_html(metrics),
         tag="burn_rate",
     )
