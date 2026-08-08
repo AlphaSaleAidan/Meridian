@@ -8,9 +8,6 @@ from datetime import datetime, timezone, timedelta
 
 logger = logging.getLogger("meridian.analytics.burn_rate")
 
-ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "")
-ADMIN_NAME = os.environ.get("ADMIN_NAME", "Aidan")
-
 # Leads are stored per market; there is no combined table.
 LEAD_TABLES = ("canada_leads", "us_leads")
 
@@ -93,16 +90,20 @@ async def send_burn_rate_report() -> dict:
     Raises on failure so the scheduled task surfaces as failed rather than
     reporting success while sending nothing.
     """
-    if not ADMIN_EMAIL:
-        raise RuntimeError("ADMIN_EMAIL not set — cannot deliver daily burn-rate report")
-
+    # Importing config is what loads .env; nothing else in the Celery task
+    # chain does it, so read the recipient at call time rather than at import.
+    from .. import config  # noqa: F401
     from ..email import PostalClient
+
+    admin_email = os.environ.get("ADMIN_EMAIL", "")
+    if not admin_email:
+        raise RuntimeError("ADMIN_EMAIL not set — cannot deliver daily burn-rate report")
 
     metrics = await calculate_daily_burn_rate()
     c = metrics["costs"]
 
     result = await PostalClient().send(
-        ADMIN_EMAIL,
+        admin_email,
         f"Meridian daily burn rate — {metrics['date']} (${c['total_daily']:.2f})",
         _render_html(metrics),
         tag="burn_rate",

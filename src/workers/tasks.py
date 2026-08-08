@@ -401,6 +401,10 @@ def send_daily_burn_rate():
     """Send the daily burn rate report to admin."""
 
     async def _send():
+        # Nothing else in this task's chain imports config, and config is what
+        # loads .env — without this, init_db() sees no credentials on a worker
+        # that hasn't yet run a task which pulls config in transitively.
+        from .. import config  # noqa: F401
         from ..db import init_db, close_db
         await init_db()
         try:
