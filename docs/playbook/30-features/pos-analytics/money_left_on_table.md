@@ -18,7 +18,10 @@ Outputs from all tier 1–4 agents.
 
 ## Where it lives
 
-Source: `src/ai/agents/money_left_on_table.py` or `src/camera/money_left_on_table.py` (vision modules) or `src/ai/money_left_on_table.py` (coordination)
+Source: `src/ai/analyzers/money_left.py` (`MoneyLeftCalculator` — the five-component
+maths), `src/ai/agents/money_left.py` (`MoneyLeftAgent`) and
+`src/ai/generators/money_left_insights.py`. Covered by
+`tests/test_money_left_calculator.py`.
 
 ---
 

@@ -10,6 +10,12 @@ Run pytest from the repo root with the default `sys.path`:
 
 Tests must import application code via `from src.x import ...`.
 
+`pytest.ini` sets `testpaths = tests`, so a bare `pytest` never looks in
+`src/tests` — hence the explicit second path above. Note that even with it,
+`src/tests/test_ai_engine.py` contributes **zero** collected tests: its body is
+a single `async def run_tests()` with no `test_` prefix, so it only runs as a
+script (`python src/tests/test_ai_engine.py`). New tests belong in `tests/`.
+
 ## Landmine: never use `PYTHONPATH=src`
 
 Do **not** put `src` on `sys.path` (e.g. `PYTHONPATH=src pytest`). The repo has a
