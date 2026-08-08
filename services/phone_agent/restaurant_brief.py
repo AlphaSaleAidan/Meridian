@@ -45,7 +45,11 @@ logger = logging.getLogger("meridian.phone_agent.restaurant_brief")
 
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
 DEEPSEEK_BASE_URL = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")
-DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash")
+# Voice path stays on V4 flash for low latency + tool-calling on live
+# calls. It reads PHONE_DEEPSEEK_MODEL, NOT the shared DEEPSEEK_MODEL, so
+# pointing the rest of the stack at the cheaper V3 chat model cannot
+# silently regress call latency. Override this var to move the phone too.
+DEEPSEEK_MODEL = os.getenv("PHONE_DEEPSEEK_MODEL", "deepseek-v4-flash")
 
 _BRIEF_MAX_WORDS = 120
 _WEBSITE_TEXT_LIMIT = 4000   # chars fed to the LLM after HTML stripping

@@ -131,7 +131,7 @@ async def run_harness() -> dict:
     llm = DeepSeekLLMService(
         api_key=os.environ["DEEPSEEK_API_KEY"],
         base_url=os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1"),
-        model=os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash"),
+        model=os.getenv("PHONE_DEEPSEEK_MODEL", "deepseek-v4-flash"),
     )
 
     captured: dict = {}

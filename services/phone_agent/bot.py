@@ -16,7 +16,7 @@ The order tools call our existing order pipeline unchanged:
 Phase 2 swaps STT/TTS to NVIDIA Nemotron via `pipecat.services.nvidia` (same
 pipeline). Env:
   ENABLE_CALL_RECORDING=1  → WAV archival
-  DEEPSEEK_API_KEY / DEEPSEEK_MODEL
+  DEEPSEEK_API_KEY / PHONE_DEEPSEEK_MODEL (voice path pins deepseek-v4-flash)
 """
 import asyncio
 import json
@@ -65,7 +65,11 @@ logger = logging.getLogger("meridian.phone_agent.bot")
 
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
 DEEPSEEK_BASE_URL = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")
-DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash")  # V4 flash: low-latency + tool-calling (was V3 deepseek-chat)
+# Voice path stays on V4 flash for low latency + tool-calling on live
+# calls. It reads PHONE_DEEPSEEK_MODEL, NOT the shared DEEPSEEK_MODEL, so
+# pointing the rest of the stack at the cheaper V3 chat model cannot
+# silently regress call latency. Override this var to move the phone too.
+DEEPSEEK_MODEL = os.getenv("PHONE_DEEPSEEK_MODEL", "deepseek-v4-flash")
 
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 # _log_call writes phone_call_logs → needs service-role (anon lacks INSERT GRANT).

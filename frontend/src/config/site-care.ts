@@ -1,12 +1,13 @@
 /**
  * Site Care — change requests for merchants whose website Meridian built.
  *
- * PRICING HERE IS PROVISIONAL. The amounts are placeholders, anchored to the
- * existing Website Buildout scale in canada-proposal-plans.ts (core CA$350,
- * anim3d CA$175, scroll CA$105, forms CA$70, maint CA$55) so the surface has a
- * coherent shape to show. They are NOT an approved rate card. Set the real
- * numbers here — this file is the single source, and every amount reaches the
- * customer labelled as an estimate confirmed before any work starts.
+ * There is deliberately NO published rate card. Change requests vary too much
+ * in scope to price up front, so every request is quoted before work starts
+ * and the UI never shows a number it cannot stand behind. Turnaround is the
+ * only commitment made here.
+ *
+ * If fixed pricing is introduced later, it belongs in this file and nowhere
+ * else — the page reads everything below and formats nothing of its own.
  */
 
 export type SiteRequestKind =
@@ -23,9 +24,7 @@ export interface SiteRequestType {
   label: string
   /** What the merchant gets — written for them, not for us. */
   description: string
-  /** Provisional estimate in CAD. `null` renders as "Quoted on request". */
-  estimateCad: number | null
-  /** Business days, quoted as a range. */
+  /** Business days, quoted as a range. The only figure we commit to. */
   turnaround: string
 }
 
@@ -34,55 +33,47 @@ export const SITE_REQUEST_TYPES: SiteRequestType[] = [
     kind: 'content',
     label: 'Content update',
     description: 'Change wording, hours, contact details or prices already on the site.',
-    estimateCad: 55,
     turnaround: '1–2 business days',
   },
   {
     kind: 'media',
     label: 'Photos & media',
     description: 'Swap in new photography, logos or video, resized and optimised for you.',
-    estimateCad: 70,
     turnaround: '1–2 business days',
   },
   {
     kind: 'menu',
     label: 'Menu or product update',
     description: 'Add, remove or re-price items, including anything wired to online ordering.',
-    estimateCad: 85,
     turnaround: '2–3 business days',
   },
   {
     kind: 'page',
     label: 'New page',
     description: 'A new section built to match the rest of the site — about, careers, location.',
-    estimateCad: 175,
     turnaround: '3–5 business days',
   },
   {
     kind: 'design',
     label: 'Design change',
     description: 'Layout, colour or typography work across one or more existing pages.',
-    estimateCad: 105,
     turnaround: '3–5 business days',
   },
   {
     kind: 'seo',
     label: 'SEO update',
     description: 'Titles, descriptions and structured data so you show up properly in search.',
-    estimateCad: 70,
     turnaround: '2–3 business days',
   },
   {
     kind: 'fix',
     label: 'Something is broken',
     description: 'A link, form or page that is not working. No charge if we caused it.',
-    estimateCad: null,
     turnaround: 'Same business day',
   },
 ]
 
-/** Surcharge for jumping the queue. Provisional — see the file header. */
-export const RUSH_SURCHARGE_CAD = 60
+/** Priority handling. Priced in the quote like everything else. */
 export const RUSH_TURNAROUND = 'Next business day'
 
 export function requestType(kind: SiteRequestKind): SiteRequestType {
@@ -103,8 +94,6 @@ export interface SiteChangeRequest {
   kind: SiteRequestKind
   details: string
   rush: boolean
-  /** Estimate at submission time, in CAD. `null` = quoted on request. */
-  estimateCad: number | null
   status: SiteRequestStatus
   submittedAt: string
 }
