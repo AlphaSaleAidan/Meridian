@@ -11,6 +11,7 @@ import ScrollReveal from '@/components/landing/ScrollReveal'
 import MagneticButton from '@/components/landing/MagneticButton'
 import CountUp from '@/components/landing/CountUp'
 import BentoGrid from '@/components/landing/CanadaBentoGrid'
+import { useAutoplayFilm } from '@/hooks/useAutoplayFilm'
 import ScheduleQuote from '@/components/landing/ScheduleQuote'
 
 const MeshGradient = lazy(() => import('@/components/landing/MeshGradient'))
@@ -57,6 +58,7 @@ export default function CanadaLandingPage() {
   const { scrollYProgress } = useScroll({ target: heroRef, offset: ['start start', 'end start'] })
   const heroOpacity = useTransform(scrollYProgress, [0, 0.8], [1, 0])
   const heroY = useTransform(scrollYProgress, [0, 0.8], [0, -60])
+  const { ref: filmRef, muted: filmMuted, unmute: unmuteFilm } = useAutoplayFilm()
 
   return (
     <div className="min-h-screen bg-[#0A0A0B] overflow-x-hidden">
@@ -232,6 +234,42 @@ export default function CanadaLandingPage() {
             </p>
           </ScrollReveal>
           <BentoGrid />
+        </div>
+      </section>
+
+      {/* THE FILM */}
+      <section className="py-24 border-t border-[#1F1F23]/40 relative overflow-hidden">
+        <div className="max-w-content mx-auto px-6">
+          {/* Starts on scroll into view. Plays with sound when the visitor has
+              already interacted with the page (the only case a browser permits
+              unmuted autoplay); otherwise starts muted with an Unmute control. */}
+          <ScrollReveal className="relative max-w-4xl mx-auto">
+            <div className="relative rounded-xl border border-[#1F1F23] bg-[#111113] shadow-2xl shadow-black/50 p-2">
+              <video
+                ref={filmRef}
+                className="w-full aspect-video rounded-lg bg-black block"
+                src="/media/captains-30s.mp4"
+                poster="/media/captains-poster.jpg"
+                controls
+                muted={filmMuted}
+                preload="metadata"
+                playsInline
+              />
+              {filmMuted && (
+                <button
+                  type="button"
+                  onClick={unmuteFilm}
+                  className="absolute top-5 right-5 flex items-center gap-2 rounded-full border border-[#1F1F23] bg-[#0A0A0B]/80 px-3.5 py-2 text-[12px] font-medium text-[#F5F5F7] backdrop-blur transition-colors hover:border-[#2A2A30]"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M11 5 6 9H2v6h4l5 4zM23 9l-6 6M17 9l6 6" />
+                  </svg>
+                  Unmute
+                </button>
+              )}
+            </div>
+            <div className="absolute -bottom-16 left-1/2 -translate-x-1/2 w-[70%] h-32 bg-[#1A8FD6] opacity-[0.06] blur-[80px] rounded-full" />
+          </ScrollReveal>
         </div>
       </section>
 
