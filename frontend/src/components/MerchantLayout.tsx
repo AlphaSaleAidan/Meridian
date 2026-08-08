@@ -4,7 +4,7 @@ import { clsx } from 'clsx'
 import { Menu, MapPin } from 'lucide-react'
 import { MeridianEmblem, MeridianWordmark } from './MeridianLogo'
 import { useUnreadNotifications } from '@/hooks/useUnreadNotifications'
-import { merchantPillars, MERCHANT_BASE_PATH, type Pillar } from '@/config/merchantPillars'
+import { merchantPillars, comingSoonPillars, MERCHANT_BASE_PATH, CANADA_DEMO_BASE_PATH, type Pillar } from '@/config/merchantPillars'
 import { useModuleFlags } from '@/config/moduleFlags'
 
 function PillarLink({ pillar, basePath, onNavigate }: { pillar: Pillar; basePath: string; onNavigate: () => void }) {
@@ -53,6 +53,9 @@ export default function MerchantLayout({ basePath = MERCHANT_BASE_PATH }: { base
   const moneyPillars = visiblePillars.filter(p => !p.secondary && p.path !== 'settings')
   const secondaryPillars = visiblePillars.filter(p => p.secondary)
   const settingsPillar = visiblePillars.find(p => p.path === 'settings')
+  // Roadmap previews ride along in the Canada demo only — never in a paying
+  // merchant's portal, and never in the US demo.
+  const roadmapPillars = basePath === CANADA_DEMO_BASE_PATH ? comingSoonPillars : []
   // Mobile bottom-nav: money pillars + settings only (no secondary tabs, no
   // overflow) — except in the demo, where the secondary tabs (Camera) join the
   // bar so the sidebar isn't needed at all on mobile.
@@ -102,6 +105,16 @@ export default function MerchantLayout({ basePath = MERCHANT_BASE_PATH }: { base
               ))}
             </div>
           )}
+          {roadmapPillars.length > 0 && (
+            <div className="pt-2 mt-2 border-t border-[#1F1F23] space-y-0.5">
+              <p className="px-3 pt-1 pb-1.5 text-[9px] font-semibold uppercase tracking-[0.16em] text-[#A1A1A8]/45">
+                Coming Soon
+              </p>
+              {roadmapPillars.map(p => (
+                <PillarLink key={p.path} pillar={p} basePath={basePath} onNavigate={closeSidebar} />
+              ))}
+            </div>
+          )}
         </nav>
 
         {settingsPillar && (
@@ -123,7 +136,10 @@ export default function MerchantLayout({ basePath = MERCHANT_BASE_PATH }: { base
       {/* Main content */}
       <main id="main-content" className="flex-1 overflow-y-auto">
         <div className="lg:hidden sticky top-0 z-30 h-14 bg-[#0A0A0B]/95 backdrop-blur-sm border-b border-[#1F1F23] flex items-center gap-3 px-4">
-          {!isDemo && (
+          {/* Demos normally drop the hamburger because the bottom bar carries
+              every tab — but the Coming Soon group lives only in the sidebar,
+              so the Canada demo keeps a way to open it. */}
+          {(!isDemo || roadmapPillars.length > 0) && (
             <button aria-label="Open menu" onClick={() => setSidebarOpen(true)} className="p-1.5 rounded-lg hover:bg-[#111113]">
               <Menu size={20} className="text-[#A1A1A8]" />
             </button>
