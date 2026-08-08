@@ -222,11 +222,22 @@ export const comingSoonPillars: Pillar[] = [
   },
 ]
 
-/** Canada demo route set: the shipped demo pillars plus the roadmap previews. */
+/** Public demo route set: the shipped demo pillars plus the roadmap previews. */
 export const canadaDemoPillars: Pillar[] = [
   ...demoMerchantPillars.filter(p => !comingSoonPillars.some(c => c.path === p.path)),
   ...comingSoonPillars,
 ]
+
+/**
+ * US demo route set — the same as Canada's.
+ *
+ * /demo is documented as "mirroring /canada/demo", but it was wired to the bare
+ * `demoMerchantPillars`, so a US prospect saw four fewer tabs than a Canadian
+ * one: Insights, Customers, Taxes & Expenses and My Website were all missing.
+ * Both public demos now show the same surface; the live merchant navs still
+ * take `merchantPillars` and are unaffected.
+ */
+export const usDemoPillars: Pillar[] = canadaDemoPillars
 
 export const MERCHANT_BASE_PATH = '/canada/merchant'
 export const US_MERCHANT_BASE_PATH = '/us/merchant'

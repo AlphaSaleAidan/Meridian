@@ -7,7 +7,7 @@ import ErrorBoundary, { lazyRetry } from '@/components/ErrorBoundary'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import Layout from '@/components/Layout'
 import MerchantPillarPage from '@/pages/canada/merchant/MerchantPillarPage'
-import { merchantPillars, demoMerchantPillars, canadaDemoPillars } from '@/config/merchantPillars'
+import { merchantPillars, usDemoPillars, canadaDemoPillars } from '@/config/merchantPillars'
 import { DemoContextProvider } from '@/lib/demo-context'
 import BusinessTypeSelector from '@/components/BusinessTypeSelector'
 import CookieConsentBanner from '@/components/compliance/CookieConsentBanner'
@@ -423,7 +423,7 @@ export default function App() {
                   <USMerchantDemoLayout />
                 </Suspense>
               }>
-                {demoMerchantPillars.map(pillar => (
+                {usDemoPillars.map(pillar => (
                   <Route
                     key={pillar.path || '_home'}
                     index={pillar.path === ''}

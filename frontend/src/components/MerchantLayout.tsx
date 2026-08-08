@@ -4,7 +4,7 @@ import { clsx } from 'clsx'
 import { Menu, MapPin } from 'lucide-react'
 import { MeridianEmblem, MeridianWordmark } from './MeridianLogo'
 import { useUnreadNotifications } from '@/hooks/useUnreadNotifications'
-import { merchantPillars, comingSoonPillars, MERCHANT_BASE_PATH, CANADA_DEMO_BASE_PATH, type Pillar } from '@/config/merchantPillars'
+import { merchantPillars, comingSoonPillars, MERCHANT_BASE_PATH, type Pillar } from '@/config/merchantPillars'
 import { useModuleFlags } from '@/config/moduleFlags'
 
 function PillarLink({ pillar, basePath, onNavigate }: { pillar: Pillar; basePath: string; onNavigate: () => void }) {
@@ -53,9 +53,12 @@ export default function MerchantLayout({ basePath = MERCHANT_BASE_PATH }: { base
   const moneyPillars = visiblePillars.filter(p => !p.secondary && p.path !== 'settings')
   const secondaryPillars = visiblePillars.filter(p => p.secondary)
   const settingsPillar = visiblePillars.find(p => p.path === 'settings')
-  // Roadmap previews ride along in the Canada demo only — never in a paying
-  // merchant's portal, and never in the US demo.
-  const roadmapPillars = basePath === CANADA_DEMO_BASE_PATH ? comingSoonPillars : []
+  // Roadmap previews ride along in BOTH public demos — never in a paying
+  // merchant's portal. This was pinned to the Canada demo path, so a US
+  // prospect saw four fewer tabs (Insights, Customers, Taxes & Expenses,
+  // My Website) than a Canadian one despite /demo being documented as a
+  // mirror of /canada/demo.
+  const roadmapPillars = isDemo ? comingSoonPillars : []
   // Mobile bottom-nav: money pillars + settings only (no secondary tabs, no
   // overflow) — except in the demo, where the secondary tabs (Camera) join the
   // bar so the sidebar isn't needed at all on mobile.
