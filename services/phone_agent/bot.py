@@ -23,7 +23,13 @@ import json
 import logging
 import os
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    # Runtime imports of pipecat stay lazy inside the functions that need it —
+    # it is a heavy optional dependency. This makes the `-> "Language"` forward
+    # reference resolvable to linters without pulling pipecat in at import time.
+    from pipecat.transcriptions.language import Language
 
 from pipecat.audio.vad.silero import SileroVADAnalyzer
 from pipecat.audio.vad.vad_analyzer import VADParams
