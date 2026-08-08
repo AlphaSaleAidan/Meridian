@@ -281,6 +281,13 @@ class MeridianAI:
             result.errors.append(f"insights: {str(e)}")
 
         # ── Phase 3b: LLM Enhancement (optional) ────────────
+        # Default OFF — deliberately, and NOT a typo for config.py's "1".
+        # enhance_insights asks LiteLLM for response_format=json_object, which
+        # DeepSeek (the primary provider) rejects outright, and the OpenAI
+        # fallback is quota-exhausted on this VPS — see docs/known_issues.md §1.
+        # Until that is fixed, defaulting this on would make every merchant
+        # analysis run a failing provider round-trip for no added insight.
+        # Set ENABLE_LLM_INSIGHTS=1 explicitly to opt in once §1 is resolved.
         if os.environ.get("ENABLE_LLM_INSIGHTS", "").lower() in ("1", "true"):
             try:
                 from .llm_layer import enhance_insights

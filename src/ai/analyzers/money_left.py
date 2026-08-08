@@ -45,11 +45,11 @@ class MoneyLeftCalculator:
                 "total_score_cents": int,
                 "total_score_dollars": str,  # "$3,847"
                 "components": {
-                    "underpriced": {...},
+                    "underpriced_products": {...},
                     "dead_stock": {...},
-                    "peak_hour_waste": {...},
+                    "peak_hour_missed": {...},
                     "discount_leakage": {...},
-                    "scheduling_gaps": {...},
+                    "staffing_waste": {...},
                 },
                 "summary": "You're leaving $3,847/mo on the table.",
                 "top_actions": [top 3 things to fix],

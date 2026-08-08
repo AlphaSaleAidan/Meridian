@@ -1,7 +1,10 @@
 # src/ai/ — AI Analysis Engine
 
 Entry point: `engine.py` → `MeridianAI.analyze_merchant(org_id, days)`
-LLM calls: `llm_layer.py` (OpenAI gpt-4o-mini wrapper)
+LLM calls: `llm_layer.py` — tier-routed via LiteLLM across DeepSeek →
+SambaNova → Groq → Cerebras → OpenAI → local Qwen/llama-cpp, NOT a plain
+OpenAI wrapper (see `docs/swarm_inventory.md`). Its `enhance_insights` step
+is off by default and currently broken against DeepSeek — `docs/known_issues.md` §1.
 
 ## Subdirectories
 - `agents/` — 30+ agents (inherit `base.py:BaseAgent`), each has `analyze(data)` method

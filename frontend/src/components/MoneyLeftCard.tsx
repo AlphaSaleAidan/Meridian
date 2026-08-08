@@ -44,8 +44,10 @@ export default function MoneyLeftCard({ score }: Props) {
     ([, a], [, b]) => (b.amount_cents || 0) - (a.amount_cents || 0)
   )
 
-  const topActions: Array<{ description: string; impact_cents?: number }> =
-    (score as unknown as Record<string, unknown>).top_actions as Array<{ description: string; impact_cents?: number }> || []
+  // `top_actions` is part of MoneyLeftScore now — it was cast through
+  // `unknown` because the interface omitted the field the backend has always
+  // sent, so a rename either side would have silently emptied this list.
+  const topActions = score.top_actions ?? []
 
   return (
     <DashboardTiltCard
