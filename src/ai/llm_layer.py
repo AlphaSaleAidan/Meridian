@@ -138,6 +138,23 @@ Rules:
 - ALWAYS respond with valid JSON only — no markdown, no explanation outside the JSON"""
 
 
+def _rejects_json_mode(err: Exception) -> bool:
+    """True when a provider refused the `response_format` argument itself.
+
+    Deliberately narrow: it must name `response_format` AND say it is
+    unsupported. A quota error, a timeout or a bad API key must NOT match,
+    or we would burn a second call retrying something that cannot succeed.
+    DeepSeek's wording is "This response_format type is unavailable now".
+    """
+    msg = str(err).lower()
+    if "response_format" not in msg:
+        return False
+    return any(
+        phrase in msg
+        for phrase in ("unavailable", "unsupported", "not supported", "does not support", "invalid_request")
+    )
+
+
 def _extract_json(text: str) -> dict | None:
     """Extract JSON object from LLM response that may contain extra text."""
     text = text.strip()
@@ -283,37 +300,58 @@ async def _call_api(
 
     router = _get_router()
     if router:
-        start = time.perf_counter()
-        try:
-            kwargs = {"model": group, "messages": messages, "temperature": 0.3, "max_tokens": 2000}
-            if response_format:
-                kwargs["response_format"] = response_format
-            if org_id:
-                kwargs["user"] = org_id
-            resp = await router.acompletion(**kwargs)
-            latency_ms = int((time.perf_counter() - start) * 1000)
-            content = resp.choices[0].message.content
-            provider, model = _extract_provider_model(resp)
-            ptok, ctok = _extract_token_usage(resp)
-            result = _extract_json(content)
-            ok = result is not None
-            _record_llm_call(
-                trace_id=tid, agent_name=agent_name, provider=provider, model=model,
-                latency_ms=latency_ms, success=ok, tier=tier,
-                prompt_tokens=ptok, completion_tokens=ctok,
-                error=None if ok else "non_json_response",
-            )
-            if result:
-                logger.info("LLM response via Router tier=%s (cached=%s)", tier, getattr(resp, '_hidden_params', {}).get('cache_hit', False))
-                return result
-        except Exception as e:
-            latency_ms = int((time.perf_counter() - start) * 1000)
-            _record_llm_call(
-                trace_id=tid, agent_name=agent_name, provider="router",
-                model=group, latency_ms=latency_ms, success=False, tier=tier,
-                error=repr(e)[:200],
-            )
-            logger.warning("Router call failed (tier=%s): %s", tier, e)
+        # DeepSeek leads every tier group and rejects OpenAI-style JSON mode
+        # outright ("This response_format type is unavailable now"), which used
+        # to fail the call and fall through to a quota-exhausted OpenAI — every
+        # enhance_insights call errored (docs/known_issues.md §1). The router
+        # picks the provider at call time, so we cannot know up front whether
+        # JSON mode is supported: ask for it first (SambaNova and OpenAI honour
+        # it), and on a rejection retry once without. `_extract_json` already
+        # recovers JSON from free text and the prompt asks for JSON either way,
+        # so the retry gives up strictness, not the result.
+        attempts = [response_format, None] if response_format else [None]
+        for attempt_format in attempts:
+            start = time.perf_counter()
+            try:
+                kwargs = {"model": group, "messages": messages, "temperature": 0.3, "max_tokens": 2000}
+                if attempt_format:
+                    kwargs["response_format"] = attempt_format
+                if org_id:
+                    kwargs["user"] = org_id
+                resp = await router.acompletion(**kwargs)
+                latency_ms = int((time.perf_counter() - start) * 1000)
+                content = resp.choices[0].message.content
+                provider, model = _extract_provider_model(resp)
+                ptok, ctok = _extract_token_usage(resp)
+                result = _extract_json(content)
+                ok = result is not None
+                _record_llm_call(
+                    trace_id=tid, agent_name=agent_name, provider=provider, model=model,
+                    latency_ms=latency_ms, success=ok, tier=tier,
+                    prompt_tokens=ptok, completion_tokens=ctok,
+                    error=None if ok else "non_json_response",
+                )
+                if result:
+                    logger.info("LLM response via Router tier=%s (cached=%s)", tier, getattr(resp, '_hidden_params', {}).get('cache_hit', False))
+                    return result
+                # Reached the provider but the body was not JSON — a parsing
+                # problem, not a format-support one. Dropping response_format
+                # would only make that likelier, so stop and fall through.
+                break
+            except Exception as e:
+                latency_ms = int((time.perf_counter() - start) * 1000)
+                _record_llm_call(
+                    trace_id=tid, agent_name=agent_name, provider="router",
+                    model=group, latency_ms=latency_ms, success=False, tier=tier,
+                    error=repr(e)[:200],
+                )
+                if attempt_format is not None and _rejects_json_mode(e):
+                    logger.info(
+                        "Provider rejected JSON mode (tier=%s) — retrying without response_format", tier
+                    )
+                    continue
+                logger.warning("Router call failed (tier=%s): %s", tier, e)
+                break
 
     try:
         from litellm import acompletion

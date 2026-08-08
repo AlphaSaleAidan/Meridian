@@ -241,6 +241,17 @@ OAUTH_SCOPES = [
 ]
 
 
+# ─── DeepSeek — one default for every service EXCEPT the phone agent ────
+# Three call sites used to hardcode the URL and model inline, so a global
+# override silently missed them. They read these instead now.
+#
+# services/phone_agent deliberately runs deepseek-v4-flash for low latency and
+# tool-calling on live calls, and reads PHONE_DEEPSEEK_MODEL — so pointing
+# DEEPSEEK_MODEL at the cheaper V3 chat model never drags the voice path back.
+DEEPSEEK_BASE_URL: str = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1")
+DEEPSEEK_MODEL: str = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
+
+
 # ─── AI Feature Flags ───────────────────────────────────
 # LLM insight enhancement defaults OFF and has no consumer here: the only
 # reader is src/ai/engine.py, which reads the env directly and also defaults

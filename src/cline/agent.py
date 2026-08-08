@@ -16,6 +16,7 @@ from enum import IntEnum
 from typing import Any, Optional
 
 from ..ai.reasoning import KarpathyReasoning, ReasoningChain
+from ..config import DEEPSEEK_BASE_URL, DEEPSEEK_MODEL
 
 logger = logging.getLogger("meridian.cline")
 
@@ -204,13 +205,13 @@ class ClineAgent:
             if api_key:
                 async with httpx.AsyncClient(timeout=30.0) as client:
                     resp = await client.post(
-                        "https://api.deepseek.com/v1/chat/completions",
+                        f"{DEEPSEEK_BASE_URL}/chat/completions",
                         headers={
                             "Authorization": f"Bearer {api_key}",
                             "Content-Type": "application/json",
                         },
                         json={
-                            "model": "deepseek-chat",
+                            "model": DEEPSEEK_MODEL,
                             "messages": messages,
                             "max_tokens": 500,
                             "temperature": 0.4,

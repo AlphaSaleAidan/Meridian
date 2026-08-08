@@ -3,10 +3,9 @@ import { clsx } from 'clsx'
 import { Globe, ExternalLink, Clock, Check, Send, Zap, Wrench } from 'lucide-react'
 import { useIsDemo, useOrgId } from '@/hooks/useOrg'
 import { useAuth } from '@/lib/auth'
-import { formatCad } from '@/lib/format'
 import ScrollReveal from '@/components/ScrollReveal'
 import {
-  SITE_REQUEST_TYPES, RUSH_SURCHARGE_CAD, RUSH_TURNAROUND, STATUS_LABELS,
+  SITE_REQUEST_TYPES, RUSH_TURNAROUND, STATUS_LABELS,
   requestType, type SiteChangeRequest, type SiteRequestKind, type SiteRequestStatus,
 } from '@/config/site-care'
 
@@ -22,9 +21,9 @@ interface ManagedSite {
  * manage it and raise paid change requests.
  *
  * Requests are held client-side for now: there is no /api/website/requests
- * endpoint yet, and no charge is taken. Every amount is presented as an
- * estimate confirmed before work begins, and the rate card lives in one file
- * (config/site-care.ts) so pricing is a config change, not a code change.
+ * endpoint yet, and no charge is taken. There is deliberately no published
+ * rate card — scope varies too much to price up front, so the surface commits
+ * to a turnaround and quotes the cost before any work starts.
  */
 export default function SiteCarePage() {
   const isDemo = useIsDemo()
@@ -63,11 +62,6 @@ export default function SiteCarePage() {
     try { localStorage.setItem(storageKey, JSON.stringify(next)) } catch { /* quota — in-memory only */ }
   }, [storageKey])
 
-  const selected = requestType(kind)
-  const estimate = selected.estimateCad === null
-    ? null
-    : selected.estimateCad + (rush ? RUSH_SURCHARGE_CAD : 0)
-
   const submit = () => {
     if (!details.trim()) return
     const next: SiteChangeRequest = {
@@ -75,7 +69,6 @@ export default function SiteCarePage() {
       kind,
       details: details.trim(),
       rush,
-      estimateCad: estimate,
       status: 'submitted',
       submittedAt: new Date().toISOString(),
     }
@@ -161,8 +154,8 @@ export default function SiteCarePage() {
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-[13px] font-medium text-[#F5F5F7]">{t.label}</span>
-                  <span className="text-[11px] font-mono text-[#A1A1A8] flex-shrink-0">
-                    {t.estimateCad === null ? 'Quoted' : formatCad(t.estimateCad)}
+                  <span className="text-[11px] text-[#A1A1A8]/70 flex-shrink-0">
+                    Quoted
                   </span>
                 </div>
                 <p className="text-[11px] leading-relaxed text-[#A1A1A8] mt-1">{t.description}</p>
@@ -196,17 +189,18 @@ export default function SiteCarePage() {
             )}
           >
             <Zap size={13} className={rush ? 'text-[#1A8FD6]' : ''} />
-            Rush it — {RUSH_TURNAROUND} (+{formatCad(RUSH_SURCHARGE_CAD)})
+            Rush it — {RUSH_TURNAROUND}
           </button>
 
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mt-5 pt-4 border-t border-[#1F1F23]">
             <div>
-              <p className="text-[10px] uppercase tracking-wider text-[#A1A1A8]/60">Estimate</p>
-              <p className="text-xl font-bold font-mono text-[#F5F5F7] mt-0.5">
-                {estimate === null ? 'Quoted on request' : formatCad(estimate)}
+              <p className="text-[10px] uppercase tracking-wider text-[#A1A1A8]/60">Cost</p>
+              <p className="text-base font-semibold text-[#F5F5F7] mt-0.5">
+                Quoted before we start
               </p>
               <p className="text-[10px] text-[#A1A1A8]/55 mt-0.5">
-                Confirmed in writing before any work begins.
+                We price each request against its scope and confirm in writing.
+                Nothing is charged until you approve it.
               </p>
             </div>
             <button
@@ -252,9 +246,6 @@ export default function SiteCarePage() {
                       {new Date(r.submittedAt).toLocaleDateString('en-CA', { year: 'numeric', month: 'short', day: 'numeric' })}
                     </p>
                   </div>
-                  <span className="text-xs font-mono text-[#A1A1A8] flex-shrink-0 mt-0.5">
-                    {r.estimateCad === null ? 'Quoted' : formatCad(r.estimateCad)}
-                  </span>
                 </li>
               ))}
             </ul>
@@ -326,7 +317,6 @@ function seedRequests(): SiteChangeRequest[] {
       kind: 'menu',
       details: 'Add the new fall tasting menu under Dinner, and take down the summer patio specials.',
       rush: false,
-      estimateCad: 85,
       status: 'in_progress',
       submittedAt: '2026-08-04T15:20:00.000Z',
     },
@@ -335,7 +325,6 @@ function seedRequests(): SiteChangeRequest[] {
       kind: 'media',
       details: 'Swap the hero photo for the new interior shots from the weekend shoot.',
       rush: true,
-      estimateCad: 130,
       status: 'complete',
       submittedAt: '2026-07-22T09:05:00.000Z',
     },
@@ -344,7 +333,6 @@ function seedRequests(): SiteChangeRequest[] {
       kind: 'content',
       details: 'Update holiday hours — closed Aug 4, opening at 4pm on long weekends.',
       rush: false,
-      estimateCad: 55,
       status: 'complete',
       submittedAt: '2026-07-09T11:40:00.000Z',
     },

@@ -11,6 +11,8 @@ import logging
 import os
 from pathlib import Path
 
+from ..config import DEEPSEEK_BASE_URL, DEEPSEEK_MODEL
+
 logger = logging.getLogger("meridian.cline.patch_generator")
 
 PROJECT_ROOT = Path("/root/Meridian")
@@ -64,13 +66,13 @@ async def _call_deepseek(messages: list[dict], max_tokens: int = 1000) -> str | 
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
             resp = await client.post(
-                "https://api.deepseek.com/v1/chat/completions",
+                f"{DEEPSEEK_BASE_URL}/chat/completions",
                 headers={
                     "Authorization": f"Bearer {api_key}",
                     "Content-Type": "application/json",
                 },
                 json={
-                    "model": "deepseek-chat",
+                    "model": DEEPSEEK_MODEL,
                     "messages": messages,
                     "max_tokens": max_tokens,
                     "temperature": 0.2,
