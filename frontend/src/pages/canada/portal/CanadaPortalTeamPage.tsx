@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import { Link, Navigate } from 'react-router-dom'
 import { useState, useEffect, useMemo } from 'react'
 import { Users, DollarSign, Target, CreditCard, Search, MoreVertical, X, Save, UserPlus, Clock, CheckCircle2, XCircle, Trophy, Crown, Medal, Award, Trash2 } from 'lucide-react'
 import { clsx } from 'clsx'
@@ -9,6 +9,7 @@ import { useCanadaLeads, useCanadaLeadsRealtime } from '@/lib/canada-queries'
 import { fetchLeaderboard, type LeaderboardEntry } from '@/lib/leaderboard'
 import { formatCad } from '@/lib/format'
 import { COMMISSION_TRACKING_PAUSED } from '@/lib/commission-flags'
+import { isLeaderboardHidden } from '@/lib/leaderboard-flags'
 import { getOrgRoleBadge, isOrgRole, ORG_ROLES, ROLE_LABELS, ROLE_LEVELS, type OrgRole } from '@/lib/role-colors'
 import { PortalPage } from './PortalPage'
 
@@ -176,12 +177,13 @@ export default function CanadaPortalTeamPage() {
   const admin = isAdmin(rep?.email) || tier === 'admin'
   const isManager = !admin && tier === 'manager'
   const canSeeTeam = admin || isManager
+  const hideBoard = isLeaderboardHidden()
   const [search, setSearch] = useState('')
   const [team, setTeam] = useState<TeamMember[]>(DEMO_TEAM)
   const [applicants, setApplicants] = useState<Applicant[]>([])
   const [teamLoading, setTeamLoading] = useState(true)
   const [teamError, setTeamError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'reps' | 'leaderboard' | 'payouts' | 'applications'>(canSeeTeam ? 'reps' : 'leaderboard')
+  const [activeTab, setActiveTab] = useState<'reps' | 'leaderboard' | 'payouts' | 'applications'>(canSeeTeam || hideBoard ? 'reps' : 'leaderboard')
   const [editingMember, setEditingMember] = useState<TeamMember | null>(null)
   const [editRate, setEditRate] = useState('')
   const [editName, setEditName] = useState('')
@@ -193,7 +195,7 @@ export default function CanadaPortalTeamPage() {
   // one. /api/leaderboard returns ALL active portal reps with aggregate-only
   // fields. Admin Team Management keeps the scoped roster endpoints unchanged.
   const [board, setBoard] = useState<LeaderboardEntry[] | null>(null)
-  const [boardLoading, setBoardLoading] = useState(!admin)
+  const [boardLoading, setBoardLoading] = useState(!admin && !hideBoard)
 
   // Deals come from the shared React Query cache so creates/updates on the
   // Leads page refresh team stats automatically.
@@ -267,14 +269,14 @@ export default function CanadaPortalTeamPage() {
   }, [rep?.rep_id])
 
   useEffect(() => {
-    if (admin || !rep?.rep_id) { setBoardLoading(false); return }
+    if (admin || hideBoard || !rep?.rep_id) { setBoardLoading(false); return }
     let cancelled = false
     fetchLeaderboard()
       .then(entries => { if (!cancelled) setBoard(entries) })
       .catch(() => { /* board stays null → fall back to the scoped roster */ })
       .finally(() => { if (!cancelled) setBoardLoading(false) })
     return () => { cancelled = true }
-  }, [admin, rep?.rep_id])
+  }, [admin, hideBoard, rep?.rep_id])
 
   // Enrich team with computed deal stats
   const enrichedTeam = computeTeamStats(team, deals)
@@ -395,12 +397,16 @@ export default function CanadaPortalTeamPage() {
     setApplicants(prev => prev.filter(a => a.id !== applicant.id))
   }
 
+  // For a plain rep this page is the leaderboard and nothing else, so while the
+  // board is hidden there is no page left to land on.
+  if (hideBoard && !canSeeTeam) return <Navigate to="/canada/portal/dashboard" replace />
+
   return (
     <div className="space-y-5">
       {/* Header */}
       <div>
         <div className="flex items-center justify-between">
-          <h1 className="text-xl font-bold text-white">{admin ? 'Team Management' : 'Leaderboard'}</h1>
+          <h1 className="text-xl font-bold text-white">{admin ? 'Team Management' : hideBoard ? 'My Team' : 'Leaderboard'}</h1>
           {/* Recruiting is deliberately not a nav tab — reachable from here. */}
           {admin && (
             <Link to="/canada/portal/recruiting" className="text-xs text-pm-accent hover:underline">
@@ -408,7 +414,7 @@ export default function CanadaPortalTeamPage() {
             </Link>
           )}
         </div>
-        <p className="text-sm text-pm-canada-text-muted mt-0.5">{admin ? (COMMISSION_TRACKING_PAUSED ? 'Manage your sales reps and applications.' : 'Manage your sales reps, commissions, and payouts.') : 'See how you stack up against the team.'}</p>
+        <p className="text-sm text-pm-canada-text-muted mt-0.5">{admin ? (COMMISSION_TRACKING_PAUSED ? 'Manage your sales reps and applications.' : 'Manage your sales reps, commissions, and payouts.') : hideBoard ? 'Your team roster.' : 'See how you stack up against the team.'}</p>
         {COMMISSION_TRACKING_PAUSED && (
           <p className="text-2xs text-pm-canada-text-faint mt-1">Commission tracking is temporarily paused.</p>
         )}
@@ -480,7 +486,7 @@ export default function CanadaPortalTeamPage() {
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className={clsx('grid grid-cols-2 gap-4', hideBoard ? 'lg:grid-cols-2' : 'lg:grid-cols-3')}>
           <div className="bg-pm-canada-surface border border-pm-canada-border rounded-xl p-4">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-lg bg-pm-accent/10 flex items-center justify-center">
@@ -492,19 +498,21 @@ export default function CanadaPortalTeamPage() {
               </div>
             </div>
           </div>
-          <div className="bg-pm-canada-surface border border-pm-canada-border rounded-xl p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-lg bg-pm-amber-orange/10 flex items-center justify-center">
-                <Trophy size={16} className="text-pm-amber-orange" />
-              </div>
-              <div>
-                <p className="text-2xs uppercase tracking-wider text-pm-canada-text-muted">Your Rank</p>
-                <p className="text-lg font-bold text-white">
-                  #{[...boardMembers].sort((a, b) => b.total_mrr - a.total_mrr || b.deals_won - a.deals_won).findIndex(isSelf) + 1 || '—'}
-                </p>
+          {!hideBoard && (
+            <div className="bg-pm-canada-surface border border-pm-canada-border rounded-xl p-4">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-pm-amber-orange/10 flex items-center justify-center">
+                  <Trophy size={16} className="text-pm-amber-orange" />
+                </div>
+                <div>
+                  <p className="text-2xs uppercase tracking-wider text-pm-canada-text-muted">Your Rank</p>
+                  <p className="text-lg font-bold text-white">
+                    #{[...boardMembers].sort((a, b) => b.total_mrr - a.total_mrr || b.deals_won - a.deals_won).findIndex(isSelf) + 1 || '—'}
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
+          )}
           <div className="bg-pm-canada-surface border border-pm-canada-border rounded-xl p-4">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-lg bg-pm-accent/10 flex items-center justify-center">
@@ -529,12 +537,14 @@ export default function CanadaPortalTeamPage() {
             {admin ? 'Sales Reps' : 'My Team'}
           </button>
         )}
-        <button
-          onClick={() => setActiveTab('leaderboard')}
-          className={clsx('px-4 py-1.5 rounded-lg text-xs font-medium transition-colors', activeTab === 'leaderboard' ? 'bg-pm-amber-orange/20 text-pm-amber-orange' : 'text-pm-canada-text-muted hover:text-white')}
-        >
-          Leaderboard
-        </button>
+        {!hideBoard && (
+          <button
+            onClick={() => setActiveTab('leaderboard')}
+            className={clsx('px-4 py-1.5 rounded-lg text-xs font-medium transition-colors', activeTab === 'leaderboard' ? 'bg-pm-amber-orange/20 text-pm-amber-orange' : 'text-pm-canada-text-muted hover:text-white')}
+          >
+            Leaderboard
+          </button>
+        )}
         {admin && !COMMISSION_TRACKING_PAUSED && (
           <button
             onClick={() => setActiveTab('payouts')}
@@ -654,7 +664,7 @@ export default function CanadaPortalTeamPage() {
       )}
 
       {/* Leaderboard Tab */}
-      {activeTab === 'leaderboard' && (
+      {activeTab === 'leaderboard' && !hideBoard && (
         <div className="space-y-4">
           {/* Apple Vision Pro Incentive Banner */}
           <div className="relative overflow-hidden bg-gradient-to-r from-[#1a1a2e] via-[#16213e] to-[#0f3460] border border-pm-purple/30 rounded-xl p-5">

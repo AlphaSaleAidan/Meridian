@@ -22,6 +22,7 @@ import {
 import { MeridianEmblem } from '@/components/MeridianLogo'
 import SalesPortalMobileNav from './SalesPortalMobileNav'
 import { useSalesAuth, repTier } from '@/lib/sales-auth'
+import { isLeaderboardHidden } from '@/lib/leaderboard-flags'
 import { useMobile } from '@/hooks/useMobile'
 import ClineAIChatWidget from '@/components/ClineAIChatWidget'
 
@@ -151,8 +152,10 @@ export default function CanadaSalesLayout() {
   // keep the admin view even if their sales_reps.role isn't 'admin' yet.
   const emailIsAdmin = !!rep?.email && ADMIN_EMAILS.some(a => a.toLowerCase() === rep.email.toLowerCase())
   const tier = emailIsAdmin ? 'admin' : repTier(rep)
-  const teamNav = tier === 'admin' ? teamNavAdmin : tier === 'manager' ? teamNavManager : teamNavRep
-  const salesNavItems = [...salesNavBase, teamNav, ...salesNavTail]
+  // While the leaderboard is hidden a plain rep has nothing on /team, so the
+  // entry drops out entirely; admins and managers keep their roster view.
+  const teamNav = tier === 'admin' ? teamNavAdmin : tier === 'manager' ? teamNavManager : isLeaderboardHidden() ? null : teamNavRep
+  const salesNavItems = [...salesNavBase, ...(teamNav ? [teamNav] : []), ...salesNavTail]
   const allNav: NavEntry[] = tier === 'admin' ? [...salesNavItems, ...adminNavItems] : [...salesNavItems]
 
   const sidebarContent = (
