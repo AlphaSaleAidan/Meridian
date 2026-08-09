@@ -10,15 +10,23 @@ Deliberately NOT a prompt change. Learned terms are fed to Deepgram as
 keyterms, which improves what the agent *hears*; the script it speaks is
 untouched. Prompt rewrites have regressed this agent before.
 
-Mined terms land as `status='candidate'`. Nothing reaches a live call until a
-human promotes them to 'approved' — a bad mining run cannot leak into calls on
-its own.
+Approval is automatic but narrow. A term goes live only if it is the
+merchant's own vocabulary (menu item, business name) or is not ordinary English
+and several separate callers used it. Everything else stays a candidate,
+because keyterms BIAS the recogniser — boosting a common word creates errors
+rather than fixing them. Profanity and slurs are dropped outright and never
+counted, stored, or shown (see vocab_blocklist).
+
+A human can still approve or reject by hand; mining never overrules a status a
+person set, in either direction.
 """
 import logging
 import re
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
+
+from .vocab_blocklist import is_blocked
 
 logger = logging.getLogger("meridian.analytics.phone_vocab")
 
@@ -119,6 +127,10 @@ def auto_status(term: str, calls: int, menu_vocab: set[str]) -> str:
     recognition the way an unfiltered list would.
     """
     t = term.lower()
+    # Defence in depth: extraction already drops these, so reaching here means
+    # a term predates the blocklist or was inserted by hand. Never approve it.
+    if is_blocked(t):
+        return "blocked"
     if t in menu_vocab:
         return "approved"
     if t not in _ORDINARY and calls >= AUTO_APPROVE_MIN_CALLS:
@@ -141,7 +153,7 @@ def extract_terms(caller_texts: list[str]) -> Counter:
     for text in caller_texts:
         seen_in_this_call = {
             w.lower() for w in _WORD.findall(text or "")
-            if w.lower() not in _STOPWORDS
+            if w.lower() not in _STOPWORDS and not is_blocked(w)
         }
         counts.update(seen_in_this_call)
     return counts
