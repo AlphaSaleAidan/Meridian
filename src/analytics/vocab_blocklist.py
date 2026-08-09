@@ -93,6 +93,23 @@ _BLOCKED = frozenset(_EN_PROFANITY | _ES_PROFANITY | _SLURS)
 # — which is simply "cone", and blocking it would delete a real ice-cream word.
 _ACCENT_SENSITIVE = frozenset({"coño", "coños"})
 
+# Stems matched as a PREFIX rather than exactly. Reserved for roots that have no
+# innocent word built on them, because prefix matching is otherwise how you
+# delete real vocabulary (see the Scunthorpe note above).
+#
+# `nigg` is here because the slur has too many spellings to enumerate — niggaz,
+# niggah, nigguh, niggar, nigg — and it is used conversationally, so it recurs
+# across separate calls and would clear the "not ordinary English, 5+ calls"
+# bar on its own. The only English word it also catches is `niggardly`
+# (unrelated etymology, means miserly); losing that from a restaurant's phone
+# vocabulary costs nothing.
+#
+# Deliberately NOT here: `negro`. It is the Spanish word for black and appears
+# all over menus — frijoles negros, mole negro, arroz negro, chocolate negro.
+# Blocking it would silently delete real dishes for exactly the Spanish-speaking
+# merchants this feature is meant to serve.
+_BLOCKED_STEMS = ("nigg",)
+
 _REPEAT = re.compile(r"(.)\1{2,}")
 _LEET = str.maketrans({"0": "o", "1": "i", "3": "e", "4": "a", "5": "s", "7": "t", "@": "a", "$": "s"})
 
@@ -136,6 +153,8 @@ def is_blocked(term: str) -> bool:
     if not n:
         return False
     if n in _BLOCKED_NORMALIZED:
+        return True
+    if n.startswith(_BLOCKED_STEMS):
         return True
     # Regular plural of a blocked singular ("pendejoss" is not a word, but
     # "cabrones" is already listed; this catches the simple -s case).
