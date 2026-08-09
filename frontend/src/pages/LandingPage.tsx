@@ -13,6 +13,7 @@ import MagneticButton from '@/components/landing/MagneticButton'
 import CountUp from '@/components/landing/CountUp'
 import TiltCard from '@/components/landing/TiltCard'
 import ScheduleQuote from '@/components/landing/ScheduleQuote'
+import ExplainerFilm from '@/components/landing/ExplainerFilm'
 import { useAutoplayFilm } from '@/hooks/useAutoplayFilm'
 
 const MeshGradient = lazy(() => import('@/components/landing/MeshGradient'))
@@ -306,6 +307,9 @@ export default function LandingPage() {
           </motion.div>
         </motion.div>
       </section>
+
+      {/* ─── THE EXPLAINER ────────────── */}
+      <ExplainerFilm accent={ACCENT} />
 
       {/* ─── POS MARQUEE ──────────────────────────── */}
       <section className="py-16 border-t border-[#1F1F23]/40">
