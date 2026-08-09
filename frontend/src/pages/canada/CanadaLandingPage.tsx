@@ -8,6 +8,7 @@ import MeridianLogo, { MeridianEmblem, MeridianWordmark } from '@/components/Mer
 import GrainOverlay from '@/components/landing/GrainOverlay'
 import { TextRevealStagger } from '@/components/landing/TextReveal'
 import ScrollReveal from '@/components/landing/ScrollReveal'
+import ExplainerFilm from '@/components/landing/ExplainerFilm'
 import MagneticButton from '@/components/landing/MagneticButton'
 import CountUp from '@/components/landing/CountUp'
 import BentoGrid from '@/components/landing/CanadaBentoGrid'
@@ -210,6 +211,9 @@ export default function CanadaLandingPage() {
           </motion.div>
         </motion.div>
       </section>
+
+      {/* THE EXPLAINER */}
+      <ExplainerFilm accent="#1A8FD6" />
 
       {/* LOGO BAR */}
       <section className="py-16 border-t border-[#1F1F23]/40">
