@@ -8,7 +8,7 @@ import {
 import { useSalesAuth } from '@/lib/sales-auth'
 import { posSystems } from '@/data/pos-systems'
 import { supabase, getAuthHeaders } from '@/lib/supabase'
-import { PLAN_TIERS, getPlan, REP_PRICE_HEADROOM_CAD, WEBSITE_MODULES, websiteMonthlyFree, CUSTOM_CRM_SERVICE, parseSetupServiceAmount, type PlanTier } from '@/lib/canada-proposal-plans'
+import { PLAN_TIERS, getPlan, REP_PRICE_HEADROOM_CAD, ZERO_PER_ORDER_CARDS, WEBSITE_MODULES, websiteMonthlyFree, CUSTOM_CRM_SERVICE, parseSetupServiceAmount, type PlanTier } from '@/lib/canada-proposal-plans'
 import { downloadProposalPdf, type ProposalInput } from '@/lib/generate-proposal-pdf'
 import { verticalsByGroup, findVerticalBySlug, DECK_BASE_URL, buildPersonalizedDeckUrl } from '@/data/cadVerticals'
 
@@ -532,6 +532,9 @@ export default function CanadaPortalCreateCustomerPage() {
     firstMonthFree: false,
     // Per-order fee handling, set here at close and FIXED for the merchant.
     feeAllocationMode: 'business_pays' as 'business_pays' | 'split_5050' | 'customer_pays',
+    // Pricing model, set here at close and FIXED: the per-order fee model
+    // (default) or the $0/order minutes plan (premium/command only).
+    pricingModel: 'per_order' as 'per_order' | 'zero_per_order',
     // Website add-on: CA$700 flat on top of the rep's setup fee; the intake
     // below becomes the brief for the 48-hour Foundry build contest.
     website: false,
@@ -563,7 +566,17 @@ export default function CanadaPortalCreateCustomerPage() {
   const websiteMonthly = WEBSITE_MODULES.filter(m => m.monthly && websiteModules.includes(m.id)).reduce((t, m) => t + m.price, 0)
 
   const selectedPlan = getPlan(form.plan)
-  const price = selectedPlan.price + form.priceBump
+  // "$0 per order" minutes plan: the base monthly is the licensing card, not
+  // the tier retail price. The bump slider then runs the whole rep range —
+  // from the card floor up to retail + headroom (the backend clamps to the
+  // same window, fee_terms.resolve_fee_terms).
+  const zpoCard = ZERO_PER_ORDER_CARDS[selectedPlan.id]
+  const zeroPerOrder = form.pricingModel === 'zero_per_order' && !!zpoCard
+  const basePrice = zeroPerOrder && zpoCard ? zpoCard.monthly : selectedPlan.price
+  const priceBumpMax = zeroPerOrder && zpoCard
+    ? selectedPlan.price + REP_PRICE_HEADROOM_CAD - zpoCard.monthly
+    : REP_PRICE_HEADROOM_CAD
+  const price = basePrice + Math.min(form.priceBump, priceBumpMax)
   // Maintenance + hosting come free with Premium and up — only Standard
   // pays the buildout's monthly line items.
   const monthlyFree = websiteMonthlyFree(selectedPlan.id)
@@ -746,7 +759,7 @@ export default function CanadaPortalCreateCustomerPage() {
             stage: 'closed_won',
             monthly_value: price,
             commission_rate: rep?.commission_rate ?? 70,
-            notes: (form.notes || `Plan: ${selectedPlan.label} at CA$${price}${interval}. Setup fee: CA$${setupFee}. First month free: ${form.firstMonthFree ? 'Yes' : 'No'}`) + (form.website ? ` Website Buildout: CA$${websiteOneTime} one-time (${WEBSITE_MODULES.filter(m => websiteModules.includes(m.id) || (m.monthly && monthlyFree)).map(m => m.label).join(', ')})${websiteMonthlyDue > 0 ? ` + CA$${websiteMonthlyDue}/mo recurring` : monthlyFree ? ` — maintenance & hosting included with ${selectedPlan.label}` : ''}.` : '') + (form.crm ? ` ${CUSTOM_CRM_SERVICE.label}: CA$${crmOneTime} one-time.` : ''),
+            notes: (form.notes || `Plan: ${selectedPlan.label} at CA$${price}${interval}. Setup fee: CA$${setupFee}. First month free: ${form.firstMonthFree ? 'Yes' : 'No'}`) + (zeroPerOrder && zpoCard ? ` Pricing: $0/order minutes plan (${zpoCard.includedMinutes} min/mo included, CA$${zpoCard.overagePerMin.toFixed(2)}/min after).` : '') + (form.website ? ` Website Buildout: CA$${websiteOneTime} one-time (${WEBSITE_MODULES.filter(m => websiteModules.includes(m.id) || (m.monthly && monthlyFree)).map(m => m.label).join(', ')})${websiteMonthlyDue > 0 ? ` + CA$${websiteMonthlyDue}/mo recurring` : monthlyFree ? ` — maintenance & hosting included with ${selectedPlan.label}` : ''}.` : '') + (form.crm ? ` ${CUSTOM_CRM_SERVICE.label}: CA$${crmOneTime} one-time.` : ''),
             rep_id: rep?.rep_id || null,
           }).select('id')
           if (leadErr) setCrmRecordError(leadErr.message)
@@ -781,8 +794,11 @@ export default function CanadaPortalCreateCustomerPage() {
             pos_provider: form.pos || null,
             rep_id: rep?.rep_id || null,
             rep_name: rep?.name || null,
-            // Rep-set fee allocation mode, FIXED for this merchant thereafter.
-            fee_allocation_mode: form.feeAllocationMode,
+            // Rep-set pricing model + fee allocation mode, FIXED thereafter.
+            // Under the $0/order minutes plan there is no per-order fee to
+            // allocate, so no mode is sent.
+            pricing_model: form.pricingModel,
+            fee_allocation_mode: zeroPerOrder ? null : form.feeAllocationMode,
             // Fee parity: the backend locks the sold terms onto this lead
             // (first-lock-wins) and records merchant_billing_terms against it.
             lead_id: leadId,
@@ -1044,7 +1060,7 @@ export default function CanadaPortalCreateCustomerPage() {
             </div>
             <div className="grid gap-3">
               {PLAN_TIERS.map(plan => (
-                <button key={plan.id} onClick={() => update('plan', plan.id)}
+                <button key={plan.id} onClick={() => { update('plan', plan.id); if (!ZERO_PER_ORDER_CARDS[plan.id]) update('pricingModel', 'per_order') }}
                   className={`p-4 rounded-xl border text-left transition-all duration-200 ${
                     form.plan === plan.id
                       ? 'border-pm-accent/50 bg-pm-accent/5'
@@ -1096,20 +1112,44 @@ export default function CanadaPortalCreateCustomerPage() {
             <div className="p-4 rounded-xl border border-pm-accent/20 bg-pm-accent/5 mb-4">
               <div className="flex justify-between items-center">
                 <div>
-                  <p className="text-sm-tight font-semibold text-white">{selectedPlan.label} Plan</p>
-                  <p className="text-2xs text-pm-canada-text-muted">{(selectedPlan.features || []).length} features included</p>
+                  <p className="text-sm-tight font-semibold text-white">{selectedPlan.label} Plan{zeroPerOrder ? ' — $0/order minutes plan' : ''}</p>
+                  <p className="text-2xs text-pm-canada-text-muted">{zeroPerOrder && zpoCard ? `${zpoCard.includedMinutes} AI-call minutes/mo included · CA$${zpoCard.overagePerMin.toFixed(2)}/min after · no per-order fee` : `${(selectedPlan.features || []).length} features included`}</p>
                 </div>
-                <p className="text-lg font-bold text-pm-accent">CA${selectedPlan.price}{interval}</p>
+                <p className="text-lg font-bold text-pm-accent">CA${basePrice}{interval}</p>
               </div>
             </div>
 
+            {zpoCard && (
+              <div className="mb-4">
+                <label className="block text-2xs font-medium text-pm-canada-text-muted mb-1.5">
+                  Pricing Model <span className="text-pm-canada-text-faint">(how the phone agent bills — set now, fixed after)</span>
+                </label>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <button onClick={() => { update('pricingModel', 'per_order'); update('priceBump', 0) }}
+                    className={`p-4 rounded-xl border text-left transition-all duration-200 ${
+                      !zeroPerOrder ? 'border-pm-accent/50 bg-pm-accent/5' : 'border-pm-canada-border hover:border-pm-canada-text-faint bg-pm-canada-bg'
+                    }`}>
+                    <p className="text-sm-tight font-semibold text-white">Per-order pricing</p>
+                    <p className="text-2xs text-pm-canada-text-muted mt-0.5">CA${selectedPlan.price}/mo + CA${selectedPlan.orderFee.toFixed(2)} per phone order</p>
+                  </button>
+                  <button onClick={() => { update('pricingModel', 'zero_per_order'); update('priceBump', 0) }}
+                    className={`p-4 rounded-xl border text-left transition-all duration-200 ${
+                      zeroPerOrder ? 'border-pm-accent/50 bg-pm-accent/5' : 'border-pm-canada-border hover:border-pm-canada-text-faint bg-pm-canada-bg'
+                    }`}>
+                    <p className="text-sm-tight font-semibold text-white">$0 per order — minutes plan</p>
+                    <p className="text-2xs text-pm-canada-text-muted mt-0.5">CA${zpoCard.monthly}/mo · {zpoCard.includedMinutes} min included · CA${zpoCard.overagePerMin.toFixed(2)}/min after</p>
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div className="mb-4">
               <label className="block text-2xs font-medium text-pm-canada-text-muted mb-1.5">
-                Price Adjustment <span className="text-pm-canada-text-faint">(add up to CA${REP_PRICE_HEADROOM_CAD}/mo on top of base)</span>
+                Price Adjustment <span className="text-pm-canada-text-faint">(add up to CA${priceBumpMax}/mo on top of base)</span>
               </label>
               <div className="flex items-center gap-3">
-                <input type="range" min={0} max={REP_PRICE_HEADROOM_CAD} step={5}
-                  value={form.priceBump}
+                <input type="range" min={0} max={priceBumpMax} step={5}
+                  value={Math.min(form.priceBump, priceBumpMax)}
                   onChange={e => update('priceBump', Number(e.target.value))}
                   className="flex-1 h-2 bg-pm-canada-border rounded-full appearance-none cursor-pointer accent-pm-accent" />
                 <span className="text-sm-tight font-semibold text-white w-36 text-right">
@@ -1119,21 +1159,31 @@ export default function CanadaPortalCreateCustomerPage() {
               <p className="text-2xs text-pm-canada-text-faint mt-1">All amounts in CAD. Base price is the floor — no discounts.</p>
             </div>
 
-            <div className="mb-4">
-              <label className="block text-2xs font-medium text-pm-canada-text-muted mb-1.5">
-                Fee Handling <span className="text-pm-canada-text-faint">(who covers the per-order fee — set now, fixed after)</span>
-              </label>
-              <select
-                value={form.feeAllocationMode}
-                onChange={e => update('feeAllocationMode', e.target.value)}
-                className="w-full bg-pm-canada-bg border border-pm-canada-border rounded-lg px-3 py-2.5 text-sm-tight text-white focus:outline-none focus:border-pm-accent"
-              >
-                <option value="business_pays">Business pays the fee (customer total = order subtotal)</option>
-                <option value="split_5050">Split 50/50 (half added to customer, half absorbed)</option>
-                <option value="customer_pays">Customer pays the fee (added to their total)</option>
-              </select>
-              <p className="text-2xs text-pm-canada-text-faint mt-1">The owner cannot change this later — they can only request a change from Settings.</p>
-            </div>
+            {!zeroPerOrder ? (
+              <div className="mb-4">
+                <label className="block text-2xs font-medium text-pm-canada-text-muted mb-1.5">
+                  Fee Handling <span className="text-pm-canada-text-faint">(who covers the per-order fee — set now, fixed after)</span>
+                </label>
+                <select
+                  value={form.feeAllocationMode}
+                  onChange={e => update('feeAllocationMode', e.target.value)}
+                  className="w-full bg-pm-canada-bg border border-pm-canada-border rounded-lg px-3 py-2.5 text-sm-tight text-white focus:outline-none focus:border-pm-accent"
+                >
+                  <option value="business_pays">Business pays the fee (customer total = order subtotal)</option>
+                  <option value="split_5050">Split 50/50 (half added to customer, half absorbed)</option>
+                  <option value="customer_pays">Customer pays the fee (added to their total)</option>
+                </select>
+                <p className="text-2xs text-pm-canada-text-faint mt-1">The owner cannot change this later — they can only request a change from Settings.</p>
+              </div>
+            ) : zpoCard && (
+              <div className="mb-4 p-4 rounded-xl border border-pm-canada-border bg-pm-canada-bg">
+                <p className="text-sm-tight font-semibold text-white">$0 per order — how it bills</p>
+                <p className="text-2xs text-pm-canada-text-muted mt-1">
+                  {zpoCard.includedMinutes} AI-call minutes included each month, then CA${zpoCard.overagePerMin.toFixed(2)}/min.
+                  There is no per-order fee, so there is no fee handling to choose. The 5-minute call cap still applies.
+                </p>
+              </div>
+            )}
 
             <div className="mb-4">
               <label className="block text-2xs font-medium text-pm-canada-text-muted mb-1.5">
@@ -1571,7 +1621,7 @@ export default function CanadaPortalCreateCustomerPage() {
               <ArrowLeft size={14} /> Back
             </button>
             <button onClick={() => {
-              setForm({ businessName: '', ownerName: '', email: '', phone: '', vertical: '', pos: '', plan: 'premium', priceBump: 0, firstMonthFree: false, feeAllocationMode: 'business_pays', website: false, websiteCurrentUrl: '', websiteGoals: '', websitePages: '', websiteBrand: '', websiteContent: 'none', crm: false, crmAmount: '', notes: '' })
+              setForm({ businessName: '', ownerName: '', email: '', phone: '', vertical: '', pos: '', plan: 'premium', priceBump: 0, firstMonthFree: false, feeAllocationMode: 'business_pays', pricingModel: 'per_order', website: false, websiteCurrentUrl: '', websiteGoals: '', websitePages: '', websiteBrand: '', websiteContent: 'none', crm: false, crmAmount: '', notes: '' })
               setStep('details')
               setOnboardingLink('')
               setCustomerLoginUrl('')
@@ -1761,7 +1811,7 @@ export default function CanadaPortalCreateCustomerPage() {
               <ArrowLeft size={14} /> Back to Leads
             </button>
             <button onClick={() => {
-              setForm({ businessName: '', ownerName: '', email: '', phone: '', vertical: '', pos: '', plan: 'premium', priceBump: 0, firstMonthFree: false, feeAllocationMode: 'business_pays', website: false, websiteCurrentUrl: '', websiteGoals: '', websitePages: '', websiteBrand: '', websiteContent: 'none', crm: false, crmAmount: '', notes: '' })
+              setForm({ businessName: '', ownerName: '', email: '', phone: '', vertical: '', pos: '', plan: 'premium', priceBump: 0, firstMonthFree: false, feeAllocationMode: 'business_pays', pricingModel: 'per_order', website: false, websiteCurrentUrl: '', websiteGoals: '', websitePages: '', websiteBrand: '', websiteContent: 'none', crm: false, crmAmount: '', notes: '' })
               setStep('details')
               setOnboardingLink('')
               setCustomerLoginUrl('')

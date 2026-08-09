@@ -78,6 +78,16 @@ export { CUSTOM_CRM_SERVICE, parseSetupServiceAmount } from './proposal-plans'
 // market (overage retired 2026-08-07), so there is nothing to FX-convert —
 // only the shared included-minutes and hard call cap carry over.
 export { VOICE_INCLUDED_MINUTES, VOICE_OVERAGE_PER_MIN, VOICE_MAX_CALL_MINUTES } from './proposal-plans'
+// "$0 per order" minutes-licensing card — CAD is CANONICAL here (Aidan's
+// settled wholesale card, 2026-08-09): Premium CA$175 / 600 min, Command
+// CA$220 / 1,000 min, CA$0.35/min past the bucket, 5-min hard cap unchanged.
+// Do NOT re-derive these numbers — they change only on Aidan's instruction.
+// Mirrors backend fee_terms.ZERO_PER_ORDER_TERMS['ca'] — keep in sync.
+export type { ZeroPerOrderCard } from './proposal-plans'
+export const ZERO_PER_ORDER_CARDS: Partial<Record<PlanTier['id'], import('./proposal-plans').ZeroPerOrderCard>> = {
+  premium: { monthly: 175, includedMinutes: 600, overagePerMin: 0.35 },
+  command: { monthly: 220, includedMinutes: 1000, overagePerMin: 0.35 },
+}
 import { WEBSITE_MODULES as US_WEBSITE_MODULES } from './proposal-plans'
 
 export const WEBSITE_MODULES = US_WEBSITE_MODULES.map(m => ({

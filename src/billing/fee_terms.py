@@ -17,6 +17,23 @@ Terminology (all money in integer cents of the market currency):
   call_overage_cents_per_min  per-minute charge past the included call block
   included_call_min           minutes included per AI call before overage
 
+PRICING MODEL (migration 077): a deal is priced one of two ways, chosen by the
+sales rep AT CLOSE and locked with the rest of the fee terms:
+  pricing_model = None            legacy / "per_order" — everything above,
+                                  byte-for-byte. None is the stored form even
+                                  for an explicit per-order choice, so rows
+                                  written before migration 077 and rows written
+                                  after are indistinguishable.
+  pricing_model = 'zero_per_order'  the minutes-licensing card (Aidan
+                                  2026-08-09): order_fee_cents FORCED to 0, a
+                                  monthly bucket of AI-call minutes
+                                  (included_monthly_min) and a per-minute
+                                  overage past it (monthly_overage_cents_per_
+                                  min), billed per call via voice_ledger
+                                  (vapi_webhook monthly-bucket block). The
+                                  5-min hard call cap is unchanged. There is no
+                                  fee_allocation_mode — nothing to allocate.
+
 merchant_billing_terms doctrine: supersede-not-update. `set_merchant_billing_
 terms` closes the active row (superseded_at=now) and inserts a fresh one; the
 row history is the audit trail. Exactly one active row per merchant (partial
@@ -54,6 +71,26 @@ FEE_TERM_FIELDS = (
     "call_overage_cents_per_min",
     "included_call_min",
 )
+
+# Zero-per-order fields (migration 077). Kept OUT of FEE_TERM_FIELDS so a
+# per-order deal writes exactly the pre-077 row — the writers below only add
+# these keys when pricing_model is set, which keeps lead locks and billing
+# contracts working against a database that hasn't run 077 yet.
+ZERO_PER_ORDER_TERM_FIELDS = (
+    "pricing_model",
+    "included_monthly_min",
+    "monthly_overage_cents_per_min",
+)
+
+PRICING_MODELS = ("per_order", "zero_per_order")
+
+
+def normalize_pricing_model(value: Optional[str]) -> Optional[str]:
+    """Client → stored form: 'zero_per_order' passes through; 'per_order',
+    None, '' and anything unrecognized normalize to None (legacy semantics —
+    see the module docstring)."""
+    v = (value or "").strip().lower()
+    return "zero_per_order" if v == "zero_per_order" else None
 
 # ── Per-order fee floors + cap (rep-slider redlines) ─────────────────────────
 # SINGLE SOURCE OF TRUTH for the slider redlines and the hard per-order cap.
@@ -151,6 +188,35 @@ CANONICAL_FEE_TERMS: dict[str, dict[str, dict[str, int]]] = {
     },
 }
 
+# ── Zero-per-order (minutes licensing) canonical table ──────────────────────
+# Aidan's settled licensing card (2026-08-09) — do NOT re-derive these numbers;
+# they change only on his explicit instruction (update the partner deck
+# artifact dd6d28c1 together with this table):
+#   CA Premium  CA$175 / 600 min included   (~200 orders @ 3 min)
+#   CA Command  CA$220 / 1,000 min included (~333 orders)
+#   Overage     CA$0.35/min past the monthly bucket; 5-min hard cap unchanged.
+# CAD is canonical HERE (the card was set in CAD); US values are DERIVED ÷1.4,
+# rounded DOWN to clean $5 / 5¢ — pending Aidan's sign-off on the US card.
+# The monthly price is the FLOOR: reps sell the plan at or above it (partner
+# retail CA$500/700 is "their margin, their problem") up to the tier's retail
+# monthly + the standard rep headroom.
+# `standard` has no phone agent, so it has no zero-per-order card — resolution
+# coerces standard/unknown tiers to DEFAULT_PLAN_TIER.
+ZERO_PER_ORDER_TERMS: dict[str, dict[str, dict[str, int]]] = {
+    "ca": {
+        "premium": {"monthly_fee_cents": 17500, "included_monthly_min": 600,
+                    "monthly_overage_cents_per_min": 35},
+        "command": {"monthly_fee_cents": 22000, "included_monthly_min": 1000,
+                    "monthly_overage_cents_per_min": 35},
+    },
+    "us": {  # CAD ÷ 1.4: 17500→12500 ($125), 22000→15714→$155 (down to $5), 35¢→25¢
+        "premium": {"monthly_fee_cents": 12500, "included_monthly_min": 600,
+                    "monthly_overage_cents_per_min": 25},
+        "command": {"monthly_fee_cents": 15500, "included_monthly_min": 1000,
+                    "monthly_overage_cents_per_min": 25},
+    },
+}
+
 # Rep price-slider headroom on top of a tier's base monthly (proposal-plans
 # REP_PRICE_HEADROOM / REP_PRICE_HEADROOM_CAD). Used only for sanity clamping.
 REP_PRICE_HEADROOM_CENTS = {"us": 10000, "ca": 15000}
@@ -216,6 +282,9 @@ def resolve_fee_terms(
     order_fee_cents: Optional[int] = None,
     call_overage_cents_per_min: Optional[int] = None,
     included_call_min: Optional[int] = None,
+    pricing_model: Optional[str] = None,
+    included_monthly_min: Optional[int] = None,
+    monthly_overage_cents_per_min: Optional[int] = None,
 ) -> dict[str, Any]:
     """Fill a complete fee-terms record, defaulting every omitted field from
     the selected tier's canonical values (so old clients that only send a plan
@@ -223,25 +292,61 @@ def resolve_fee_terms(
 
     Tier selection: explicit plan_tier wins; otherwise the closest canonical
     tier for the given monthly price; otherwise DEFAULT_PLAN_TIER.
+
+    pricing_model='zero_per_order' switches to the minutes-licensing card:
+    order_fee_cents is FORCED to 0 (whatever the client sent), the monthly
+    clamp runs from the card price (floor) up to the tier's retail monthly +
+    rep headroom (a rep may sell the plan above the card, never below), and
+    the bucket fields fill from ZERO_PER_ORDER_TERMS. `included_monthly_min` /
+    `monthly_overage_cents_per_min` args exist for the lead-row round-trip
+    (terms_from_lead_row) — locked values pass through; routes never accept
+    them from clients. Any other pricing_model value = the legacy path,
+    byte-for-byte, with the three zero-per-order keys set to None.
     """
     m = normalize_market(market)
+    model = normalize_pricing_model(pricing_model)
     tier = (plan_tier or "").strip().lower()
     if tier not in PLAN_TIER_IDS:
         tier = (
             closest_plan_for_monthly(m, monthly_fee_cents)
             if monthly_fee_cents else DEFAULT_PLAN_TIER
         )
+    if model == "zero_per_order" and tier not in ZERO_PER_ORDER_TERMS[m]:
+        tier = DEFAULT_PLAN_TIER  # standard has no phone agent → no minutes card
     base = canonical_terms(m, tier)
-
-    monthly = int(monthly_fee_cents) if monthly_fee_cents else int(base["monthly_fee_cents"])
-    # Sanity clamp: never below the tier base, never above base + rep headroom.
     base_monthly = int(base["monthly_fee_cents"])
-    monthly = max(min(monthly, base_monthly + REP_PRICE_HEADROOM_CENTS[m]), base_monthly)
 
-    if order_fee_cents is None:
-        order_fee = int(base["order_fee_cents"])
+    monthly = int(monthly_fee_cents) if monthly_fee_cents else base_monthly
+    if model == "zero_per_order":
+        card = ZERO_PER_ORDER_TERMS[m][tier]
+        if not monthly_fee_cents:
+            monthly = int(card["monthly_fee_cents"])
+        # Floor = the licensing card; cap = the tier's retail monthly + the
+        # standard rep headroom (the rep's margin room, never a discount
+        # below the card).
+        monthly = max(min(monthly, base_monthly + REP_PRICE_HEADROOM_CENTS[m]),
+                      int(card["monthly_fee_cents"]))
+        order_fee = 0
+        bucket_min = (
+            max(int(included_monthly_min), 0)
+            if included_monthly_min is not None
+            else int(card["included_monthly_min"])
+        )
+        bucket_overage = (
+            max(int(monthly_overage_cents_per_min), 0)
+            if monthly_overage_cents_per_min is not None
+            else int(card["monthly_overage_cents_per_min"])
+        )
     else:
-        order_fee = _clamp_order_fee(m, tier, int(order_fee_cents))
+        # Sanity clamp: never below the tier base, never above base + headroom.
+        monthly = max(min(monthly, base_monthly + REP_PRICE_HEADROOM_CENTS[m]),
+                      base_monthly)
+        if order_fee_cents is None:
+            order_fee = int(base["order_fee_cents"])
+        else:
+            order_fee = _clamp_order_fee(m, tier, int(order_fee_cents))
+        bucket_min = None
+        bucket_overage = None
 
     return {
         "plan_tier": tier,
@@ -257,6 +362,9 @@ def resolve_fee_terms(
             if included_call_min is not None
             else int(base["included_call_min"])
         ),
+        "pricing_model": model,
+        "included_monthly_min": bucket_min,
+        "monthly_overage_cents_per_min": bucket_overage,
     }
 
 
@@ -284,7 +392,21 @@ def terms_from_lead_row(market: str, lead: dict[str, Any]) -> dict[str, Any]:
         ),
         call_overage_cents_per_min=lead.get("call_overage_cents_per_min"),
         included_call_min=lead.get("included_call_min"),
+        pricing_model=lead.get("pricing_model"),
+        included_monthly_min=lead.get("included_monthly_min"),
+        monthly_overage_cents_per_min=lead.get("monthly_overage_cents_per_min"),
     )
+
+
+def _term_row_fields(terms: dict[str, Any]) -> dict[str, Any]:
+    """The columns a terms dict writes to a lead / billing-terms row. The
+    zero-per-order columns (migration 077) are included ONLY when pricing_model
+    is set, so a per-order deal writes the exact pre-077 payload and keeps
+    working against a database that hasn't run the migration yet."""
+    row = {f: terms.get(f) for f in FEE_TERM_FIELDS}
+    if terms.get("pricing_model") is not None:
+        row.update({f: terms.get(f) for f in ZERO_PER_ORDER_TERM_FIELDS})
+    return row
 
 
 # ── merchant_billing_terms access ────────────────────────────────────────────
@@ -337,7 +459,7 @@ async def set_merchant_billing_terms(
         "effective_at": now,
         "created_by": created_by or "",
         "override_reason": override_reason,
-        **{f: terms.get(f) for f in FEE_TERM_FIELDS},
+        **_term_row_fields(terms),
     }
     try:
         # Supersede first: the partial unique index rejects a second active row,
@@ -371,7 +493,7 @@ async def lock_lead_fee_terms(
     newly) locked; False on error."""
     table = LEAD_TABLE_BY_MARKET.get(normalize_market(market), "canada_leads")
     try:
-        patch = {f: terms.get(f) for f in FEE_TERM_FIELDS}
+        patch = _term_row_fields(terms)
         patch["fee_terms_locked_at"] = datetime.now(timezone.utc).isoformat()
         patch["fee_terms_locked_by"] = locked_by or ""
         await db.update(
