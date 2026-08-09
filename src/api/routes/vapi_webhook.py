@@ -641,15 +641,40 @@ def _persona_prompt_block(config) -> str:
         return ""
 
 
-def _transcriber_for(config) -> dict:
+def _transcriber_for(config, keyterms: list[str] | None = None) -> dict:
     """Deepgram nova-3; language=multi enables code-switch understanding
     (Hindi/Punjabi + English on one call) — set by the wizard's multilingual
-    toggle under the Indian accent group. Default stays EN-only."""
+    toggle under the Indian accent group. Default stays EN-only.
+
+    `keyterms` are this store's learned proper nouns (menu items, street and
+    neighbourhood names). They bias RECOGNITION only — nothing here changes a
+    word the agent says. Empty/None leaves the payload byte-identical to before,
+    so a merchant with no approved vocabulary is unaffected.
+    """
     t = {"provider": "deepgram", "model": "nova-3"}
     lang = (getattr(config, "language", "") or "").strip().lower()
     if lang in ("multi", "multilingual"):
         t["language"] = "multi"
+    if keyterms:
+        t["keyterm"] = list(keyterms)
     return t
+
+
+async def _keyterms_for(config) -> list[str]:
+    """Approved vocabulary for this merchant, or [] on any failure.
+
+    Never raises: a vocabulary lookup problem must not stop a phone call from
+    being answered.
+    """
+    merchant_id = getattr(config, "merchant_id", "") or ""
+    if not merchant_id:
+        return []
+    try:
+        from ...analytics.phone_vocab import approved_terms
+        return await approved_terms(merchant_id)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("keyterm lookup failed for merchant=%s: %s", merchant_id, e)
+        return []
 
 
 _SUBMIT_ORDER_TOOL = {
@@ -755,7 +780,7 @@ def _owner_notes_block(config) -> str:
 
 
 def _assistant_for(config, transfer_number: str | None = None,
-                   caller_context: str = "") -> dict:
+                   caller_context: str = "", keyterms: list[str] | None = None) -> dict:
     # personality.customGreeting (when set) overrides the standard greeting as
     # the spoken opener; _system_prompt's step-1 greet line uses the same value
     # so the prompt never contradicts what the caller just heard.
@@ -781,7 +806,7 @@ def _assistant_for(config, transfer_number: str | None = None,
     assistant = {
         "name": f"{config.business_name} — Order Taker",
         "firstMessage": _effective_greeting(config) or f"Thanks for calling {config.business_name}! What can I get for you?",
-        "transcriber": _transcriber_for(config),
+        "transcriber": _transcriber_for(config, keyterms),
         "voice": _voice_for(config),
         "model": {"provider": "openai", "model": "gpt-4.1",
                   "messages": [{"role": "system", "content": system_content}],
@@ -1168,7 +1193,10 @@ async def vapi_webhook(request: Request):
 
             return {"assistant": _assistant_for(
                 config, transfer_number=transfer_override,
-                caller_context=caller_context or "")}
+                caller_context=caller_context or "",
+                # This store's learned proper nouns, biasing recognition only.
+                # [] for merchants with nothing approved — payload unchanged.
+                keyterms=await _keyterms_for(config))}
         except Exception as e:  # noqa: BLE001 — never strand the call
             logger.error("assistant-request failed: %s", e)
             return {"error": "Sorry, we couldn't connect your call. Please try again."}
@@ -1303,6 +1331,14 @@ async def vapi_webhook(request: Request):
         except Exception as e:  # noqa: BLE001 — telemetry never affects the call
             logger.error("voice_call_endings record failed: %s", e)
 
+        # Keep what the caller said, so the vocabulary miner has something to
+        # learn this store's proper nouns from. Same contract as the recorder
+        # above: never let it affect the call.
+        try:
+            await _record_call_transcript(msg, call_id, config=config)
+        except Exception as e:  # noqa: BLE001
+            logger.error("phone_call_transcripts record failed: %s", e)
+
     return {"received": True}
 
 
@@ -1325,6 +1361,72 @@ def _had_order(msg: dict) -> bool | None:
             if fn.get("name") == "submit_order":
                 return True
     return False
+
+
+def _caller_turns(msg: dict) -> list[str]:
+    """Pull just the CALLER's lines out of an end-of-call report.
+
+    The assistant's own turns are deliberately dropped: they are the script we
+    wrote, so mining them would only teach the transcriber the words it already
+    puts in the agent's mouth. What we want is how real people in this
+    neighbourhood ask for things.
+    """
+    artifact = msg.get("artifact") or {}
+    messages = artifact.get("messages") or msg.get("messages")
+    if not isinstance(messages, list):
+        return []
+    turns: list[str] = []
+    for m in messages:
+        if not isinstance(m, dict):
+            continue
+        # Vapi uses "user" for the caller; "customer" appears in some payloads.
+        if (m.get("role") or "").lower() not in ("user", "customer"):
+            continue
+        text = (m.get("message") or m.get("content") or "").strip()
+        if text:
+            turns.append(text)
+    return turns
+
+
+async def _record_call_transcript(msg: dict, call_id: str, config=None) -> None:
+    """Persist the caller side of one call for the vocabulary miner.
+
+    Deduped on vapi_call_id by a partial unique index, because Vapi re-sends the
+    end-of-call report on retry and a duplicate would inflate a term's
+    frequency — the very signal the miner ranks on.
+    """
+    turns = _caller_turns(msg)
+    if not turns:
+        return
+    from datetime import datetime, timezone
+    from uuid import uuid4
+
+    from ...db import get_db
+
+    if config is None:
+        config = await _resolve_config(_dialed_number(msg))
+    merchant_id = getattr(config, "merchant_id", "") or "demo"
+    db = get_db()
+    if call_id:
+        existing = await db.select(
+            "phone_call_transcripts",
+            columns="id",
+            filters={"vapi_call_id": f"eq.{call_id}"},
+            limit=1,
+        )
+        if existing:
+            return
+    await db.insert("phone_call_transcripts", {
+        "id": str(uuid4()),
+        "merchant_id": merchant_id,
+        "vapi_call_id": call_id or None,
+        "caller_text": "\n".join(turns)[:20000],
+        "turn_count": len(turns),
+        "had_order": _had_order(msg),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    logger.info("Stored caller transcript: merchant=%s turns=%d call=%s",
+                merchant_id, len(turns), call_id)
 
 
 async def _record_call_ending(msg: dict, call_id: str, ended: str | None,
