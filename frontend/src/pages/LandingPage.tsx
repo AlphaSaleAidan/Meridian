@@ -687,6 +687,8 @@ export default function LandingPage() {
               <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 text-[12px] text-[#A1A1A8]/60">
                 <span className="flex items-center gap-1.5"><Shield size={12} /> Bank-level encryption</span>
                 <span className="flex items-center gap-1.5"><Clock size={12} /> Real-time sync</span>
+                <a href="/privacy" className="hover:text-[#F5F5F7] transition-colors">Privacy</a>
+                <a href="/terms" className="hover:text-[#F5F5F7] transition-colors">Terms</a>
                 <a onClick={() => navigate('/careers')} className="hover:text-[#F5F5F7] cursor-pointer transition-colors">Careers</a>
                 <a onClick={() => navigate('/us/portal/login')} className="hover:text-[#F5F5F7] cursor-pointer transition-colors">Sales Portal</a>
                 <a onClick={() => navigate('/customer/login')} className="hover:text-[#F5F5F7] cursor-pointer transition-colors">Customer Login</a>

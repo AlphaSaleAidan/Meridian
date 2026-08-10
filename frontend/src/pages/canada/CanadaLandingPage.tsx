@@ -508,6 +508,8 @@ export default function CanadaLandingPage() {
               <span className="flex items-center gap-1.5"><Shield size={12} /> Built for PIPEDA &middot; Law 25</span>
               <span className="flex items-center gap-1.5"><Lock size={12} /> Bank-level encryption</span>
               <span className="flex items-center gap-1.5"><Clock size={12} /> Real-time sync</span>
+              <a href="/privacy" className="hover:text-[#F5F5F7] transition-colors">Privacy</a>
+              <a href="/terms" className="hover:text-[#F5F5F7] transition-colors">Terms</a>
               <a onClick={() => navigate('/canada/careers')} className="hover:text-[#F5F5F7] cursor-pointer transition-colors">Careers</a>
               <a onClick={() => navigate('/canada/portal/login')} className="hover:text-[#F5F5F7] cursor-pointer transition-colors">Sales Portal</a>
               <a onClick={() => navigate('/canada/login')} className="hover:text-[#F5F5F7] cursor-pointer transition-colors">Customer Login</a>
