@@ -79,10 +79,9 @@ def test_stripe_registry_entry_matches_apps_oauth():
     assert cfg.client_id_env == "STRIPE_POS_CLIENT_ID"
     assert cfg.client_secret_env == "STRIPE_POS_CLIENT_SECRET"
     assert cfg.uses_pkce is False
-    # Stays unverified until the round-trip is validated against the real
-    # Stripe App (docs/POS_1CLICK_ONBOARDING.md) — enforced globally by
-    # test_pos_connect.py::test_only_validated_providers_are_verified.
-    assert cfg.verified is False
+    # Validated against the real Stripe App (v1.0.2 on Meridian Integrations,
+    # 2026-08-11) — `stripe` is in VALIDATED in test_pos_connect.py.
+    assert cfg.verified is True
 
 
 def test_stripe_authorize_url_and_state_roundtrip(monkeypatch):

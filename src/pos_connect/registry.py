@@ -132,7 +132,11 @@ _REGISTRY: dict[str, ProviderConfig] = {
             merchant_id_strategy="token:stripe_user_id",
             token_basic_auth=True,
             default_token_ttl=3600,
-            verified=False,
+            # Flipped 2026-08-11: app v1.0.2 uploaded to Meridian Integrations
+            # (acct_1U2zYkLVKm50aKmT), external-test channel live, chnlink
+            # authorize URL probed 200 with the live client id; env set on
+            # Railway. Full install round-trip validated against the real app.
+            verified=True,
             market_note="Payment processor, not full POS — revenue analytics only (no menu/labor).",
             docs_url="https://docs.stripe.com/stripe-apps/api-authentication/oauth",
         ),
