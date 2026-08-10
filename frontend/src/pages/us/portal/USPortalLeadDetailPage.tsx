@@ -14,7 +14,7 @@ import QRCode from 'qrcode'
 import POSSystemPicker from '@/components/POSSystemPicker'
 import { type Deal, type DealStage } from '@/lib/canada-sales-demo-data'
 import { usLeadsService } from '@/lib/us-leads-service'
-import { getPlan, closestMonthlyPlan, PLAN_TIERS, REP_PRICE_HEADROOM, WEBSITE_MODULES, websiteMonthlyFree, CUSTOM_CRM_SERVICE, parseSetupServiceAmount, VOICE_INCLUDED_MINUTES, VOICE_OVERAGE_PER_MIN, VOICE_MAX_CALL_MINUTES, type PlanTier } from '@/lib/proposal-plans'
+import { getPlan, closestMonthlyPlan, PLAN_TIERS, ZERO_PER_ORDER_CARDS, REP_PRICE_HEADROOM, WEBSITE_MODULES, websiteMonthlyFree, CUSTOM_CRM_SERVICE, parseSetupServiceAmount, VOICE_INCLUDED_MINUTES, VOICE_OVERAGE_PER_MIN, VOICE_MAX_CALL_MINUTES, type PlanTier } from '@/lib/proposal-plans'
 
 // Website Buildout is sold as modular line items (WEBSITE_MODULES) — the
 // one-time modules sum into the setup fee. Creating the customer fires the
@@ -117,7 +117,13 @@ export default function USPortalLeadDetailPage() {
   // Per-order fee slider (cents): defaults to the tier's standard rate and
   // slides DOWN only, to the tier redline (orderFeeFloor). Backend re-clamps.
   const [orderFeeCents, setOrderFeeCents] = useState(() => Math.round(getPlan('premium').orderFee * 100))
+  // Pricing model (mirrors CreateCustomerPage): per_order is today's model;
+  // zero_per_order is the minutes plan — $0/order, monthly minute bucket.
+  // The monthly stays retail; only the per-order fee changes. Set at close, fixed after.
+  const [pricingModel, setPricingModel] = useState<'per_order' | 'zero_per_order'>('per_order')
   const selectedPlan = getPlan(planId)
+  const zpoCard = ZERO_PER_ORDER_CARDS[selectedPlan.id]
+  const zeroPerOrder = pricingModel === 'zero_per_order' && !!zpoCard
   const monthlyPrice = selectedPlan.price + priceBump
   const orderFeeFloorCents = Math.round(selectedPlan.orderFeeFloor * 100)
   const orderFeeMaxCents = Math.round(selectedPlan.orderFee * 100)
@@ -341,9 +347,12 @@ export default function USPortalLeadDetailPage() {
           monthly_price: monthlyPrice,
           portal: 'us',
           plan_id: planId,
+          // The pricing model the rep locked at close; backend forces the
+          // per-order fee to 0 on zero_per_order and fills the minute bucket.
+          pricing_model: pricingModel,
           // Rep-negotiated per-order fee (cents, USD). Only meaningful on
-          // phone-agent tiers; the backend clamps to the tier redline.
-          ...(selectedPlan.phoneAgent ? { order_fee_cents: Math.min(Math.max(orderFeeCents, orderFeeFloorCents), orderFeeMaxCents) } : {}),
+          // phone-agent tiers billing per order; the backend clamps to the tier redline.
+          ...(selectedPlan.phoneAgent && !zeroPerOrder ? { order_fee_cents: Math.min(Math.max(orderFeeCents, orderFeeFloorCents), orderFeeMaxCents) } : {}),
         }),
       })
 
@@ -1118,7 +1127,7 @@ export default function USPortalLeadDetailPage() {
           <label className="text-xs text-[#A1A1A8] block mb-1.5">Plan (USD)</label>
           <div className="grid grid-cols-3 gap-2 mb-3">
             {PLAN_TIERS.map(plan => (
-              <button key={plan.id} onClick={() => { setPlanId(plan.id); setPriceBump(0); setOrderFeeCents(Math.round(plan.orderFee * 100)) }}
+              <button key={plan.id} onClick={() => { setPlanId(plan.id); setPriceBump(0); setOrderFeeCents(Math.round(plan.orderFee * 100)); if (!ZERO_PER_ORDER_CARDS[plan.id]) setPricingModel('per_order') }}
                 className={`p-2.5 rounded-lg border text-left transition-colors ${
                   planId === plan.id
                     ? 'border-[#17C5B0]/50 bg-[#17C5B0]/5'
@@ -1132,32 +1141,57 @@ export default function USPortalLeadDetailPage() {
               </button>
             ))}
           </div>
-          <label className="text-xs text-[#A1A1A8] block mb-1.5">
-            Price Adjustment <span className="text-[#4a5550]">(up to +${REP_PRICE_HEADROOM}/mo)</span>
-          </label>
-          <div className="flex items-center gap-3">
-            <input
-              type="range"
-              min={0}
-              max={REP_PRICE_HEADROOM}
-              step={5}
-              value={priceBump}
-              onChange={e => setPriceBump(Number(e.target.value))}
-              className="flex-1 h-2 bg-[#1F1F23] rounded-full appearance-none cursor-pointer accent-[#17C5B0]"
-            />
-            <span className="text-sm font-semibold text-[#f0b429] w-28 text-right">${monthlyPrice.toLocaleString()}/mo</span>
-          </div>
-          <p className="text-[10px] text-[#4a5550] mt-1">Billed monthly in USD. Base price is the floor — no discounts.</p>
+          <p className="text-[10px] text-[#4a5550] mt-1">Billed monthly in USD. Tier price is fixed — no adjustments, no discounts.</p>
+
+          {/* Pricing Model — only phone-agent tiers with a minutes card offer the
+              choice (mirrors CreateCustomerPage; set at close, fixed after). */}
+          {selectedPlan.phoneAgent && zpoCard && (
+            <div className="mt-4">
+              <label className="block text-[10px] font-medium text-[#A1A1A8] mb-1.5">
+                Pricing Model <span className="text-[#4a5550]">(how the phone agent bills — set now, fixed after)</span>
+              </label>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <button onClick={() => setPricingModel('per_order')}
+                  className={`p-4 rounded-xl border text-left transition-all duration-200 ${
+                    !zeroPerOrder ? 'border-[#17C5B0]/50 bg-[#17C5B0]/5' : 'border-[#1F1F23] hover:border-[#4a5550] bg-[#0A0A0B]'
+                  }`}>
+                  <p className="text-sm font-semibold text-white">Per-order pricing</p>
+                  <p className="text-[10px] text-[#A1A1A8] mt-0.5">${monthlyPrice}/mo + ${selectedPlan.orderFee.toFixed(2)} per phone order</p>
+                </button>
+                <button onClick={() => setPricingModel('zero_per_order')}
+                  className={`p-4 rounded-xl border text-left transition-all duration-200 ${
+                    zeroPerOrder ? 'border-[#17C5B0]/50 bg-[#17C5B0]/5' : 'border-[#1F1F23] hover:border-[#4a5550] bg-[#0A0A0B]'
+                  }`}>
+                  <p className="text-sm font-semibold text-white">$0 per order — minutes plan</p>
+                  <p className="text-[10px] text-[#A1A1A8] mt-0.5">Same ${monthlyPrice}/mo · {zpoCard.includedMinutes} min included · ${zpoCard.overagePerMin.toFixed(2)}/min after</p>
+                  <p className="text-[10px] text-[#f0b429] mt-1.5 flex items-start gap-1.5">
+                    <AlertTriangle size={12} className="flex-shrink-0 mt-[1px]" />
+                    Lower commission on $0/order deals
+                  </p>
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Per-order fee — fixed per tier (the negotiation slider is retired;
               every deal sells at the tier rate). */}
-          {selectedPlan.phoneAgent && (
+          {selectedPlan.phoneAgent && !zeroPerOrder && (
             <div className="mt-4">
               <p className="text-xs text-[#A1A1A8]">
                 Per-order fee: <span className="font-semibold text-[#f0b429]">${selectedPlan.orderFee.toFixed(2)}/order</span> — fixed for this tier
               </p>
               <p className="text-[10px] text-[#A1A1A8] mt-1.5 px-2.5 py-1.5 rounded-md bg-[#0A0A0B] border border-[#1F1F23]">
                 Voice calls: <span className="font-semibold text-[#f0b429]">no per-minute charge</span> — call time is not billed. Calls end automatically at {VOICE_MAX_CALL_MINUTES} minutes. Phone ordering is Canada-first: phone orders are charged in <span className="font-semibold text-[#f0b429]">Canadian dollars (CAD)</span> for now, whichever market the merchant is in.
+              </p>
+            </div>
+          )}
+
+          {selectedPlan.phoneAgent && zeroPerOrder && zpoCard && (
+            <div className="mt-4 p-4 rounded-xl border border-[#1F1F23] bg-[#0A0A0B]">
+              <p className="text-sm font-semibold text-white">$0 per order — how it bills</p>
+              <p className="text-[10px] text-[#A1A1A8] mt-1">
+                The monthly stays ${monthlyPrice} — it now covers {zpoCard.includedMinutes} AI-call minutes each month, then ${zpoCard.overagePerMin.toFixed(2)}/min.
+                There is no per-order fee. The {VOICE_MAX_CALL_MINUTES}-minute call cap still applies.
               </p>
             </div>
           )}
