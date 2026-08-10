@@ -1,23 +1,24 @@
 {
+  "$schema": "https://stripe.com/stripe-app.schema.json",
   "id": "tips.meridian.pos-analytics",
-  "version": "1.0.0",
   "name": "Meridian POS Analytics",
+  "version": "1.0.0",
   "icon": "./icon.png",
-  "distribution_type": "public",
-  "stripe_api_access_type": "oauth",
-  "sandbox_install_compatible": true,
-  "allowed_redirect_uris": [
-    "https://api.meridian.tips/api/pos/stripe/callback"
-  ],
+  "extensions": null,
   "permissions": [
     {
       "permission": "charge_read",
-      "purpose": "Reads your charge and refund history to power Meridian's revenue analytics and reporting for your business.",
-      "name": "Meridian syncs charges read-only for revenue reporting. It never creates charges, refunds, or payouts, and requests no other data."
+      "purpose": "Reads your charge and refund history to power Meridian's revenue analytics and reporting for your business."
     }
   ],
   "post_install_action": {
     "type": "external",
     "url": "https://meridian.tips/app/settings"
-  }
+  },
+  "allowed_redirect_uris": [
+    "https://api.meridian.tips/api/pos/stripe/callback"
+  ],
+  "distribution_type": "public",
+  "stripe_api_access_type": "oauth",
+  "sandbox_install_compatible": true
 }
