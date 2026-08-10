@@ -33,11 +33,27 @@ class ProviderConfig:
     #   "userinfo:<url>:<dotted.path>" → GET <url> with bearer token, read path
     merchant_id_strategy: str
     uses_pkce: bool = False
+    # Optional env var that overrides authorize_url when set (Stripe Apps:
+    # pre-publish installs go through a channel-scoped external-test link;
+    # the canonical marketplace URL only activates once the app is published).
+    authorize_url_env: str = ""
+    # Token-endpoint auth style: False → client_id/client_secret in the form
+    # body (the common OAuth2 pattern); True → HTTP basic with client_secret
+    # as the username (Stripe Apps' /v1/oauth/token contract).
+    token_basic_auth: bool = False
+    # Seconds an access token lives when the token response omits expires_in
+    # (Stripe Apps: fixed 1h, not echoed in the response). 0 = trust expires_in.
+    default_token_ttl: int = 0
     verified: bool = False        # validated against a real app? (see module docstring)
     # Market context surfaced to the frontend / sales, not used at runtime.
     market_note: str = ""
     docs_url: str = ""
     extra_authorize_params: dict[str, str] = field(default_factory=dict)
+
+    def effective_authorize_url(self) -> str:
+        if self.authorize_url_env:
+            return os.environ.get(self.authorize_url_env, "") or self.authorize_url
+        return self.authorize_url
 
     def client_id(self) -> str:
         return os.environ.get(self.client_id_env, "")
@@ -81,6 +97,44 @@ _REGISTRY: dict[str, ProviderConfig] = {
             verified=True,
             market_note="Self-serve OAuth2. Real US restaurant + retail footprint.",
             docs_url="https://x-series-api.lightspeedhq.com/docs/authorization",
+        ),
+        # Stripe — merchant connects their EXISTING Stripe account via a
+        # STRIPE APP (stripe-app/ in this repo), not classic Connect OAuth:
+        # Stripe support confirmed 2026-08-08 that the Connect `read_only`
+        # scope is deprecated and platforms must ship a Stripe App for
+        # read-only access. The app declares `charge_read` in its manifest;
+        # no `scope` param goes on the authorize URL.
+        #   client_id     → the app's OAuth client id (from the app's
+        #                   External test / Settings tab after upload — NOT
+        #                   the legacy ca_… Connect id)
+        #   client_secret → the app developer account's SECRET KEY, sent as
+        #                   HTTP basic auth on /v1/oauth/token
+        # Deliberately STRIPE_POS_* env names — the payments rails
+        # (stripe_connect.py / stripe_checkout.py) own STRIPE_SECRET_KEY and
+        # may be a different Stripe account. Access tokens live 1h with
+        # rolling 1y refresh tokens (see src/stripe_pos/tokens.py).
+        # Unlike a POS, Stripe has charges only (no items/menu/labor); the sync
+        # engine lives in src/stripe_pos/.
+        ProviderConfig(
+            key="stripe",
+            label="Stripe",
+            authorize_url="https://marketplace.stripe.com/oauth/v2/authorize",
+            # Until the app passes marketplace review, installs go through the
+            # channel-scoped external-test link — set STRIPE_POS_AUTHORIZE_URL
+            # to it on Railway (value in /root/.secrets/meridian-integrations-
+            # stripe.env), unset after publish.
+            authorize_url_env="STRIPE_POS_AUTHORIZE_URL",
+            token_url="https://api.stripe.com/v1/oauth/token",
+            scopes=[],  # permissions are declared in stripe-app/stripe-app.json
+            client_id_env="STRIPE_POS_CLIENT_ID",
+            client_secret_env="STRIPE_POS_CLIENT_SECRET",
+            # Token response carries stripe_user_id = acct_… directly.
+            merchant_id_strategy="token:stripe_user_id",
+            token_basic_auth=True,
+            default_token_ttl=3600,
+            verified=False,
+            market_note="Payment processor, not full POS — revenue analytics only (no menu/labor).",
+            docs_url="https://docs.stripe.com/stripe-apps/api-authentication/oauth",
         ),
         # SumUp — self-serve OAuth2. Small in US restaurants (mobile card reader),
         # but a clean, simple connector; good framework proof.

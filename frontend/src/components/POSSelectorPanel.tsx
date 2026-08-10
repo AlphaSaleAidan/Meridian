@@ -266,6 +266,14 @@ const POS_FIELDS: Record<string, { key: string; label: string; placeholder: stri
 const OAUTH_AUTHORIZE: Record<string, string> = {
   square: '/api/square/authorize',
   clover: '/api/clover/authorize',
+  // Generic 1-click framework providers live under /api/pos/{key}/…
+  stripe: '/api/pos/stripe/authorize',
+}
+
+// Post-OAuth status polling. Square/Clover have dedicated /api/{key}/status
+// routes; framework providers use the generic /api/pos/{key}/status.
+const OAUTH_STATUS: Record<string, string> = {
+  stripe: '/api/pos/stripe/status',
 }
 
 function LayoutA({ system, onConnect, isDemo, repId }: {
@@ -314,7 +322,8 @@ function LayoutA({ system, onConnect, isDemo, repId }: {
     let active = true
     const tick = async () => {
       try {
-        const res = await fetch(`${apiBase}/api/${system.key}/status?org_id=${encodeURIComponent(orgId)}`)
+        const statusPath = OAUTH_STATUS[system.key] || `/api/${system.key}/status`
+        const res = await fetch(`${apiBase}${statusPath}?org_id=${encodeURIComponent(orgId)}`)
         if (!res.ok) return
         const st = await res.json()
         if (active && st?.connected) {

@@ -1,0 +1,16 @@
+-- Add 'stripe' to the pos_connections.provider enum so the generic POS
+-- connector can store a Stripe connection (merchant links their existing
+-- Stripe account via Connect OAuth; sync engine in src/stripe_pos/).
+--
+-- Without this, the OAuth round-trip succeeds but the callback's INSERT into
+-- pos_connections fails ("invalid input value for enum pos_provider"), leaving
+-- the merchant on the "connected but failed to save" path.
+--
+-- Mirrors 20260708_pos_provider_lightspeed_xseries.sql. Stripe rows write to
+-- the base transactions table (not in _KNOWN_PROVIDERS): if/when the
+-- per-provider cutover (20260618 phase 2) goes live, stripe needs its own
+-- LIKE-tables, a _KNOWN_PROVIDERS entry, and a branch in the UNION views —
+-- same follow-up lightspeed_xseries carries.
+--
+-- ADD VALUE cannot run inside a transaction block; apply as a standalone statement.
+ALTER TYPE pos_provider ADD VALUE IF NOT EXISTS 'stripe';

@@ -675,6 +675,84 @@ async def _run_clover_backfill(org_id: str, connection_id: str, access_token: st
             logger.error(f"Could not record Clover backfill failure for org={org_id}: {record_err}")
 
 
+async def run_stripe_backfill(org_id: str, connection_id: str, connection: dict):
+    """Background task: run Stripe initial backfill (queued by the pos_connect
+    OAuth callback; re-run by the scheduler's recovery path). Public name — the
+    scheduler imports it. Mirrors _run_clover_backfill's contract: the engine
+    folds fatal errors into result.errors, a failure flips the connection to
+    status=error and reverts the connected flags."""
+    from ...services.pos_sync_runner import stripe_pos_credentials
+    from ...stripe_pos.client import StripePOSClient
+    from ...stripe_pos.sync_engine import StripePOSSyncEngine
+    from ...db import get_db
+
+    db = get_db()
+
+    try:
+        api_key, account_id = await stripe_pos_credentials(connection)
+        async with StripePOSClient(api_key=api_key, account_id=account_id) as client:
+            engine = StripePOSSyncEngine(
+                client=client,
+                org_id=org_id,
+                pos_connection_id=connection_id,
+            )
+            result = await engine.run_initial_backfill()
+
+        # Same gate as Clover: a dead backfill must not be marked complete.
+        fatal_errors = [err for err in (getattr(result, "errors", None) or []) if str(err).startswith("fatal:")]
+        if fatal_errors:
+            raise RuntimeError(fatal_errors[0])
+
+        await _write_sync_result(db, result)
+
+        await db.update(
+            "pos_connections",
+            {
+                "historical_import_complete": True,
+                "last_sync_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "status": "connected",
+                "last_error": None,
+            },
+            filters={"id": f"eq.{connection_id}"},
+        )
+        logger.info(f"Stripe backfill complete for org={org_id}: {len(result.transactions)} charges")
+
+        try:
+            from ...live_pipeline import MeridianPipeline
+            import os
+            pipeline = MeridianPipeline(
+                org_id=org_id,
+                square_token="",
+                supabase_url=os.environ.get("SUPABASE_URL", ""),
+                supabase_key=os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
+                    or os.environ.get("SUPABASE_SERVICE_KEY", ""),
+                pos_connection_id=connection_id,
+            )
+            # Charges are already in the DB via the engine above; run only the
+            # POS-agnostic analytics + portal phases (same as Clover).
+            await pipeline.run_analysis_only()
+        except Exception as e:
+            logger.warning(f"AI pipeline after Stripe backfill failed: {e}")
+
+    except Exception as e:
+        logger.error(f"Stripe backfill failed for org={org_id}: {e}", exc_info=True)
+        try:
+            await db.update(
+                "pos_connections",
+                {
+                    "status": "error",
+                    "last_error": str(e)[:500],
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                },
+                filters={"id": f"eq.{connection_id}"},
+            )
+            await db.update("businesses", {"pos_connected": False}, filters={"id": f"eq.{org_id}"})
+            await db.update("organizations", {"pos_connection_status": "error"}, filters={"id": f"eq.{org_id}"})
+        except Exception as record_err:
+            logger.error(f"Could not record Stripe backfill failure for org={org_id}: {record_err}")
+
+
 async def _run_generic_backfill(org_id: str, connection_id: str, pos_system: str, credentials: dict):
     """Background task: run initial backfill for any GenericREST POS system."""
     from ...db import get_db

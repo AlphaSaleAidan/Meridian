@@ -9,6 +9,7 @@ Square and Clover keep their own routes; this only serves registry providers
 that are BOTH verified and credential-configured. Unknown/disabled providers 404.
 """
 import logging
+import os
 import re
 from datetime import datetime, timezone
 from urllib.parse import urlencode
@@ -36,7 +37,6 @@ _ORG_ID_RE = re.compile(
 )
 _DEFAULT_RETURN_TO = "/app/settings"
 
-import os
 _FRONTEND_URL = os.environ.get(
     "FRONTEND_URL", os.environ.get("FRONTEND_ORIGIN", "https://meridian.tips")
 )
@@ -62,6 +62,50 @@ async def list_providers():
              "authorize_path": f"/api/pos/{p.key}/authorize"}
             for p in enabled_providers()
         ]
+    }
+
+
+@router.get("/{provider}/status")
+async def status(provider: str, org_id: str):
+    """Connection status for a framework provider (same shape as the dedicated
+    /api/square/status and /api/clover/status endpoints — the frontend's
+    post-OAuth poller reads `connected`)."""
+    cfg = get_provider(provider)
+    if cfg is None:
+        raise HTTPException(404, "Unknown POS provider")
+    if not org_id or not _ORG_ID_RE.match(org_id):
+        return {"connected": False, "status": "not_connected",
+                "oauth_available": cfg.enabled()}
+
+    from ...db import _db_instance
+    from ...db.org_ids import connection_org_id
+    if not _db_instance:
+        return {"connected": False, "status": "unavailable",
+                "oauth_available": cfg.enabled()}
+
+    org_uuid = connection_org_id(org_id) or org_id
+    try:
+        rows = await _db_instance.select(
+            "pos_connections",
+            filters={"org_id": f"eq.{org_uuid}", "provider": f"eq.{provider}"},
+            limit=1,
+        )
+    except Exception as e:
+        # A malformed/legacy org id shape is "no such row", not a server fault
+        # (mirrors the uuid-cast guard on the dedicated status endpoints).
+        logger.warning("pos_connect status lookup failed for %s/%s: %s", provider, org_id, e)
+        rows = []
+    if not rows:
+        return {"connected": False, "status": "not_connected",
+                "oauth_available": cfg.enabled()}
+    conn = rows[0]
+    return {
+        "connected": conn.get("status") == "connected",
+        "merchant_id": conn.get("external_merchant_id", ""),
+        "status": conn.get("status", ""),
+        "last_sync_at": conn.get("last_sync_at"),
+        "historical_import_complete": bool(conn.get("historical_import_complete")),
+        "oauth_available": cfg.enabled(),
     }
 
 
@@ -122,14 +166,37 @@ async def callback(provider: str, request: Request, background_tasks: Background
 
     try:
         from ...db import _db_instance
+        from ...db.org_ids import connection_org_id
         if not _db_instance:
             logger.warning("DB not initialized — %s tokens not persisted", provider)
             return _redirect_to(return_to, {"oauth": "partial",
                                             "warning": "Connected but not saved — please retry."}, origin)
 
+        # organizations.id / pos_connections.org_id are uuid columns, but
+        # merchants authenticated off a businesses row pass TEXT `biz_` ids —
+        # those inserts fail the uuid cast, ending every 1-click connect in
+        # "Connected but failed to save". Map to the deterministic companion
+        # UUID (same fix the Square/Clover routes carry); the businesses update
+        # below keeps the ORIGINAL id (TEXT table).
+        org_uuid = connection_org_id(org_id) or org_id
+
+        # pos_connections.org_id → organizations.id is a NOT NULL FK; make sure
+        # the org row exists (vertical is NOT NULL with no default).
+        existing_orgs = await _db_instance.select(
+            "organizations", filters={"id": f"eq.{org_uuid}"}, limit=1)
+        if not existing_orgs:
+            await _db_instance.insert("organizations", {
+                "id": org_uuid,
+                "name": f"Org {org_id}",
+                "slug": org_id.lower().replace(" ", "-"),
+                "vertical": "other",
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            })
+
         existing = await _db_instance.select(
             "pos_connections",
-            filters={"org_id": f"eq.{org_id}", "provider": f"eq.{provider}"},
+            filters={"org_id": f"eq.{org_uuid}", "provider": f"eq.{provider}"},
             limit=1,
         )
         conn_fields = {
@@ -142,11 +209,13 @@ async def callback(provider: str, request: Request, background_tasks: Background
             "updated_at": datetime.now(timezone.utc).isoformat(),
         }
         if existing:
+            connection_id = existing[0]["id"]
             await _db_instance.update("pos_connections", conn_fields,
-                                      filters={"id": f"eq.{existing[0]['id']}"})
+                                      filters={"id": f"eq.{connection_id}"})
         else:
+            connection_id = str(uuid4())
             await _db_instance.insert("pos_connections", {
-                "id": str(uuid4()), "org_id": org_id, "provider": provider,
+                "id": connection_id, "org_id": org_uuid, "provider": provider,
                 "historical_import_complete": False,
                 "created_at": datetime.now(timezone.utc).isoformat(),
                 **conn_fields,
@@ -157,11 +226,16 @@ async def callback(provider: str, request: Request, background_tasks: Background
                                   filters={"id": f"eq.{org_id}"})
         await _db_instance.update("organizations",
                                   {"pos_system": provider, "pos_connection_status": "connected"},
-                                  filters={"id": f"eq.{org_id}"})
-        # NOTE: no data backfill is queued here. run_backfill is Square-specific;
-        # each provider's historical sync is a separate build gated on a test
-        # merchant (docs/POS_1CLICK_ONBOARDING.md). The connection + tokens are
-        # stored so sync can run once that engine exists.
+                                  filters={"id": f"eq.{org_uuid}"})
+
+        # Historical sync: only providers with a real engine get a backfill
+        # queued (docs/POS_1CLICK_ONBOARDING.md step 5). Others store the
+        # connection + tokens so sync can run once that engine exists.
+        if provider == "stripe":
+            from .pos_connections import run_stripe_backfill
+            connection = {**conn_fields, "id": connection_id, "org_id": org_uuid,
+                          "provider": provider}
+            background_tasks.add_task(run_stripe_backfill, org_uuid, connection_id, connection)
     except Exception as e:
         logger.error("Failed to store %s connection: %s", provider, e, exc_info=True)
         return _redirect_to(return_to, {"oauth": "partial",

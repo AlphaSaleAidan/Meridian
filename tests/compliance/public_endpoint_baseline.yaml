@@ -33,6 +33,10 @@ oauth:
   - "GET /api/pos/providers"
   - "GET /api/pos/{provider}/authorize"
   - "GET /api/pos/{provider}/callback"
+  # Framework-provider twin of /api/square/status and /api/clover/status:
+  # the frontend's post-OAuth poller reads `connected` before a session
+  # exists; org ids are validated and unknown orgs return not_connected.
+  - "GET /api/pos/{provider}/status"
   - "GET /api/square/authorize"
   - "GET /api/square/callback"
   - "GET /api/square/status"
