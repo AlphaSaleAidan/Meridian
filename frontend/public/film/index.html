@@ -297,8 +297,14 @@ html.static .doc{display:flex}
   .artpane{flex:0 0 auto;width:100%}
   .copypane{flex:0 0 auto;width:100%}
   .sub{max-width:100%}
-  .screen{position:relative;top:0;transform:scale(.96)}
-  .screen.on{transform:scale(1)}
+  /* The art pane is a flex ROW, so an in-flow screen sits BESIDE the drawing and
+     splits the width with it — and once the first screenshot has loaded, its src
+     never clears, so every later drawing got squeezed to a sliver next to an
+     invisible screen. Hidden, the screen keeps the desktop overlay (absolute, no
+     flow space); shown, IT takes the flow and the dimmed drawing becomes the
+     overlay behind it instead. */
+  .screen.on{position:relative;top:0;transform:scale(1)}
+  .artpane.showscreen .art{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%) scale(.9)}
 }
 </style>
 
