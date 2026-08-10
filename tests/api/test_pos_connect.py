@@ -24,7 +24,7 @@ from src.pos_connect.oauth import sign_state, verify_state, GenericOAuthManager 
 # Providers whose OAuth config has been validated against a real registered app
 # and are intentionally live. Everything else must stay verified=False until it
 # too has been validated — this guards against an accidental live flip.
-VALIDATED = {"lightspeed_xseries"}
+VALIDATED = {"lightspeed_xseries", "stripe"}
 
 
 def test_only_validated_providers_are_verified():
