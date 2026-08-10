@@ -404,6 +404,21 @@
     v.play().catch(() => {})
     pill.classList.add('gone')
   })
+  // Browsers only allow audio after a user gesture — so make the FIRST tap
+  // anywhere on the page count, as long as the film is still on screen.
+  // Restart from the top if the viewer is early; otherwise unmute in place.
+  const firstTouch = (e) => {
+    document.removeEventListener('pointerdown', firstTouch, true)
+    if (!v.muted) return
+    if (e.target.closest && e.target.closest('#soundpill')) return
+    const r = v.getBoundingClientRect()
+    const onScreen = r.bottom > 0 && r.top < window.innerHeight
+    if (!onScreen) return
+    if (v.currentTime < 6) v.currentTime = 0
+    v.muted = false
+    v.play().then(() => pill.classList.add('gone')).catch(() => { v.muted = true })
+  }
+  document.addEventListener('pointerdown', firstTouch, true)
   // Aidan's call 2026-08-10: once the visitor opts into sound, the audio
   // keeps playing as they scroll the pitch — no pause on leaving view.
 })()
