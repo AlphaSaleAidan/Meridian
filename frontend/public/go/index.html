@@ -46,14 +46,17 @@
   }
   .demo p{font-size:14px;color:var(--muted)}
   .demo p strong{color:var(--ink)}
+  .callgrid{display:grid;gap:9px}
   .callbtn{
-    display:flex;align-items:center;justify-content:center;gap:10px;width:100%;
-    padding:15px;border-radius:12px;border:0;
+    display:flex;align-items:center;justify-content:center;gap:11px;width:100%;
+    padding:12px 15px;border-radius:12px;border:0;
     background:linear-gradient(100deg,var(--accent),#12A796);
-    color:#04211D;font-size:16px;font-weight:700;text-decoration:none;
+    color:#04211D;font-size:16.5px;font-weight:800;text-decoration:none;
     box-shadow:0 8px 22px -8px rgba(23,197,176,.55);
   }
-  .callbtn svg{color:#04211D}
+  .callbtn svg{color:#04211D;flex:none}
+  .callbtn span{display:flex;flex-direction:column;align-items:flex-start;line-height:1.25}
+  .callbtn small{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;opacity:.75}
   .callnote{text-align:center;font-size:12.5px;color:var(--muted);margin-top:8px}
 
   .benefits{margin:28px 0;display:grid;gap:14px}
@@ -267,12 +270,16 @@
       <span class="dot" aria-hidden="true"></span>
       <p><strong>Don't take our word for it.</strong> Call and order a pizza — a real AI answers. No card, no charge.</p>
     </div>
-    <a class="callbtn" href="tel:+13802409535">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/>
-      </svg>
-      Call the live demo — +1 380 240 9535
-    </a>
+    <div class="callgrid">
+      <a class="callbtn" href="tel:+13802409535">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+        <span><small>Call the US demo</small>+1 380 240 9535</span>
+      </a>
+      <a class="callbtn" href="tel:+15068017904">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+        <span><small>Call the Canada demo</small>+1 506 801 7904</span>
+      </a>
+    </div>
   </div>
 
   <div class="benefits">
