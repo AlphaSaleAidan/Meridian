@@ -79,8 +79,16 @@
     background:linear-gradient(100deg,var(--brand),var(--accent));
     -webkit-background-clip:text;background-clip:text;color:transparent;
   }
-  .film{margin:26px 0}
-  .film video{width:100%;margin-top:10px;border-radius:14px;display:block;background:#0A0A0B;border:1px solid var(--line);box-shadow:0 10px 26px -12px rgba(22,24,29,.3)}
+  .film{position:relative;margin:4px 0 20px}
+  .film video{width:100%;border-radius:14px;display:block;background:#0A0A0B;border:1px solid var(--line);box-shadow:0 10px 26px -12px rgba(22,24,29,.3)}
+  .soundpill{
+    position:absolute;top:10px;right:10px;display:flex;align-items:center;gap:7px;
+    padding:9px 14px;border:0;border-radius:999px;cursor:pointer;
+    background:rgba(10,10,11,.72);color:#F5F5F7;font-size:13px;font-weight:600;
+    backdrop-filter:blur(6px);
+  }
+  .soundpill svg{color:var(--accent)}
+  .soundpill.gone{display:none}
   .bridge{
     text-align:center;font-size:16.5px;font-weight:700;letter-spacing:-.01em;
     margin:26px 0;color:var(--ink);
@@ -209,6 +217,14 @@
     <span class="word">MERIDIAN</span>
   </header>
 
+  <div class="film">
+    <video id="herofilm" autoplay muted loop playsinline controls preload="metadata" poster="/media/captains-poster.jpg" src="/media/captains-30s.mp4" aria-label="The Captains — Meridian's commercial"></video>
+    <button type="button" class="soundpill" id="soundpill" aria-label="Play with sound">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+      Tap for sound
+    </button>
+  </div>
+
   <h1 data-reveal>Your phone. Your register. Your door. <em>One AI.</em></h1>
   <p class="sub" data-reveal style="--i:1">Money moves through your restaurant three ways. Meridian watches
   all three — and turns what it sees into orders taken, leaks plugged, and
@@ -281,11 +297,6 @@
     </div>
   </div>
 
-  <div class="film" data-reveal>
-    <p class="kicker">The 30-second version</p>
-    <video controls playsinline preload="none" poster="/media/captains-poster.jpg" src="/media/captains-30s.mp4" aria-label="The Captains — Meridian's 30 second commercial"></video>
-  </div>
-
   <p class="bridge" data-reveal>Three doors. One brain. Every location, one dashboard.</p>
 
   <div class="card" id="quote" data-reveal>
@@ -329,6 +340,28 @@
     for (const e of entries) if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target) }
   }, { threshold: 0.15, rootMargin: '4000px 0px -40px 0px' })
   document.querySelectorAll('[data-reveal]').forEach((el) => io.observe(el))
+})()
+;(() => {
+  const v = document.getElementById('herofilm')
+  const pill = document.getElementById('soundpill')
+  if (!v) return
+  // Browsers block unmuted autoplay without a gesture; attempt it anyway so
+  // the few webviews that allow it get sound, otherwise fall back to muted.
+  v.muted = false
+  v.play().then(() => pill.classList.add('gone')).catch(() => {
+    v.muted = true
+    v.play().catch(() => {})
+  })
+  pill.addEventListener('click', () => {
+    v.currentTime = 0
+    v.muted = false
+    v.play().catch(() => {})
+    pill.classList.add('gone')
+  })
+  // sound must not follow the visitor down the page
+  new IntersectionObserver(([e]) => {
+    if (!e.isIntersecting && !v.muted && !v.paused) v.pause()
+  }, { threshold: 0.25 }).observe(v)
 })()
 ;(() => {
   const form = document.getElementById('leadform')
