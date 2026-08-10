@@ -130,20 +130,6 @@ export const MeridianEmblem: React.FC<EmblemProps> = ({
       <circle cx={cx} cy={cy} r="3" fill="#17C5B0" />
       <circle cx={cx} cy={cy} r="5" fill="none" stroke="#17C5B0" strokeWidth="0.8" strokeOpacity="0.5" />
 
-      {/* Stylized M at center — subtle */}
-      <text
-        x={cx}
-        y={cy + 1.5}
-        textAnchor="middle"
-        dominantBaseline="central"
-        fill="#0A0A0B"
-        fontSize="5"
-        fontWeight="800"
-        fontFamily="system-ui, -apple-system, sans-serif"
-      >
-        M
-      </text>
-
       {/* Outer rim accent */}
       <circle cx={cx} cy={cy} r="47" fill="none" stroke="#17C5B0" strokeWidth="0.8" strokeOpacity="0.25" />
       <circle cx={cx} cy={cy} r="48.5" fill="none" stroke="#1A8FD6" strokeWidth="0.3" strokeOpacity="0.15" />
