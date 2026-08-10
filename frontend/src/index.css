@@ -9,6 +9,19 @@
     scroll-behavior: smooth;
   }
 
+  /* The prerendered HTML is a DOM snapshot, so it carries the animation libraries'
+     initial hidden states as inline styles (framer's opacity:0/translateY, GSAP's
+     from-states). Until main.tsx marks the document .js-live, nothing can ever
+     animate those styles away — on a phone that means whole sections (the explainer
+     film, the Captains cut, the POS logos) render as blank space for the entire
+     hydration window. Hold them visible while only the static HTML is in charge. */
+  html:not(.js-live) [data-scroll-reveal],
+  html:not(.js-live) [style*='opacity: 0;'] {
+    opacity: 1 !important;
+    transform: none !important;
+    clip-path: none !important;
+  }
+
   body {
     @apply bg-[#0A0A0B] text-[#A1A1A8];
     font-family: 'Geist Sans', 'Inter', system-ui, -apple-system, sans-serif;

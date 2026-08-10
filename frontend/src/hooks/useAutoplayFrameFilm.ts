@@ -136,8 +136,20 @@ export function useAutoplayFrameFilm() {
 
   /** The frame preloads muted and off-screen; hold it until it is actually watched. */
   const onFrameLoad = useCallback(() => {
+    // Reduced motion: both observers above are off, so this is the only place the
+    // film can start. The frame only mounts there through the explicit play tap, so
+    // start it — and try for sound, since a real gesture asked for a narrated film.
+    // If the gesture has expired by the time 1.5MB has arrived, unmute() notices the
+    // browser refused and falls back to the muted state with the Unmute pill up.
+    if (reduced) {
+      if (gestured.current) {
+        api()?.start()
+        unmute()
+      }
+      return
+    }
     if (!visible.current) api()?.stop()
-  }, [api])
+  }, [api, reduced, unmute])
 
   /** Reduced-motion path: nothing starts until it is asked for. */
   const startManually = useCallback(() => {
