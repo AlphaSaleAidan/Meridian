@@ -473,6 +473,7 @@ def _system_prompt(config, transfer_number: str = "") -> str:
         "item, then add sides and drinks). Read back the COMPLETE order — every item, size, "
         "and toppings — with the total, then ask 'Does that all look right?'\n"
         f"{_cash_offer_step(config)}"
+        f"{_sms_consent_step(config)}"
         "7. Call submit_order ONLY after the customer confirms the order is correct.\n"
         "8. After submit_order returns, tell the caller: 'I've sent a secure payment link to "
         "your phone — you'll get a receipt once it goes through.'\n\n"
@@ -480,6 +481,9 @@ def _system_prompt(config, transfer_number: str = "") -> str:
         f"- Available order types: {order_types}.\n"
         f"{reservation_lines}"
         f"{_cash_guard_line(config)}"
+        "- The caller must clearly agree to receive texts before submit_order with "
+        "pay_choice 'pay_now'. If they decline texting, use pay_choice 'pay_at_pickup' — "
+        "never send a text to someone who said no.\n"
         "- Delivery without an address → ask for the address before calling submit_order.\n"
         "- Off-menu items → say so warmly and suggest a similar item.\n"
         "- Mishear → ask the caller to repeat just THAT item; never restart the order from scratch.\n"
@@ -489,6 +493,26 @@ def _system_prompt(config, transfer_number: str = "") -> str:
         f"{transfer_block}"
         f"{menu}"
         f"{_smart_upsell_block(config)}"
+    )
+
+
+def _sms_consent_step(config) -> str:
+    """A2P 10DLC verbal opt-in, spoken before any SMS is sent.
+
+    The exact wording is filed verbatim in the Telnyx campaign's message flow
+    (TCR requires brand name, message types, frequency, rates, STOP, HELP, and
+    no-share language) — change it here and the campaign filing must be updated
+    to match, or vetting fails again. Decline path routes to pay_at_pickup,
+    which sends no text by design.
+    """
+    business = getattr(config, "business_name", None) or "the restaurant"
+    return (
+        "6c. Before any text is sent, say: 'I\'ll text your confirmation and secure "
+        f"payment link to this number — usually 1 to 3 texts per order, from Meridian "
+        f"on behalf of {business}. Message and data rates may apply; reply STOP anytime "
+        "or HELP for help. We never share your mobile information. Sound good?' "
+        "If they agree, continue. If they decline texting, set pay_choice to "
+        "'pay_at_pickup' — no text is sent and they pay at the counter.\n"
     )
 
 
