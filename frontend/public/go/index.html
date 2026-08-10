@@ -1,0 +1,547 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<!-- Paid-traffic lander: light theme, one job. Deliberately not part of the
+     SPA — a static file loads instantly on cellular, which is the whole point.
+     noindex: this page exists for ad clicks, not search. -->
+<meta name="robots" content="noindex,nofollow">
+<title>Meridian — One AI for Your Phone, Register, and Camera</title>
+<style>
+  :root{
+    --bg:#FAFBFC; --card:#FFFFFF; --ink:#16181D; --muted:#5A6472;
+    --line:#E6EAEF; --brand:#1A8FD6; --accent:#17C5B0; --ok:#0E9F6E;
+  }
+  *{box-sizing:border-box;margin:0}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    background:var(--bg); color:var(--ink);
+    background-image:
+      radial-gradient(560px 300px at 85% -60px, rgba(26,143,214,.10), transparent 70%),
+      radial-gradient(420px 260px at -10% 40px, rgba(23,197,176,.08), transparent 70%);
+    background-repeat:no-repeat;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    line-height:1.5;
+  }
+  .wrap{max-width:480px;margin:0 auto;padding:0 20px 96px}
+  header{display:flex;align-items:center;gap:10px;padding:18px 0}
+  .mark{width:30px;height:30px;flex:none;display:block}
+  @media (prefers-reduced-motion:reduce){.mark g{animation:none !important}}
+  .word{font-weight:700;letter-spacing:.14em;font-size:14px}
+  h1{font-size:clamp(28px,8vw,36px);line-height:1.15;letter-spacing:-.02em;margin:18px 0 12px;font-weight:800}
+  h1 em{
+    font-style:normal;
+    background:linear-gradient(100deg,var(--brand),var(--accent));
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+  }
+  .sub{color:var(--muted);font-size:17px;margin-bottom:22px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;box-shadow:0 1px 3px rgba(22,24,29,.05)}
+
+  .demo{display:flex;align-items:center;gap:14px;margin-bottom:14px}
+  .demo .dot{width:8px;height:8px;border-radius:50%;background:var(--ok);flex:none;position:relative}
+  @media (prefers-reduced-motion:no-preference){
+    .demo .dot::after{content:"";position:absolute;inset:-4px;border-radius:50%;border:1px solid var(--ok);opacity:0;animation:ping 2.4s ease-out infinite}
+    @keyframes ping{0%{opacity:.7;transform:scale(.6)}70%,100%{opacity:0;transform:scale(1.4)}}
+  }
+  .demo p{font-size:14px;color:var(--muted)}
+  .demo p strong{color:var(--ink)}
+  .callgrid{display:grid;gap:9px}
+  .callbtn{
+    display:flex;align-items:center;justify-content:center;gap:11px;width:100%;
+    padding:12px 15px;border-radius:12px;border:0;
+    background:linear-gradient(100deg,var(--accent),#12A796);
+    color:#04211D;font-size:16.5px;font-weight:800;text-decoration:none;
+    box-shadow:0 8px 22px -8px rgba(23,197,176,.55);
+  }
+  .callbtn svg{color:#04211D;flex:none}
+  .callbtn span{display:flex;flex-direction:column;align-items:flex-start;line-height:1.25}
+  .callbtn small{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;opacity:.75}
+  .callnote{text-align:center;font-size:12.5px;color:var(--muted);margin-top:8px}
+
+  .benefits{margin:28px 0;display:grid;gap:14px}
+  .trio{display:grid;gap:12px;margin-bottom:22px}
+  .trio .benefit .ic{width:36px;height:36px}
+  .trio h3{font-size:15px}
+  .trio p{font-size:13.5px}
+  .kicker{display:flex;align-items:center;gap:9px;font-size:11.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--brand)}
+  .kicker::before{content:"";width:22px;height:2px;border-radius:2px;background:linear-gradient(90deg,var(--brand),var(--accent))}
+  .payflow{margin-top:4px;padding:16px;border-radius:14px;background:linear-gradient(135deg,rgba(26,143,214,.05),rgba(23,197,176,.07));border:1px solid rgba(23,197,176,.25)}
+  .payhead{font-size:13px;font-weight:700;margin-bottom:10px}
+  .payflow ol{list-style:none;display:grid;gap:10px}
+  .payflow li{display:flex;gap:10px;font-size:13.5px;color:var(--muted);line-height:1.45}
+  .payflow li span{flex:none;width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#12A796);color:#fff;font-size:11px;font-weight:800;display:grid;place-items:center;margin-top:1px;box-shadow:0 4px 10px -4px rgba(23,197,176,.6)}
+  .paytrust{
+    display:flex;align-items:flex-start;gap:8px;
+    margin-top:12px;padding-top:12px;border-top:1px solid var(--line);
+    font-size:15px;font-weight:700;line-height:1.4;color:var(--ink);letter-spacing:-.01em;
+  }
+  .paytrust svg{flex:none;color:var(--accent);margin-top:2px}
+  .paytrust em{
+    font-style:normal;
+    background:linear-gradient(100deg,var(--brand),var(--accent));
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+  }
+  .film{position:relative;margin:4px -20px 22px}
+  .film video{width:100%;border-radius:0;display:block;background:#0A0A0B;border:0;box-shadow:0 10px 26px -12px rgba(22,24,29,.3)}
+  @media (min-width:640px){.film video{border-radius:14px;border:1px solid var(--line)}}
+  .soundpill{
+    position:absolute;top:10px;right:10px;display:flex;align-items:center;gap:7px;
+    padding:9px 14px;border:0;border-radius:999px;cursor:pointer;
+    background:rgba(10,10,11,.72);color:#F5F5F7;font-size:13px;font-weight:600;
+    backdrop-filter:blur(6px);
+  }
+  .soundpill svg{color:var(--accent)}
+  .soundpill.gone{display:none}
+  .bridge{
+    text-align:center;font-size:16.5px;font-weight:700;letter-spacing:-.01em;
+    margin:26px 0;color:var(--ink);
+  }
+  .bridge::after{content:"";display:block;width:44px;height:3px;border-radius:2px;margin:10px auto 0;background:linear-gradient(90deg,var(--brand),var(--accent))}
+  .pos{margin:0 0 18px}
+  .posgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+  .postile{
+    display:flex;align-items:center;justify-content:center;gap:9px;
+    padding:15px;border-radius:12px;border:1.5px solid var(--line);background:var(--card);
+    color:var(--ink);font-size:15.5px;font-weight:700;cursor:pointer;
+    transition:border-color .2s var(--ease-out),box-shadow .2s var(--ease-out),transform .15s var(--ease-out);
+  }
+  .postile svg{border-radius:6px}
+  .postile:active{transform:scale(.97)}
+  .postile[aria-pressed="true"]{
+    border-color:var(--accent);
+    box-shadow:0 0 0 3px rgba(23,197,176,.15),0 6px 16px -8px rgba(23,197,176,.4);
+  }
+  .posnote{font-size:12.5px;color:var(--muted);margin-top:9px;text-align:center}
+  .benefit{display:flex;gap:14px;align-items:flex-start}
+  .benefit .ic{width:40px;height:40px;flex:none;border-radius:12px;display:grid;place-items:center;color:#fff;
+    background:linear-gradient(135deg,var(--brand),#1478B8);box-shadow:0 6px 14px -6px rgba(26,143,214,.5)}
+  .benefit:nth-child(odd) .ic{background:linear-gradient(135deg,var(--accent),#12A796);box-shadow:0 6px 14px -6px rgba(23,197,176,.5)}
+  .benefit h3{font-size:15.5px;margin-bottom:2px}
+  .benefit p{font-size:14px;color:var(--muted)}
+
+
+  form{display:grid;gap:10px}
+  label{font-size:13px;font-weight:600}
+  input{
+    width:100%;padding:13px 14px;border-radius:10px;border:1px solid var(--line);
+    background:var(--bg);font-size:16px;color:var(--ink);
+  }
+  input:focus{outline:2px solid var(--brand);outline-offset:0;border-color:transparent}
+  .hp{position:absolute;left:-9999px;top:-9999px;height:0;overflow:hidden}
+  .submit{
+    padding:16px;border:0;border-radius:12px;color:#fff;
+    background:linear-gradient(100deg,var(--brand),#1478B8);
+    box-shadow:0 10px 24px -10px rgba(26,143,214,.6);
+    font-size:17px;font-weight:700;cursor:pointer;width:100%;
+  }
+  .submit:disabled{opacity:.6}
+  .fine{font-size:12px;color:var(--muted);text-align:center}
+  .success{display:none;text-align:center;padding:26px 8px}
+  .success svg{color:var(--ok);margin-bottom:10px}
+  .success h3{font-size:18px;margin-bottom:6px}
+  .success p{font-size:14px;color:var(--muted)}
+  .bookbtn{
+    display:inline-flex;align-items:center;justify-content:center;gap:9px;
+    margin:14px 0 4px;padding:15px 26px;border-radius:12px;text-decoration:none;
+    background:linear-gradient(100deg,var(--brand),#1478B8);color:#fff;
+    font-size:16px;font-weight:700;box-shadow:0 10px 24px -10px rgba(26,143,214,.6);
+    transition:transform .15s var(--ease-out);
+  }
+  .bookbtn:active{transform:scale(.97)}
+  .finealt{font-size:12px;margin-top:10px}
+  .schedmodal{position:fixed;inset:0;z-index:50}
+  .schedback{position:absolute;inset:0;background:rgba(10,10,11,.5);backdrop-filter:blur(4px)}
+  .schedsheet{
+    position:absolute;inset:12px 0 0 0;display:flex;flex-direction:column;
+    background:#0A0A0B;border-radius:18px 18px 0 0;overflow:hidden;
+    transform:translateY(14px);opacity:0;
+    transition:transform .4s var(--ease-out),opacity .35s var(--ease-out);
+  }
+  .schedmodal.open .schedsheet{transform:none;opacity:1}
+  @media (prefers-reduced-motion:reduce){.schedsheet{transition:none}}
+  @media (min-width:640px){.schedsheet{inset:4vh 0;max-width:480px;margin:0 auto;border-radius:18px}}
+  .schedbar{
+    display:flex;align-items:center;justify-content:space-between;flex:none;
+    padding:13px 16px;color:#F5F5F7;font-size:14px;font-weight:700;
+    border-bottom:1px solid #1F1F23;
+  }
+  .schedclose{
+    display:grid;place-items:center;width:32px;height:32px;border-radius:9px;
+    border:1px solid #1F1F23;background:transparent;color:#F5F5F7;cursor:pointer;
+  }
+  .schedframe{flex:1;min-height:0;-webkit-overflow-scrolling:touch;overflow:auto}
+  .schedframe iframe{display:block;width:1px;min-width:100%;height:100%;border:0;background:#0A0A0B}
+
+  .stickybar{
+    position:fixed;left:0;right:0;bottom:0;padding:10px 16px calc(10px + env(safe-area-inset-bottom));
+    background:rgba(250,251,252,.92);backdrop-filter:blur(8px);border-top:1px solid var(--line);
+  }
+  .stickybar a{
+    display:block;text-align:center;padding:14px;border-radius:12px;
+    background:linear-gradient(100deg,var(--brand),#1478B8);
+    box-shadow:0 8px 20px -8px rgba(26,143,214,.55);
+    color:#fff;font-weight:700;font-size:16px;text-decoration:none;
+  }
+  @media (min-width:640px){ .stickybar{display:none} .wrap{padding-bottom:40px} }
+  footer{margin-top:34px;padding-top:16px;border-top:1px solid var(--line);font-size:12px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap}
+  footer a{color:var(--muted)}
+
+  /* ── motion ─────────────────────────────────────────────
+     Entrances only exist once JS is running (html.js) — without JS the page
+     is simply visible, so prerender/no-JS never shows a blank band. */
+  :root{--ease-out:cubic-bezier(.16,1,.3,1)}
+  .js [data-reveal]{opacity:0;transform:translateY(14px);filter:blur(5px)}
+  .js [data-reveal].in{
+    opacity:1;transform:none;filter:blur(0);
+    transition:opacity .5s var(--ease-out),transform .55s var(--ease-out),filter .5s var(--ease-out);
+    transition-delay:calc(var(--i,0)*70ms);
+  }
+  .callbtn,.submit,.stickybar a{transition:transform .15s var(--ease-out),box-shadow .3s var(--ease-out)}
+  .callbtn:active,.submit:active,.stickybar a:active{transform:scale(.97)}
+  @media (prefers-reduced-motion:no-preference){
+    .mark,.card:first-of-type{animation:floaty 7s ease-in-out infinite}
+    .card:first-of-type{animation-duration:9s;animation-delay:-3s}
+    @keyframes floaty{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .js [data-reveal]{opacity:1;transform:none;filter:none;transition:none}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <svg class="mark" viewBox="0 0 100 100" fill="none" aria-hidden="true">
+<defs>
+<linearGradient id="mk2-sweep" x1="0" y1="0" x2="1" y2="0">
+<stop offset="0%" stop-color="#17C5B0" stop-opacity="0"/>
+<stop offset="60%" stop-color="#17C5B0" stop-opacity="0.25"/>
+<stop offset="100%" stop-color="#17C5B0" stop-opacity="0.7"/>
+</linearGradient>
+<radialGradient id="mk2-glow" cx="50%" cy="50%" r="50%">
+<stop offset="0%" stop-color="#17C5B0" stop-opacity="0.15"/>
+<stop offset="70%" stop-color="#17C5B0" stop-opacity="0.05"/>
+<stop offset="100%" stop-color="#17C5B0" stop-opacity="0"/>
+</radialGradient>
+</defs>
+<circle cx="50" cy="50" r="48" fill="#0A0A0B" stroke="#1A8FD6" stroke-width="1" stroke-opacity="0.3"/>
+<circle cx="50" cy="50" r="46" fill="url(#mk2-glow)"/>
+<circle cx="50" cy="50" r="16" fill="none" stroke="#17C5B0" stroke-width="0.5" stroke-opacity="0.15"/><circle cx="50" cy="50" r="30" fill="none" stroke="#17C5B0" stroke-width="0.5" stroke-opacity="0.15"/><circle cx="50" cy="50" r="43" fill="none" stroke="#17C5B0" stroke-width="0.5" stroke-opacity="0.15"/>
+<line x1="50" y1="8" x2="50" y2="92" stroke="#17C5B0" stroke-width="0.4" stroke-opacity="0.12"/>
+<line x1="8" y1="50" x2="92" y2="50" stroke="#17C5B0" stroke-width="0.4" stroke-opacity="0.12"/>
+<g style="animation: mer-sweep-mk2 3s linear infinite; transform-origin: 50px 50px;">
+<path d="M 50 50 L 50 6 A 44 44 0 0 0 11.895 28.000 Z" fill="url(#mk2-sweep)" opacity="0.5"/>
+<line x1="50" y1="50" x2="50" y2="6" stroke="#17C5B0" stroke-width="1.5" stroke-linecap="round"/>
+<circle cx="50" cy="8" r="2" fill="#17C5B0" opacity="0.9"/>
+</g>
+<circle cx="62" cy="34" r="2.5" fill="#17C5B0" opacity="0.7"/><circle cx="38" cy="62" r="2.0" fill="#17C5B0" opacity="0.5"/><circle cx="68" cy="58" r="1.8" fill="#1A8FD6" opacity="0.6"/><circle cx="35" cy="38" r="1.5" fill="#17C5B0" opacity="0.4"/>
+<circle cx="50" cy="50" r="3" fill="#17C5B0"/>
+<circle cx="50" cy="50" r="5" fill="none" stroke="#17C5B0" stroke-width="0.8" stroke-opacity="0.5"/>
+<text x="50" y="51.5" text-anchor="middle" dominant-baseline="central" fill="#0A0A0B" font-size="5" font-weight="800" font-family="system-ui,-apple-system,sans-serif">M</text>
+<circle cx="50" cy="50" r="47" fill="none" stroke="#17C5B0" stroke-width="0.8" stroke-opacity="0.25"/>
+<circle cx="50" cy="50" r="48.5" fill="none" stroke="#1A8FD6" stroke-width="0.3" stroke-opacity="0.15"/>
+<style>@keyframes mer-sweep-mk2{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+  /* ── motion ─────────────────────────────────────────────
+     Entrances only exist once JS is running (html.js) — without JS the page
+     is simply visible, so prerender/no-JS never shows a blank band. */
+  :root{--ease-out:cubic-bezier(.16,1,.3,1)}
+  .js [data-reveal]{opacity:0;transform:translateY(14px);filter:blur(5px)}
+  .js [data-reveal].in{
+    opacity:1;transform:none;filter:blur(0);
+    transition:opacity .5s var(--ease-out),transform .55s var(--ease-out),filter .5s var(--ease-out);
+    transition-delay:calc(var(--i,0)*70ms);
+  }
+  .callbtn,.submit,.stickybar a{transition:transform .15s var(--ease-out),box-shadow .3s var(--ease-out)}
+  .callbtn:active,.submit:active,.stickybar a:active{transform:scale(.97)}
+  @media (prefers-reduced-motion:no-preference){
+    .mark,.card:first-of-type{animation:floaty 7s ease-in-out infinite}
+    .card:first-of-type{animation-duration:9s;animation-delay:-3s}
+    @keyframes floaty{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .js [data-reveal]{opacity:1;transform:none;filter:none;transition:none}
+  }
+</style>
+</svg>
+    <span class="word">MERIDIAN</span>
+  </header>
+
+  <h1 data-reveal>Your phone. Your register. Your camera. <em>One AI.</em></h1>
+  <p class="sub" data-reveal style="--i:1">Money moves through your restaurant three ways. Meridian watches
+  all three — and turns what it sees into orders taken, leaks plugged, and
+  hours staffed right.</p>
+
+  <div class="film">
+    <video id="herofilm" autoplay muted playsinline controls preload="metadata" poster="/media/captains-poster.jpg" src="/media/captains-30s.mp4" aria-label="The Captains — Meridian's commercial"></video>
+    <button type="button" class="soundpill" id="soundpill" aria-label="Play with sound">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H2v6h4l5 4z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+      Tap for sound
+    </button>
+  </div>
+
+
+  <div class="trio">
+    <div class="benefit" data-reveal style="--i:1">
+      <span class="ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="10"/></svg></span>
+      <div><h3>Never miss a call again</h3><p>Busy line, mid-rush, after close — it picks up every time.</p></div>
+    </div>
+    <div class="benefit" data-reveal style="--i:2">
+      <span class="ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg></span>
+      <div><h3>Finds the leaks</h3><p>Voids, comps, discounts, cancelled tickets — flagged the day patterns start.</p></div>
+    </div>
+    <div class="benefit" data-reveal style="--i:3">
+      <span class="ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+      <div><h3>True conversion</h3><p>Walk-ins vs. orders, by hour — your register only sees the buyers.</p></div>
+    </div>
+  </div>
+
+
+  <div class="card" data-reveal style="--i:2">
+    <div class="demo">
+      <span class="dot" aria-hidden="true"></span>
+      <p><strong>Don't take our word for it.</strong> Call and order a pizza — a real AI answers. No card, no charge.</p>
+    </div>
+    <div class="callgrid">
+      <a class="callbtn" href="tel:+13802409535">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+        <span><small>Call the US demo</small>+1 380 240 9535</span>
+      </a>
+      <a class="callbtn" href="tel:+15068017904">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+        <span><small>Call the Canada demo</small>+1 506 801 7904</span>
+      </a>
+    </div>
+  </div>
+
+  <div class="benefits">
+    <p class="kicker" data-reveal>It watches the phone</p>
+        <div class="benefit" data-reveal style="--i:1">
+      <span class="ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></span>
+      <div><h3>Orders land in your POS</h3><p>A complete order in Square or Clover — not a voicemail, not a link.</p></div>
+    </div>
+
+    <div class="payflow" data-reveal style="--i:1">
+      <p class="payhead">And the money follows</p>
+      <ol>
+        <li><span>1</span>Mid-call, the AI texts a secure checkout link for the exact order.</li>
+        <li><span>2</span>The guest taps and pays — card or wallet — before pickup.</li>
+        <li><span>3</span>Order marked paid in your POS, money settles to you.</li>
+      </ol>
+      <p class="paytrust"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg><span>Your staff <em>never</em> reads a card number over the phone again.</span></p>
+    </div>
+
+    <p class="kicker" data-reveal style="margin-top:14px">It watches the register</p>
+        <div class="benefit" data-reveal style="--i:1">
+      <span class="ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="m7 13 4-4 3 3 5-6"/></svg></span>
+      <div><h3>Sees what's coming</h3><p>Revenue forecast by daypart — prep, ordering, and staffing follow.</p></div>
+    </div>
+    <div class="benefit" data-reveal style="--i:1">
+      <span class="ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="2" x2="12" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span>
+      <div><h3>Knows your margins</h3><p>Which dishes earn, which just fill the menu.</p></div>
+    </div>
+
+    <p class="kicker" data-reveal style="margin-top:14px">It watches the door</p>
+        <div class="benefit" data-reveal style="--i:1">
+      <span class="ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 22h14"/><path d="M5 2h14"/><path d="M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22"/><path d="M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2"/></svg></span>
+      <div><h3>The cost of the wait</h3><p>Walk-outs counted, and priced.</p></div>
+    </div>
+    <div class="benefit" data-reveal style="--i:1">
+      <span class="ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></span>
+      <div><h3>Staff to reality</h3><p>Schedules from real door traffic, not gut feel. Anonymous by design — it counts people, never identifies them.</p></div>
+    </div>
+  </div>
+
+  <p class="bridge" data-reveal>Three doors. One brain. Every location, one dashboard.</p>
+
+  <div class="pos" data-reveal>
+    <p class="kicker">Works with the POS you already run</p>
+    <div class="posgrid">
+      <button type="button" class="postile" data-pos="Square" aria-pressed="false">
+        <svg width="24" height="24" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="64" height="64" rx="12" fill="#006AFF"/>
+  <rect x="18" y="18" width="28" height="28" rx="4" stroke="white" stroke-width="3.5" fill="none"/>
+  <rect x="27" y="27" width="10" height="10" rx="2" fill="white"/>
+</svg>
+        Square
+      </button>
+      <button type="button" class="postile" data-pos="Clover" aria-pressed="false">
+        <svg width="24" height="24" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="64" height="64" rx="12" fill="#1DC167"/>
+  <circle cx="32" cy="23" r="8" fill="white"/>
+  <circle cx="23" cy="32" r="8" fill="white"/>
+  <circle cx="41" cy="32" r="8" fill="white"/>
+  <circle cx="32" cy="41" r="8" fill="white"/>
+  <circle cx="32" cy="32" r="4" fill="#1DC167"/>
+</svg>
+        Clover
+      </button>
+    </div>
+    <p class="posnote">One-click connect. Keep your hardware, keep your menu.</p>
+  </div>
+
+  <div class="card" id="quote" data-reveal>
+    <form id="leadform" autocomplete="on">
+      <label for="f-name">See what it costs for your restaurant</label>
+      <input id="f-name" name="full_name" placeholder="Your name" required autocomplete="name">
+      <input id="f-biz" name="business_name" placeholder="Restaurant name" required autocomplete="organization">
+      <input id="f-phone" name="phone" type="tel" placeholder="Mobile number" required autocomplete="tel">
+      <input id="f-email" name="email" type="email" placeholder="Email" required autocomplete="email">
+      <div class="hp" aria-hidden="true">
+        <label for="f-web">Company website</label>
+        <input id="f-web" name="company_website" tabindex="-1" autocomplete="off">
+      </div>
+      <button class="submit" type="submit">Get my quote</button>
+      <p class="fine">Takes under a minute. First month free, no contracts.</p>
+    </form>
+    <div class="success" id="success">
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg>
+      <h3>Got it — now grab a time.</h3>
+      <p>Pick a slot that works and it goes straight on the calendar — you'll
+      get an invite by email.</p>
+      <a class="bookbtn" href="https://schedule.meridian.tips" target="_blank" rel="noopener">
+        Pick your call time
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+      </a>
+      <p class="finealt">Prefer us to call you? Just close this — we reach out within one business day.</p>
+    </div>
+  </div>
+
+  <footer>
+    <span>© Meridian</span>
+    <a href="https://meridian.tips/privacy">Privacy</a>
+    <a href="https://meridian.tips/terms">Terms</a>
+    <a href="https://meridian.tips">meridian.tips</a>
+  </footer>
+</div>
+
+<div class="schedmodal" id="schedmodal" role="dialog" aria-modal="true" aria-label="Book your call" hidden>
+  <div class="schedback" id="schedback"></div>
+  <div class="schedsheet">
+    <div class="schedbar">
+      <span>Book your call</span>
+      <button type="button" class="schedclose" id="schedclose" aria-label="Close">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="schedframe"><iframe id="schediframe" title="Meridian scheduling calendar" scrolling="yes"></iframe></div>
+  </div>
+</div>
+
+<div class="stickybar" id="stickybar">
+  <a href="#quote">Get my quote</a>
+</div>
+
+<script>
+(() => {
+  document.documentElement.classList.add('js')
+  const io = new IntersectionObserver((entries) => {
+    for (const e of entries) if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target) }
+  }, { threshold: 0.15, rootMargin: '4000px 0px -40px 0px' })
+  document.querySelectorAll('[data-reveal]').forEach((el) => io.observe(el))
+})()
+;(() => {
+  const v = document.getElementById('herofilm')
+  const pill = document.getElementById('soundpill')
+  if (!v) return
+  // Browsers block unmuted autoplay without a gesture; attempt it anyway so
+  // the few webviews that allow it get sound, otherwise fall back to muted.
+  v.muted = false
+  v.play().then(() => pill.classList.add('gone')).catch(() => {
+    v.muted = true
+    v.play().catch(() => {})
+  })
+  document.querySelectorAll('.postile').forEach((t) => t.addEventListener('click', () => {
+    document.querySelectorAll('.postile').forEach((o) => o.setAttribute('aria-pressed', String(o === t && o.getAttribute('aria-pressed') !== 'true')))
+    document.getElementById('f-name').focus({ preventScroll: false })
+  }))
+  pill.addEventListener('click', () => {
+    v.currentTime = 0
+    v.muted = false
+    v.play().catch(() => {})
+    pill.classList.add('gone')
+  })
+  // Browsers only allow audio after a user gesture — so make the FIRST tap
+  // anywhere on the page count, as long as the film is still on screen.
+  // Restart from the top if the viewer is early; otherwise unmute in place.
+  const firstTouch = (e) => {
+    document.removeEventListener('pointerdown', firstTouch, true)
+    if (!v.muted) return
+    if (e.target.closest && e.target.closest('#soundpill')) return
+    const r = v.getBoundingClientRect()
+    const onScreen = r.bottom > 0 && r.top < window.innerHeight
+    if (!onScreen) return
+    if (v.currentTime < 6) v.currentTime = 0
+    v.muted = false
+    v.play().then(() => pill.classList.add('gone')).catch(() => { v.muted = true })
+  }
+  document.addEventListener('pointerdown', firstTouch, true)
+})()
+;(() => {
+  const modal = document.getElementById('schedmodal')
+  const frame = document.getElementById('schediframe')
+  const open = (e) => {
+    e.preventDefault()
+    if (!frame.src) frame.src = 'https://schedule.meridian.tips'
+    modal.hidden = false
+    requestAnimationFrame(() => modal.classList.add('open'))
+    document.body.style.overflow = 'hidden'
+  }
+  const close = () => {
+    modal.classList.remove('open')
+    document.body.style.overflow = ''
+    setTimeout(() => { modal.hidden = true }, 300)
+  }
+  document.addEventListener('click', (e) => {
+    const a = e.target.closest && e.target.closest('.bookbtn')
+    if (a) open(e)
+  })
+  document.getElementById('schedclose').addEventListener('click', close)
+  document.getElementById('schedback').addEventListener('click', close)
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !modal.hidden) close() })
+  // Aidan's call 2026-08-10: once the visitor opts into sound, the audio
+  // keeps playing as they scroll the pitch — no pause on leaving view.
+})()
+;(() => {
+  const form = document.getElementById('leadform')
+  const success = document.getElementById('success')
+  const sticky = document.getElementById('stickybar')
+
+  // hide the sticky CTA while the form itself is on screen
+  const io = new IntersectionObserver(([e]) => {
+    sticky.style.display = e.isIntersecting ? 'none' : ''
+  })
+  io.observe(document.getElementById('quote'))
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault()
+    const btn = form.querySelector('.submit')
+    btn.disabled = true; btn.textContent = 'Sending…'
+    const data = Object.fromEntries(new FormData(form).entries())
+    // attribution: the ad platform's query string travels with the lead
+    data.source = 'ad-lander'
+    const pos = document.querySelector('.postile[aria-pressed="true"]')
+    const parts = []
+    if (pos) parts.push('pos: ' + pos.dataset.pos)
+    if (location.search) parts.push('utm: ' + location.search.slice(1, 400))
+    data.notes = parts.join(' | ')
+    try {
+      const res = await fetch('/api/quote-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      })
+      if (!res.ok) throw new Error(String(res.status))
+      form.style.display = 'none'
+      success.style.display = 'block'
+      sticky.style.display = 'none'
+    } catch {
+      btn.disabled = false
+      btn.textContent = 'Get my quote'
+      alert('Something went wrong — please try again, or just call the demo line above.')
+    }
+  })
+})()
+</script>
+</body>
+</html>
