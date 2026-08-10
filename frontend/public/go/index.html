@@ -151,27 +151,55 @@
   .bookbtn:active{transform:scale(.97)}
   .finealt{font-size:12px;margin-top:10px}
   .schedmodal{position:fixed;inset:0;z-index:50}
-  .schedback{position:absolute;inset:0;background:rgba(10,10,11,.5);backdrop-filter:blur(4px)}
+  .schedback{position:absolute;inset:0;background:rgba(22,24,29,.42);backdrop-filter:blur(4px)}
   .schedsheet{
-    position:absolute;inset:12px 0 0 0;display:flex;flex-direction:column;
-    background:#0A0A0B;border-radius:18px 18px 0 0;overflow:hidden;
-    transform:translateY(14px);opacity:0;
+    position:absolute;inset:auto 0 0 0;max-height:88dvh;display:flex;flex-direction:column;
+    background:var(--bg);border-radius:20px 20px 0 0;overflow:hidden;
+    box-shadow:0 -12px 40px -12px rgba(22,24,29,.35);
+    transform:translateY(16px);opacity:0;
     transition:transform .4s var(--ease-out),opacity .35s var(--ease-out);
   }
   .schedmodal.open .schedsheet{transform:none;opacity:1}
   @media (prefers-reduced-motion:reduce){.schedsheet{transition:none}}
-  @media (min-width:640px){.schedsheet{inset:4vh 0;max-width:480px;margin:0 auto;border-radius:18px}}
+  @media (min-width:640px){.schedsheet{inset:auto 0 6vh 0;max-width:440px;margin:0 auto;border-radius:20px}}
   .schedbar{
-    display:flex;align-items:center;justify-content:space-between;flex:none;
-    padding:13px 16px;color:#F5F5F7;font-size:14px;font-weight:700;
-    border-bottom:1px solid #1F1F23;
+    display:flex;align-items:flex-start;justify-content:space-between;flex:none;
+    padding:16px 18px 12px;border-bottom:1px solid var(--line);background:var(--card);
   }
+  .schedtitle{display:block;font-size:16px;font-weight:800;letter-spacing:-.01em}
+  .schedsub{display:block;font-size:12px;color:var(--muted);margin-top:2px}
   .schedclose{
-    display:grid;place-items:center;width:32px;height:32px;border-radius:9px;
-    border:1px solid #1F1F23;background:transparent;color:#F5F5F7;cursor:pointer;
+    display:grid;place-items:center;width:32px;height:32px;border-radius:9px;flex:none;
+    border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer;
   }
-  .schedframe{flex:1;min-height:0;-webkit-overflow-scrolling:touch;overflow:auto}
-  .schedframe iframe{display:block;width:1px;min-width:100%;height:100%;border:0;background:#0A0A0B}
+  .schedbody{overflow-y:auto;padding:14px 18px;min-height:200px}
+  .daystrip{display:flex;gap:8px;overflow-x:auto;padding-bottom:10px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .daystrip::-webkit-scrollbar{display:none}
+  .daychip{
+    flex:none;padding:9px 13px;border-radius:11px;border:1.5px solid var(--line);
+    background:var(--card);color:var(--ink);font-size:13px;font-weight:700;cursor:pointer;
+    display:flex;flex-direction:column;align-items:center;gap:1px;min-width:64px;
+  }
+  .daychip small{font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+  .daychip.sel{border-color:var(--brand);box-shadow:0 0 0 3px rgba(26,143,214,.14)}
+  .daychip.sel small{color:var(--brand)}
+  .slotgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
+  .slot{
+    padding:11px 4px;border-radius:10px;border:1.5px solid var(--line);background:var(--card);
+    color:var(--ink);font-size:13.5px;font-weight:700;cursor:pointer;text-align:center;
+  }
+  .slot.sel{border-color:var(--accent);background:rgba(23,197,176,.08);box-shadow:0 0 0 3px rgba(23,197,176,.14)}
+  .schedstate{font-size:13px;color:var(--muted);text-align:center;padding:18px 0}
+  .schedok{text-align:center;padding:26px 8px}
+  .schedok svg{color:var(--ok);margin-bottom:10px}
+  .schedok h3{font-size:18px;margin-bottom:6px}
+  .schedok p{font-size:13.5px;color:var(--muted)}
+  .schedfoot{
+    flex:none;display:flex;align-items:center;gap:12px;border-top:1px solid var(--line);
+    background:var(--card);padding:12px 18px calc(12px + env(safe-area-inset-bottom));
+  }
+  .schedfoot span{font-size:12.5px;font-weight:700;line-height:1.3}
+  .schedconfirm{width:auto;flex:none;margin-left:auto;padding:13px 18px;font-size:15px}
 
   .stickybar{
     position:fixed;left:0;right:0;bottom:0;padding:10px 16px calc(10px + env(safe-area-inset-bottom));
@@ -419,12 +447,28 @@
   <div class="schedback" id="schedback"></div>
   <div class="schedsheet">
     <div class="schedbar">
-      <span>Book your call</span>
+      <div>
+        <span class="schedtitle">Book your call</span>
+        <span class="schedsub" id="schedsub">Pick a day — times are shown in your timezone</span>
+      </div>
       <button type="button" class="schedclose" id="schedclose" aria-label="Close">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
       </button>
     </div>
-    <div class="schedframe"><iframe id="schediframe" title="Meridian scheduling calendar" scrolling="yes"></iframe></div>
+    <div class="schedbody">
+      <div class="daystrip" id="daystrip" aria-label="Available days"></div>
+      <div class="slotgrid" id="slotgrid" aria-label="Available times"></div>
+      <p class="schedstate" id="schedstate">Loading availability…</p>
+      <div class="schedok" id="schedok" hidden>
+        <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg>
+        <h3>You're booked.</h3>
+        <p id="schedokmsg">A calendar invite is on its way to your email.</p>
+      </div>
+    </div>
+    <div class="schedfoot" id="schedfoot" hidden>
+      <span id="schedpick"></span>
+      <button type="button" class="submit schedconfirm" id="schedconfirm">Confirm booking</button>
+    </div>
   </div>
 </div>
 
@@ -478,29 +522,132 @@
   document.addEventListener('pointerdown', firstTouch, true)
 })()
 ;(() => {
+  const API = 'https://schedule.meridian.tips/api'
+  const TZ = (Intl.DateTimeFormat().resolvedOptions().timeZone) || 'America/New_York'
   const modal = document.getElementById('schedmodal')
-  const frame = document.getElementById('schediframe')
+  const daystrip = document.getElementById('daystrip')
+  const slotgrid = document.getElementById('slotgrid')
+  const state = document.getElementById('schedstate')
+  const foot = document.getElementById('schedfoot')
+  const pickEl = document.getElementById('schedpick')
+  const confirmBtn = document.getElementById('schedconfirm')
+  const okEl = document.getElementById('schedok')
+  let days = [], selDay = null, selSlot = null, loaded = false
+
+  const say = (msg) => { state.hidden = !msg; state.textContent = msg || '' }
+
+  const monthOf = (offset) => {
+    const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() + offset)
+    return d.toISOString().slice(0, 7)
+  }
+
+  async function loadDays() {
+    say('Loading availability…')
+    try {
+      const results = await Promise.all([0, 1].map((o) =>
+        fetch(`${API}/availability?month=${monthOf(o)}&tz=${encodeURIComponent(TZ)}`).then((r) => r.json())))
+      days = results.flatMap((r) => r.days || []).filter((d) => d.hasAvailability).slice(0, 14)
+      if (!days.length) { say('No open times right now — we will call you instead.'); return }
+      daystrip.innerHTML = days.map((d, i) => {
+        const dt = new Date(d.date + 'T12:00:00')
+        const dow = dt.toLocaleDateString(undefined, { weekday: 'short' })
+        const md = dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+        return `<button type="button" class="daychip" data-date="${d.date}" data-i="${i}"><small>${dow}</small>${md}</button>`
+      }).join('')
+      say('')
+      pickDay(days[0].date)
+    } catch { say('Could not load times — close this and we will call you within one business day.') }
+  }
+
+  async function pickDay(date) {
+    selDay = date; selSlot = null; foot.hidden = true
+    daystrip.querySelectorAll('.daychip').forEach((c) => c.classList.toggle('sel', c.dataset.date === date))
+    slotgrid.innerHTML = ''
+    say('Loading times…')
+    try {
+      const r = await fetch(`${API}/availability?date=${date}&tz=${encodeURIComponent(TZ)}`).then((x) => x.json())
+      const slots = r.slots || []
+      if (!slots.length) { say('That day just filled up — pick another.'); return }
+      say('')
+      slotgrid.innerHTML = slots.map((sl) =>
+        `<button type="button" class="slot" data-start="${sl.start}" data-label="${sl.local.time} ${sl.local.label}">${sl.local.time}</button>`).join('')
+    } catch { say('Could not load times for that day.') }
+  }
+
+  function pickSlot(btn) {
+    selSlot = { start: btn.dataset.start, label: btn.dataset.label }
+    slotgrid.querySelectorAll('.slot').forEach((b) => b.classList.toggle('sel', b === btn))
+    const dt = new Date(selDay + 'T12:00:00')
+    pickEl.textContent = dt.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) + ' · ' + selSlot.label
+    foot.hidden = false
+  }
+
+  async function confirmBooking() {
+    if (!selSlot) return
+    confirmBtn.disabled = true; confirmBtn.textContent = 'Booking…'
+    const val = (id) => (document.getElementById(id) || {}).value || ''
+    const pos = document.querySelector('.postile[aria-pressed="true"]')
+    const detail = ['Booked from meridian.tips/go']
+    if (pos) detail.push('POS: ' + pos.dataset.pos)
+    if (location.search) detail.push('utm: ' + location.search.slice(1, 300))
+    try {
+      const res = await fetch(`${API}/book`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          start_ts: selSlot.start,
+          requester_name: val('f-name') || 'Ad lander visitor',
+          requester_email: val('f-email'),
+          company: val('f-biz') || null,
+          phone: val('f-phone') || null,
+          meeting_reason: 'customer',
+          reason_detail: detail.join(' | '),
+          requester_timezone: TZ,
+        }),
+      })
+      if (res.status === 409) {
+        confirmBtn.disabled = false; confirmBtn.textContent = 'Confirm booking'
+        say('That slot was just taken — pick another.')
+        pickDay(selDay)
+        return
+      }
+      if (!res.ok) throw new Error(String(res.status))
+      daystrip.hidden = true; slotgrid.hidden = true; foot.hidden = true; say('')
+      document.getElementById('schedokmsg').textContent =
+        'A calendar invite is on its way to ' + (val('f-email') || 'your email') + '.'
+      okEl.hidden = false
+      document.getElementById('schedsub').textContent = 'See you then.'
+    } catch {
+      confirmBtn.disabled = false; confirmBtn.textContent = 'Confirm booking'
+      say('Something went wrong — try another slot, or close this and we will call you.')
+    }
+  }
+
   const open = (e) => {
     e.preventDefault()
-    if (!frame.src) frame.src = 'https://schedule.meridian.tips'
     modal.hidden = false
     requestAnimationFrame(() => modal.classList.add('open'))
     document.body.style.overflow = 'hidden'
+    if (!loaded) { loaded = true; loadDays() }
   }
   const close = () => {
     modal.classList.remove('open')
     document.body.style.overflow = ''
     setTimeout(() => { modal.hidden = true }, 300)
   }
+
   document.addEventListener('click', (e) => {
-    const a = e.target.closest && e.target.closest('.bookbtn')
-    if (a) open(e)
+    const t = e.target
+    if (t.closest && t.closest('.bookbtn')) return open(e)
+    const chip = t.closest && t.closest('.daychip')
+    if (chip) return pickDay(chip.dataset.date)
+    const slotBtn = t.closest && t.closest('.slot')
+    if (slotBtn) return pickSlot(slotBtn)
   })
+  confirmBtn.addEventListener('click', confirmBooking)
   document.getElementById('schedclose').addEventListener('click', close)
   document.getElementById('schedback').addEventListener('click', close)
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !modal.hidden) close() })
-  // Aidan's call 2026-08-10: once the visitor opts into sound, the audio
-  // keeps playing as they scroll the pitch — no pause on leaving view.
 })()
 ;(() => {
   const form = document.getElementById('leadform')
