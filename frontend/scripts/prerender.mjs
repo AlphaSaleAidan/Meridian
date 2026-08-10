@@ -57,6 +57,11 @@ async function main() {
       ).catch(() => {});
       await page.waitForTimeout(400);
 
+      // main.tsx marks the live document .js-live, which releases the CSS guard that
+      // keeps reveal animations visible in static HTML. The snapshot must not carry
+      // that marker — baked in, it would disarm the guard for every real visitor's
+      // pre-hydration window (the whole point of the class).
+      await page.evaluate(() => document.documentElement.classList.remove("js-live"));
       const html = await page.content();
       const title = await page.title();
       const file = outPath(route);

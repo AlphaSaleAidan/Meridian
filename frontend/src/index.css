@@ -9,6 +9,33 @@
     scroll-behavior: smooth;
   }
 
+  /* The prerendered HTML is a DOM snapshot, so it carries the animation libraries'
+     initial hidden states as inline styles (framer's opacity:0/translateY, GSAP's
+     from-states). Until main.tsx marks the document .js-live, nothing can ever
+     animate those styles away — on a phone that means whole sections (the explainer
+     film, the Captains cut, the POS logos) render as blank space for the entire
+     hydration window. Hold them visible while only the static HTML is in charge. */
+  html:not(.js-live) [data-scroll-reveal],
+  html:not(.js-live) [style*='opacity: 0;'] {
+    opacity: 1 !important;
+    transform: none !important;
+    clip-path: none !important;
+  }
+
+  /* The explainer film's iframe box. The film is a 16:9 picture over a 72px
+     transport strip; below 720px of frame width the film restacks itself to its
+     4:5 mobile layout (film/index.html @media max-width:720px) and the box has to
+     grow with it, or the picture crops behind a scrollbar. 784px of viewport =
+     720px of frame here (px-6 container + p-2 card). */
+  .explainer-frame {
+    padding-bottom: calc(56.25% + 72px);
+  }
+  @media (max-width: 784px) {
+    .explainer-frame {
+      padding-bottom: calc(125% + 72px);
+    }
+  }
+
   body {
     @apply bg-[#0A0A0B] text-[#A1A1A8];
     font-family: 'Geist Sans', 'Inter', system-ui, -apple-system, sans-serif;

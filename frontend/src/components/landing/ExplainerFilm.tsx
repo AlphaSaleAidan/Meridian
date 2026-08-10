@@ -14,9 +14,6 @@ import { useAutoplayFrameFilm } from '@/hooks/useAutoplayFrameFilm'
  */
 const FILM_SRC = '/film/index.html?theme=dark&embed=1'
 
-/* The embedded film is a 16:9 picture with its transport strip beneath it. */
-const FRAME_BOX = 'calc(56.25% + 68px)'
-
 /** Canada's landing page runs a different accent, so it is passed in rather than fixed. */
 export default function ExplainerFilm({ accent = '#0066FF' }: { accent?: string }) {
   const { holderRef, frameRef, mounted, muted, unmute, onFrameLoad, startManually, reduced } =
@@ -41,7 +38,10 @@ export default function ExplainerFilm({ accent = '#0066FF' }: { accent?: string 
 
         <ScrollReveal className="relative max-w-4xl mx-auto" delay={0.1}>
           <div className="relative rounded-xl border border-[#1F1F23] bg-[#111113] shadow-2xl shadow-black/50 p-2">
-            <div ref={holderRef} className="relative w-full" style={{ paddingBottom: FRAME_BOX }}>
+            {/* Sized in index.css (.explainer-frame): the film is 16:9 + a 72px
+                transport on desktop, but below 720px of frame width it restacks to
+                its 4:5 mobile layout — the box has to follow or the film crops. */}
+            <div ref={holderRef} className="relative w-full explainer-frame">
               {mounted && (
                 <iframe
                   ref={frameRef}
@@ -61,7 +61,7 @@ export default function ExplainerFilm({ accent = '#0066FF' }: { accent?: string 
                   alt="Opening frame: four drawings labelled the POS system, the phone, the front door and the leaks, beside the words Four things happen at once."
                   width={1600}
                   height={900}
-                  className="absolute inset-x-0 top-0 w-full aspect-video rounded-lg block object-cover"
+                  className="absolute inset-0 m-auto w-full aspect-video rounded-lg block object-cover"
                 />
               )}
 
@@ -71,7 +71,7 @@ export default function ExplainerFilm({ accent = '#0066FF' }: { accent?: string 
                   type="button"
                   onClick={startManually}
                   aria-label="Play the explainer film, 68 seconds"
-                  className="absolute inset-x-0 top-0 aspect-video flex items-center justify-center group"
+                  className="absolute inset-0 flex items-center justify-center group"
                 >
                   <span className="flex items-center justify-center w-[68px] h-[68px] md:w-20 md:h-20 rounded-full border border-white/15 bg-[#0A0A0B]/70 backdrop-blur-sm transition-transform duration-200 ease-out group-hover:scale-[1.06] motion-reduce:transform-none">
                     {/* nudged right ~2px: a triangle's optical centre sits left of its box */}
