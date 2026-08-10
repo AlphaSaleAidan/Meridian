@@ -17,6 +17,10 @@
   html{-webkit-text-size-adjust:100%}
   body{
     background:var(--bg); color:var(--ink);
+    background-image:
+      radial-gradient(560px 300px at 85% -60px, rgba(26,143,214,.10), transparent 70%),
+      radial-gradient(420px 260px at -10% 40px, rgba(23,197,176,.08), transparent 70%);
+    background-repeat:no-repeat;
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
     line-height:1.5;
   }
@@ -26,9 +30,20 @@
   @media (prefers-reduced-motion:reduce){.mark g{animation:none !important}}
   .word{font-weight:700;letter-spacing:.14em;font-size:14px}
   h1{font-size:clamp(28px,8vw,36px);line-height:1.15;letter-spacing:-.02em;margin:18px 0 12px;font-weight:800}
-  h1 em{font-style:normal;color:var(--brand)}
+  h1 em{
+    font-style:normal;
+    background:linear-gradient(100deg,var(--brand),var(--accent));
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+  }
   .sub{color:var(--muted);font-size:17px;margin-bottom:22px}
   .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;box-shadow:0 1px 3px rgba(22,24,29,.05)}
+  .card.dark{
+    background:#0A0A0B;border-color:#1F1F23;color:#F5F5F7;
+    box-shadow:0 14px 34px -14px rgba(10,10,11,.45);
+  }
+  .card.dark .demo p{color:#A1A1A8}
+  .card.dark .demo p strong{color:#F5F5F7}
+  .card.dark .callnote{color:#A1A1A8}
 
   .demo{display:flex;align-items:center;gap:14px;margin-bottom:14px}
   .demo .dot{width:8px;height:8px;border-radius:50%;background:var(--ok);flex:none;position:relative}
@@ -40,22 +55,27 @@
   .demo p strong{color:var(--ink)}
   .callbtn{
     display:flex;align-items:center;justify-content:center;gap:10px;width:100%;
-    padding:15px;border-radius:12px;border:1px solid var(--line);background:var(--card);
-    color:var(--ink);font-size:16px;font-weight:600;text-decoration:none;
+    padding:15px;border-radius:12px;border:0;
+    background:linear-gradient(100deg,var(--accent),#12A796);
+    color:#04211D;font-size:16px;font-weight:700;text-decoration:none;
+    box-shadow:0 8px 22px -8px rgba(23,197,176,.55);
   }
-  .callbtn svg{color:var(--accent)}
+  .callbtn svg{color:#04211D}
   .callnote{text-align:center;font-size:12.5px;color:var(--muted);margin-top:8px}
 
   .benefits{margin:28px 0;display:grid;gap:14px}
-  .kicker{font-size:11.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--brand)}
-  .payflow{margin-top:4px;padding:16px;border-radius:12px;background:var(--card);border:1px solid var(--line)}
+  .kicker{display:flex;align-items:center;gap:9px;font-size:11.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--brand)}
+  .kicker::before{content:"";width:22px;height:2px;border-radius:2px;background:linear-gradient(90deg,var(--brand),var(--accent))}
+  .payflow{margin-top:4px;padding:16px;border-radius:14px;background:linear-gradient(135deg,rgba(26,143,214,.05),rgba(23,197,176,.07));border:1px solid rgba(23,197,176,.25)}
   .payhead{font-size:13px;font-weight:700;margin-bottom:10px}
   .payflow ol{list-style:none;display:grid;gap:10px}
   .payflow li{display:flex;gap:10px;font-size:13.5px;color:var(--muted);line-height:1.45}
-  .payflow li span{flex:none;width:20px;height:20px;border-radius:50%;background:rgba(23,197,176,.12);color:var(--accent);font-size:11px;font-weight:700;display:grid;place-items:center;margin-top:1px}
+  .payflow li span{flex:none;width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#12A796);color:#fff;font-size:11px;font-weight:800;display:grid;place-items:center;margin-top:1px;box-shadow:0 4px 10px -4px rgba(23,197,176,.6)}
   .paytrust{margin-top:10px;padding-top:10px;border-top:1px solid var(--line);font-size:12.5px;font-weight:600;color:var(--ink)}
   .benefit{display:flex;gap:14px;align-items:flex-start}
-  .benefit .ic{width:38px;height:38px;flex:none;border-radius:10px;background:rgba(26,143,214,.08);display:grid;place-items:center;color:var(--brand)}
+  .benefit .ic{width:40px;height:40px;flex:none;border-radius:12px;display:grid;place-items:center;color:#fff;
+    background:linear-gradient(135deg,var(--brand),#1478B8);box-shadow:0 6px 14px -6px rgba(26,143,214,.5)}
+  .benefit:nth-child(odd) .ic{background:linear-gradient(135deg,var(--accent),#12A796);box-shadow:0 6px 14px -6px rgba(23,197,176,.5)}
   .benefit h3{font-size:15.5px;margin-bottom:2px}
   .benefit p{font-size:14px;color:var(--muted)}
 
@@ -69,7 +89,9 @@
   input:focus{outline:2px solid var(--brand);outline-offset:0;border-color:transparent}
   .hp{position:absolute;left:-9999px;top:-9999px;height:0;overflow:hidden}
   .submit{
-    padding:16px;border:0;border-radius:12px;background:var(--brand);color:#fff;
+    padding:16px;border:0;border-radius:12px;color:#fff;
+    background:linear-gradient(100deg,var(--brand),#1478B8);
+    box-shadow:0 10px 24px -10px rgba(26,143,214,.6);
     font-size:17px;font-weight:700;cursor:pointer;width:100%;
   }
   .submit:disabled{opacity:.6}
@@ -84,7 +106,9 @@
     background:rgba(250,251,252,.92);backdrop-filter:blur(8px);border-top:1px solid var(--line);
   }
   .stickybar a{
-    display:block;text-align:center;padding:14px;border-radius:12px;background:var(--brand);
+    display:block;text-align:center;padding:14px;border-radius:12px;
+    background:linear-gradient(100deg,var(--brand),#1478B8);
+    box-shadow:0 8px 20px -8px rgba(26,143,214,.55);
     color:#fff;font-weight:700;font-size:16px;text-decoration:none;
   }
   @media (min-width:640px){ .stickybar{display:none} .wrap{padding-bottom:40px} }
@@ -134,7 +158,7 @@
   then finds your leaks, forecasts your revenue, and watches every location.
   One AI. One platform.</p>
 
-  <div class="card">
+  <div class="card dark">
     <div class="demo">
       <span class="dot" aria-hidden="true"></span>
       <p><strong>Don't take our word for it.</strong> Call the demo line and order a pizza — a real AI answers.</p>
