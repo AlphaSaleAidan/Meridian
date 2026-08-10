@@ -217,6 +217,11 @@
     <span class="word">MERIDIAN</span>
   </header>
 
+  <h1 data-reveal>Your phone. Your register. Your door. <em>One AI.</em></h1>
+  <p class="sub" data-reveal style="--i:1">Money moves through your restaurant three ways. Meridian watches
+  all three — and turns what it sees into orders taken, leaks plugged, and
+  hours staffed right.</p>
+
   <div class="film">
     <video id="herofilm" autoplay muted loop playsinline controls preload="metadata" poster="/media/captains-poster.jpg" src="/media/captains-30s.mp4" aria-label="The Captains — Meridian's commercial"></video>
     <button type="button" class="soundpill" id="soundpill" aria-label="Play with sound">
@@ -225,10 +230,6 @@
     </button>
   </div>
 
-  <h1 data-reveal>Your phone. Your register. Your door. <em>One AI.</em></h1>
-  <p class="sub" data-reveal style="--i:1">Money moves through your restaurant three ways. Meridian watches
-  all three — and turns what it sees into orders taken, leaks plugged, and
-  hours staffed right.</p>
 
   <div class="trio">
     <div class="benefit" data-reveal style="--i:1">
@@ -358,10 +359,8 @@
     v.play().catch(() => {})
     pill.classList.add('gone')
   })
-  // sound must not follow the visitor down the page
-  new IntersectionObserver(([e]) => {
-    if (!e.isIntersecting && !v.muted && !v.paused) v.pause()
-  }, { threshold: 0.25 }).observe(v)
+  // Aidan's call 2026-08-10: once the visitor opts into sound, the audio
+  // keeps playing as they scroll the pitch — no pause on leaving view.
 })()
 ;(() => {
   const form = document.getElementById('leadform')
