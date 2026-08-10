@@ -128,18 +128,25 @@ class GenericOAuthManager:
         }, domain_prefix)
 
     async def _post_token(self, data: dict[str, str], domain_prefix: str) -> dict[str, Any]:
+        auth = None
+        if self.cfg.token_basic_auth:
+            # Stripe Apps style: the developer secret key IS the auth, as the
+            # basic-auth username; client credentials never go in the body.
+            auth = (data.pop("client_secret", ""), "")
+            data.pop("client_id", None)
         async with httpx.AsyncClient(timeout=30.0) as http:
             resp = await http.post(
                 self._token_url(domain_prefix),
                 data=data,  # OAuth2 token endpoints take form-encoded bodies
                 headers={"Accept": "application/json"},
+                auth=auth,
             )
         if resp.status_code != 200:
             logger.error("token exchange failed for %s: %s %s",
                          self.cfg.key, resp.status_code, resp.text[:300])
             raise OAuthError(f"Token exchange failed ({resp.status_code})")
         body = resp.json()
-        expires_in = body.get("expires_in")
+        expires_in = body.get("expires_in") or self.cfg.default_token_ttl
         expires_at = (
             time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() + int(expires_in)))
             if expires_in else ""

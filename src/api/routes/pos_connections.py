@@ -689,7 +689,7 @@ async def run_stripe_backfill(org_id: str, connection_id: str, connection: dict)
     db = get_db()
 
     try:
-        api_key, account_id = stripe_pos_credentials(connection)
+        api_key, account_id = await stripe_pos_credentials(connection)
         async with StripePOSClient(api_key=api_key, account_id=account_id) as client:
             engine = StripePOSSyncEngine(
                 client=client,

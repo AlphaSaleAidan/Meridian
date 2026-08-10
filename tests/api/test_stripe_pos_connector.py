@@ -3,11 +3,11 @@
 Run: python -m pytest tests/api/test_stripe_pos_connector.py -q
 
 Pins the contract for the Stripe 1-click connector (src/stripe_pos/ + the
-`stripe` registry entry): the OAuth config matches Stripe's Connect OAuth
-surface, charges map to canonical `transactions` columns with deterministic
-ids, the sync runner dispatches provider='stripe' to the Stripe engine, and
-credential resolution prefers platform-key + Stripe-Account header with a
-stored-token fallback. No network calls.
+`stripe` registry entry): the OAuth config matches the Stripe Apps OAuth
+surface (stripe-app/), charges map to canonical `transactions` columns with
+deterministic ids, the sync runner dispatches provider='stripe' to the Stripe
+engine, and credential resolution refreshes app tokens (rolling refresh) with
+legacy platform-key / stored-token fallbacks. No network calls.
 """
 from __future__ import annotations
 
@@ -60,12 +60,18 @@ def _charge(**over):
 
 # ─── Registry entry ──────────────────────────────────────────────────────────
 
-def test_stripe_registry_entry_matches_connect_oauth():
+def test_stripe_registry_entry_matches_apps_oauth():
     cfg = get_provider("stripe")
     assert cfg is not None
-    assert cfg.authorize_url == "https://connect.stripe.com/oauth/authorize"
-    assert cfg.token_url == "https://connect.stripe.com/oauth/token"
-    assert cfg.scopes == ["read_only"]
+    # Stripe App OAuth surface — NOT classic Connect: support confirmed
+    # 2026-08-08 that the `read_only` Connect scope is deprecated; permissions
+    # now live in stripe-app/stripe-app.json, so no scope goes on the URL.
+    assert cfg.authorize_url == "https://marketplace.stripe.com/oauth/v2/authorize"
+    assert cfg.token_url == "https://api.stripe.com/v1/oauth/token"
+    assert cfg.scopes == []
+    assert cfg.token_basic_auth is True
+    # App access tokens are fixed at 1h and the response omits expires_in.
+    assert cfg.default_token_ttl == 3600
     # Stripe puts stripe_user_id (acct_…) straight in the token response.
     assert cfg.merchant_id_strategy == "token:stripe_user_id"
     # MUST be the POS-namespaced envs — STRIPE_SECRET_KEY belongs to the
@@ -74,21 +80,21 @@ def test_stripe_registry_entry_matches_connect_oauth():
     assert cfg.client_secret_env == "STRIPE_POS_CLIENT_SECRET"
     assert cfg.uses_pkce is False
     # Stays unverified until the round-trip is validated against the real
-    # Connect app (docs/POS_1CLICK_ONBOARDING.md) — enforced globally by
+    # Stripe App (docs/POS_1CLICK_ONBOARDING.md) — enforced globally by
     # test_pos_connect.py::test_only_validated_providers_are_verified.
     assert cfg.verified is False
 
 
 def test_stripe_authorize_url_and_state_roundtrip(monkeypatch):
     cfg = get_provider("stripe")
-    monkeypatch.setenv("STRIPE_POS_CLIENT_ID", "ca_test123")
+    monkeypatch.setenv("STRIPE_POS_CLIENT_ID", "app_client_test123")
     monkeypatch.setenv("STRIPE_POS_CLIENT_SECRET", "sk_test_x")
     state = sign_state("stripe", ORG, "/app/settings")
     url = GenericOAuthManager(cfg, "https://api.example.com/api/pos/stripe/callback").authorize_url(state)
-    assert url.startswith("https://connect.stripe.com/oauth/authorize?")
-    assert "client_id=ca_test123" in url
-    assert "scope=read_only" in url
-    assert "stripe_landing=login" in url
+    assert url.startswith("https://marketplace.stripe.com/oauth/v2/authorize?")
+    assert "client_id=app_client_test123" in url
+    # App permissions are manifest-declared — a scope param would be rejected.
+    assert "scope=" not in url
     verified = verify_state(state)
     assert verified == ("stripe", ORG, "/app/settings")
     # provider-scoped: a square-signed state must not pass for stripe
@@ -193,19 +199,59 @@ def test_backfill_folds_fatal_errors_instead_of_raising():
 
 # ─── Credential resolution (runner) ──────────────────────────────────────────
 
-def test_credentials_prefer_platform_key_with_account_header(monkeypatch):
+def test_credentials_app_oauth_uses_fresh_token_bare(monkeypatch):
+    """App-OAuth rows (refresh_token_enc present) return the stored access
+    token bare while it's comfortably inside its 1h lifetime — no platform
+    key, no Stripe-Account header."""
+    from datetime import timedelta
+    monkeypatch.setenv("STRIPE_POS_CLIENT_SECRET", "sk_live_platform")
+    future = (datetime.now(timezone.utc) + timedelta(minutes=50)).strftime(
+        "%Y-%m-%dT%H:%M:%SZ")
+    conn = {"external_merchant_id": "acct_1ABC",
+            "access_token_enc": encrypt_token("app_access_token"),
+            "refresh_token_enc": encrypt_token("app_refresh_token"),
+            "token_expires_at": future}
+    api_key, account_id = _run(stripe_pos_credentials(conn))
+    assert (api_key, account_id) == ("app_access_token", "")
+
+
+def test_credentials_app_oauth_refreshes_and_rolls(monkeypatch):
+    """Near-expiry app tokens are refreshed; the ROLLED refresh token must be
+    written back into the connection dict (Stripe kills the old one)."""
+    from src.stripe_pos import tokens as st_tokens
+    from src.security.encryption import decrypt_token as dec
+    monkeypatch.setenv("STRIPE_POS_CLIENT_SECRET", "sk_live_platform")
+
+    async def fake_exchange(refresh_token, secret_key):
+        assert refresh_token == "old_refresh"
+        assert secret_key == "sk_live_platform"
+        return {"access_token": "new_access", "refresh_token": "new_refresh"}
+
+    monkeypatch.setattr(st_tokens, "_exchange_refresh_token", fake_exchange)
+    conn = {"id": "", "external_merchant_id": "acct_1ABC",
+            "access_token_enc": encrypt_token("stale_access"),
+            "refresh_token_enc": encrypt_token("old_refresh"),
+            "token_expires_at": "2026-01-01T00:00:00Z"}
+    api_key, account_id = _run(stripe_pos_credentials(conn))
+    assert (api_key, account_id) == ("new_access", "")
+    assert dec(conn["refresh_token_enc"]) == "new_refresh"
+    assert conn["token_expires_at"] > "2026-01-01"
+
+
+def test_credentials_legacy_prefer_platform_key_with_account_header(monkeypatch):
+    """Pre-app Connect rows (no refresh token) keep the old contract."""
     monkeypatch.setenv("STRIPE_POS_CLIENT_SECRET", "sk_live_platform")
     conn = {"external_merchant_id": "acct_1ABC",
             "access_token_enc": encrypt_token("sk_stored_fallback")}
-    api_key, account_id = stripe_pos_credentials(conn)
+    api_key, account_id = _run(stripe_pos_credentials(conn))
     assert (api_key, account_id) == ("sk_live_platform", "acct_1ABC")
 
 
-def test_credentials_fall_back_to_stored_token(monkeypatch):
+def test_credentials_legacy_fall_back_to_stored_token(monkeypatch):
     monkeypatch.delenv("STRIPE_POS_CLIENT_SECRET", raising=False)
     conn = {"external_merchant_id": "acct_1ABC",
             "access_token_enc": encrypt_token("sk_stored_fallback")}
-    api_key, account_id = stripe_pos_credentials(conn)
+    api_key, account_id = _run(stripe_pos_credentials(conn))
     assert api_key == "sk_stored_fallback"
     assert account_id == "", "stored per-account token is used bare (no header)"
 
