@@ -31,14 +31,17 @@ def _unix_to_iso(ts: int | None) -> str | None:
     return datetime.fromtimestamp(int(ts), tz=timezone.utc).isoformat()
 
 
-# Stripe payment_method_details.type → Meridian payment_method enum
-# (cash/card/debit/gift_card/other/unknown — see the Clover mapper).
+# Stripe payment_method_details.type → Meridian payment_method enum.
+# The transactions.payment_method column is a Postgres ENUM whose LIVE range
+# is {cash,credit_card,debit_card,mobile_pay,gift_card,other} (queried in
+# prod 2026-08-11 after the first real backfill 400'd on "card" — the
+# previous map here was written against an enum that doesn't exist).
 _PAYMENT_METHOD_MAP = {
-    "card": "card",
-    "card_present": "card",
-    "link": "card",
-    "interac_present": "debit",
-    "cashapp": "other",
+    "card": "credit_card",
+    "card_present": "credit_card",
+    "link": "credit_card",
+    "interac_present": "debit_card",
+    "cashapp": "mobile_pay",
     "us_bank_account": "other",
     "acss_debit": "other",
     "sepa_debit": "other",
@@ -71,7 +74,8 @@ class StripePOSMapper:
         amount_refunded = int(charge.get("amount_refunded", 0) or 0)
 
         pm_type = (charge.get("payment_method_details") or {}).get("type", "")
-        payment_method = _PAYMENT_METHOD_MAP.get(pm_type, "card" if pm_type else "unknown")
+        # Unmapped/absent types collapse to "other" — every value MUST be in the enum.
+        payment_method = _PAYMENT_METHOD_MAP.get(pm_type, "other")
 
         billing = charge.get("billing_details") or {}
 
