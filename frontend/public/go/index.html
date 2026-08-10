@@ -72,6 +72,15 @@
   .payflow li{display:flex;gap:10px;font-size:13.5px;color:var(--muted);line-height:1.45}
   .payflow li span{flex:none;width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#12A796);color:#fff;font-size:11px;font-weight:800;display:grid;place-items:center;margin-top:1px;box-shadow:0 4px 10px -4px rgba(23,197,176,.6)}
   .paytrust{margin-top:10px;padding-top:10px;border-top:1px solid var(--line);font-size:12.5px;font-weight:600;color:var(--ink)}
+  .camera{margin:4px 0 28px;padding:20px;border-radius:14px;background:#0A0A0B;border:1px solid #1F1F23;color:#F5F5F7;box-shadow:0 14px 34px -14px rgba(10,10,11,.45)}
+  .camera .kicker{color:var(--accent)}
+  .camera h2{font-size:21px;letter-spacing:-.01em;margin:8px 0}
+  .camsub{font-size:14.5px;color:#A1A1A8;margin-bottom:12px}
+  .camlist{list-style:none;display:grid;gap:9px}
+  .camlist li{font-size:14px;color:#A1A1A8;padding-left:20px;position:relative;line-height:1.45}
+  .camlist li::before{content:"";position:absolute;left:0;top:7px;width:8px;height:8px;border-radius:50%;background:linear-gradient(135deg,var(--brand),var(--accent))}
+  .camlist strong{color:#F5F5F7}
+  .camtrust{margin-top:12px;padding-top:12px;border-top:1px solid #1F1F23;font-size:12.5px;font-weight:600;color:var(--accent)}
   .benefit{display:flex;gap:14px;align-items:flex-start}
   .benefit .ic{width:40px;height:40px;flex:none;border-radius:12px;display:grid;place-items:center;color:#fff;
     background:linear-gradient(135deg,var(--brand),#1478B8);box-shadow:0 6px 14px -6px rgba(26,143,214,.5)}
@@ -200,16 +209,34 @@
     <p class="kicker" style="margin-top:14px">Then it runs the numbers</p>
     <div class="benefit">
       <span class="ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg></span>
-      <div><h3>Finds the leaks</h3><p>Anomaly detection flags voids, comps, and theft patterns before month-end.</p></div>
+      <div><h3>Finds the leaks</h3><p>Anomaly detection watches every void, comp, discount, and cancelled ticket — and flags the patterns that quietly drain revenue, the day they start, not at month-end.</p></div>
     </div>
     <div class="benefit">
       <span class="ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="m7 13 4-4 3 3 5-6"/></svg></span>
-      <div><h3>Sees what's coming</h3><p>AI revenue forecasting — not just yesterday's report.</p></div>
+      <div><h3>Sees what's coming</h3><p>AI forecasting projects revenue by day and daypart, so prep, ordering, and staffing follow what's about to happen — not last week's spreadsheet.</p></div>
     </div>
     <div class="benefit">
       <span class="ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></span>
-      <div><h3>One view of everything</h3><p>Every location, every channel, one dashboard.</p></div>
+      <div><h3>One view of everything</h3><p>Every location, every channel, one dashboard — with locations benchmarked against each other so you see who's leading and who needs help.</p></div>
     </div>
+    <div class="benefit">
+      <span class="ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="2" x2="12" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span>
+      <div><h3>Knows your margins</h3><p>Item-level profit analysis and menu engineering — which dishes earn, which just fill the menu, and where a price is leaving money on the table.</p></div>
+    </div>
+  </div>
+
+  <div class="camera">
+    <p class="kicker">Sales data × camera intelligence</p>
+    <h2>Your door and your register, finally talking.</h2>
+    <p class="camsub">POS reports only see the people who bought. Meridian also counts the
+    ones who walked in, waited, and left — and ties both together into data points
+    a register alone can never produce:</p>
+    <ul class="camlist">
+      <li><strong>True conversion</strong> — how many people walked in vs. how many actually ordered, by hour.</li>
+      <li><strong>The cost of the wait</strong> — walk-outs during long waits, counted and priced as the revenue they took with them.</li>
+      <li><strong>Staff to reality</strong> — schedules built on real door traffic, not gut feel.</li>
+    </ul>
+    <p class="camtrust">Anonymous by design — it counts people, it never identifies them.</p>
   </div>
 
   <div class="card" id="quote">
