@@ -396,16 +396,50 @@ def reconcile_careers_applicants():
     return run_async(_run())
 
 
+@shared_task(name="src.workers.tasks.mine_phone_vocab")
+def mine_phone_vocab():
+    """Nightly: distil each merchant's recent call transcripts into candidate
+    vocabulary terms.
+
+    Only writes candidates. Terms reach a live call solely once a human marks
+    them 'approved', so this task can never change how a phone agent hears a
+    caller on its own.
+    """
+
+    async def _run():
+        from .. import config  # noqa: F401 — loads .env before init_db reads it
+        from ..db import init_db, close_db
+        db = await init_db()
+        if not db:
+            return {"status": "error", "error": "DB unavailable"}
+        try:
+            from ..analytics.phone_vocab import mine_merchant_vocab
+            rows = await db.select("phone_call_transcripts", columns="merchant_id")
+            merchants = sorted({r.get("merchant_id") for r in (rows or []) if r.get("merchant_id")})
+            results = [await mine_merchant_vocab(m) for m in merchants]
+            return {"status": "complete", "merchants": len(merchants), "results": results}
+        finally:
+            await close_db()
+
+    result = run_async(_run())
+    logger.info(f"Phone vocab mining complete: {result}")
+    return result
+
+
 @shared_task(name="src.workers.tasks.send_daily_burn_rate")
 def send_daily_burn_rate():
-    """Send daily burn rate SMS to admin."""
+    """Send the daily burn rate report to admin."""
 
     async def _send():
+        # Nothing else in this task's chain imports config, and config is what
+        # loads .env — without this, init_db() sees no credentials on a worker
+        # that hasn't yet run a task which pulls config in transitively.
+        from .. import config  # noqa: F401
         from ..db import init_db, close_db
         await init_db()
         try:
-            from ..analytics.burn_rate import send_burn_rate_sms
-            return await send_burn_rate_sms()
+            from ..analytics.burn_rate import send_burn_rate_report
+            return await send_burn_rate_report()
         finally:
             await close_db()
 

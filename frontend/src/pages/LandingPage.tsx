@@ -13,6 +13,8 @@ import MagneticButton from '@/components/landing/MagneticButton'
 import CountUp from '@/components/landing/CountUp'
 import TiltCard from '@/components/landing/TiltCard'
 import ScheduleQuote from '@/components/landing/ScheduleQuote'
+import ExplainerFilm from '@/components/landing/ExplainerFilm'
+import { useAutoplayFilm } from '@/hooks/useAutoplayFilm'
 
 const MeshGradient = lazy(() => import('@/components/landing/MeshGradient'))
 
@@ -63,11 +65,10 @@ export default function LandingPage() {
   // GSAP ScrollTrigger — feature cards scale-up reveal
   const { triggerRef: featuresRef, timeline: featuresTl } = useGsapTimeline({ start: 'top 80%' })
 
+  // "The Captains" — scroll-triggered playback, shared with the Canada page.
+  const { ref: filmRef, muted: filmMuted, unmute: unmuteFilm } = useAutoplayFilm()
+
   // Pre-compute random values to avoid Math.random() in render
-  const barHeights = useMemo(
-    () => Array.from({ length: 24 }, (_, i) => 20 + Math.sin(i * 0.5) * 30 + Math.random() * 25),
-    [],
-  )
   const dotStyles = useMemo(
     () =>
       Array.from({ length: 36 }, (_, i) => ({
@@ -268,54 +269,47 @@ export default function LandingPage() {
             </MagneticButton>
           </motion.div>
 
-          {/* Dashboard preview */}
+          {/* Four-step setup, in the hero where the dashboard mock used to sit.
+              Uses the hero's own entrance motion rather than ScrollReveal — this
+              is above the fold, so a scroll-triggered reveal would never fire. */}
           <motion.div
             initial={{ opacity: 0, y: 40 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 1, ease: EASE, delay: 0.55 }}
-            className="mt-16 relative max-w-3xl mx-auto"
+            className="mt-20 relative max-w-4xl mx-auto"
           >
-            <div className="animate-float-slow">
-              <div className="rounded-xl border border-[#1F1F23] bg-[#111113] shadow-2xl shadow-black/50 overflow-hidden">
-                <div className="flex items-center gap-1.5 px-4 py-2.5 border-b border-[#1F1F23]">
-                  <div className="w-2.5 h-2.5 rounded-full bg-[#1F1F23]" />
-                  <div className="w-2.5 h-2.5 rounded-full bg-[#1F1F23]" />
-                  <div className="w-2.5 h-2.5 rounded-full bg-[#1F1F23]" />
-                  <div className="flex-1 mx-4 h-5 rounded bg-[#0A0A0B] border border-[#1F1F23]" />
-                </div>
-                <div className="p-6 space-y-4">
-                  <div className="grid grid-cols-4 gap-3">
-                    {[
-                      { label: 'Revenue Today', value: '$1,847', change: '+12.4%' },
-                      { label: 'Transactions', value: '124', change: '+8.2%' },
-                      { label: 'Avg Order', value: '$14.89', change: '+3.1%' },
-                      { label: 'Money Left', value: '$2,340', change: '', accent: true },
-                    ].map(s => (
-                      <div key={s.label} className="rounded-lg bg-[#0A0A0B] border border-[#1F1F23] p-3">
-                        <p className="text-[10px] text-[#A1A1A8]">{s.label}</p>
-                        <p className="text-sm font-semibold font-mono mt-0.5" style={{ color: s.accent ? ACCENT : '#F5F5F7' }}>
-                          {s.value}
-                        </p>
-                        {s.change && <p className="text-[9px] mt-0.5" style={{ color: ACCENT_CA }}>{s.change}</p>}
-                      </div>
-                    ))}
+            <div className="absolute top-0 right-0 aurora-glow" style={{ width: 500, height: 500, opacity: 0.06, background: `radial-gradient(circle, ${ACCENT_CA} 0%, transparent 70%)` }} />
+            <div className="relative">
+              <h2 className="text-2xl md:text-3xl font-bold text-[#F5F5F7] tracking-tight">
+                Connect Your POS in{' '}
+                <em className="font-serif italic font-normal" style={{ color: ACCENT_CA }}>Minutes</em>
+              </h2>
+              <p className="mt-3 text-[#A1A1A8] text-[15px]">Four steps. Under sixty seconds.</p>
+
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mt-10 text-left">
+                {[
+                  { step: '01', title: 'Connect', desc: 'One-click Square, Clover, or Toast OAuth. No API keys, no config.' },
+                  { step: '02', title: 'Analyze', desc: '39 AI agents process your entire transaction history instantly.' },
+                  { step: '03', title: 'Discover', desc: 'See specific dollar-denominated revenue opportunities.' },
+                  { step: '04', title: 'Capture', desc: 'Act on insights and start recovering hidden revenue today.' },
+                ].map((s, i) => (
+                  <div key={s.step} className="relative">
+                    {i < 3 && (
+                      <div className="hidden md:block absolute top-4 left-full w-6 h-px bg-[#1F1F23] z-0" />
+                    )}
+                    <span className="font-mono text-[11px] tracking-wider" style={{ color: ACCENT }}>{s.step}</span>
+                    <h3 className="text-[#F5F5F7] font-semibold text-lg mt-2 mb-2">{s.title}</h3>
+                    <p className="text-[#A1A1A8] text-[13px] leading-relaxed">{s.desc}</p>
                   </div>
-                  <div className="rounded-lg bg-[#0A0A0B] border border-[#1F1F23] p-4 h-28 flex items-end gap-1">
-                    {barHeights.map((h, i) => (
-                      <div
-                        key={i}
-                        className="flex-1 rounded-sm"
-                        style={{ height: `${h}%`, background: i >= 20 ? `${ACCENT}50` : `${ACCENT}25` }}
-                      />
-                    ))}
-                  </div>
-                </div>
+                ))}
               </div>
             </div>
-            <div className="absolute -bottom-20 left-1/2 -translate-x-1/2 w-[80%] h-40 opacity-[0.06] blur-[80px] rounded-full" style={{ backgroundColor: ACCENT }} />
           </motion.div>
         </motion.div>
       </section>
+
+      {/* ─── THE EXPLAINER ────────────── */}
+      <ExplainerFilm accent={ACCENT} />
 
       {/* ─── POS MARQUEE ──────────────────────────── */}
       <section className="py-16 border-t border-[#1F1F23]/40">
@@ -452,37 +446,39 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ─── HOW IT WORKS ─────────────────────────── */}
+      {/* ─── THE FILM ─────────────────────────────── */}
       <section className="py-24 border-t border-[#1F1F23]/40 relative overflow-hidden">
-        <div className="absolute top-0 right-0 aurora-glow" style={{ width: 500, height: 500, opacity: 0.06, background: `radial-gradient(circle, ${ACCENT_CA} 0%, transparent 70%)` }} />
-        <div className="max-w-content mx-auto px-6 relative">
-          <ScrollReveal className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold text-[#F5F5F7] tracking-tight">
-              Connect Your POS in{' '}
-              <em className="font-serif italic font-normal" style={{ color: ACCENT_CA }}>Minutes</em>
-            </h2>
-            <p className="mt-4 text-[#A1A1A8] text-[15px]">Four steps. Under sixty seconds.</p>
+        <div className="max-w-content mx-auto px-6">
+          {/* Starts on scroll into view. Plays with sound when the visitor has
+              already interacted with the page (the only case a browser permits
+              unmuted autoplay); otherwise starts muted with an Unmute control. */}
+          <ScrollReveal className="relative max-w-4xl mx-auto">
+            <div className="relative rounded-xl border border-[#1F1F23] bg-[#111113] shadow-2xl shadow-black/50 p-2">
+              <video
+                ref={filmRef}
+                className="w-full aspect-video rounded-lg bg-black block"
+                src="/media/captains-30s.mp4"
+                poster="/media/captains-poster.jpg"
+                controls
+                muted={filmMuted}
+                preload="metadata"
+                playsInline
+              />
+              {filmMuted && (
+                <button
+                  type="button"
+                  onClick={unmuteFilm}
+                  className="absolute top-5 right-5 flex items-center gap-2 rounded-full border border-[#1F1F23] bg-[#0A0A0B]/80 px-3.5 py-2 text-[12px] font-medium text-[#F5F5F7] backdrop-blur transition-colors hover:border-[#2A2A30]"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M11 5 6 9H2v6h4l5 4zM23 9l-6 6M17 9l6 6" />
+                  </svg>
+                  Unmute
+                </button>
+              )}
+            </div>
+            <div className="absolute -bottom-16 left-1/2 -translate-x-1/2 w-[70%] h-32 opacity-[0.06] blur-[80px] rounded-full" style={{ backgroundColor: ACCENT }} />
           </ScrollReveal>
-
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 max-w-4xl mx-auto">
-            {[
-              { step: '01', title: 'Connect', desc: 'One-click Square, Clover, or Toast OAuth. No API keys, no config.' },
-              { step: '02', title: 'Analyze', desc: '41 AI agents process your entire transaction history instantly.' },
-              { step: '03', title: 'Discover', desc: 'See specific dollar-denominated revenue opportunities.' },
-              { step: '04', title: 'Capture', desc: 'Act on insights and start recovering hidden revenue today.' },
-            ].map((s, i) => (
-              <ScrollReveal key={s.step} delay={i * 0.1}>
-                <div className="relative group text-left">
-                  {i < 3 && (
-                    <div className="hidden md:block absolute top-4 left-full w-6 h-px bg-[#1F1F23] z-0" />
-                  )}
-                  <span className="font-mono text-[11px] tracking-wider" style={{ color: ACCENT }}>{s.step}</span>
-                  <h3 className="text-[#F5F5F7] font-semibold text-lg mt-2 mb-2">{s.title}</h3>
-                  <p className="text-[#A1A1A8] text-[13px] leading-relaxed">{s.desc}</p>
-                </div>
-              </ScrollReveal>
-            ))}
-          </div>
         </div>
       </section>
 
@@ -691,6 +687,8 @@ export default function LandingPage() {
               <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 text-[12px] text-[#A1A1A8]/60">
                 <span className="flex items-center gap-1.5"><Shield size={12} /> Bank-level encryption</span>
                 <span className="flex items-center gap-1.5"><Clock size={12} /> Real-time sync</span>
+                <a href="/privacy" className="hover:text-[#F5F5F7] transition-colors">Privacy</a>
+                <a href="/terms" className="hover:text-[#F5F5F7] transition-colors">Terms</a>
                 <a onClick={() => navigate('/careers')} className="hover:text-[#F5F5F7] cursor-pointer transition-colors">Careers</a>
                 <a onClick={() => navigate('/us/portal/login')} className="hover:text-[#F5F5F7] cursor-pointer transition-colors">Sales Portal</a>
                 <a onClick={() => navigate('/customer/login')} className="hover:text-[#F5F5F7] cursor-pointer transition-colors">Customer Login</a>

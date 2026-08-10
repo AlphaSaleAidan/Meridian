@@ -316,7 +316,7 @@ function generateInsights(): { insights: Insight[]; total: number } {
     {
       id: uuid(),
       type: 'money_left',
-      title: `\u{1F4B8} ${$s(2340)}/Month Left on the Table — Here's How to Capture It`,
+      title: `${$s(2340)}/Month Left on the Table — Here's How to Capture It`,
       summary: `Meridian's Money Left on Table analysis identifies ${$s(2340)}/month in unrealized revenue across your operations. This score is calculated using five economic dimensions, each benchmarked against industry standards:\n\n*Component breakdown:*\n  • Pricing Optimization: ${$s(840)}/mo\n  • Peak Hour Staffing: ${$s(520)}/mo\n  • Dead Stock Clearance: ${$s(450)}/mo\n  • Discount Leakage: ${$s(310)}/mo\n  • Schedule Gap Recovery: ${$s(220)}/mo\n\nMcKinsey research confirms most SMBs leave 2-7% of revenue on the table through suboptimal pricing, staffing, and inventory management — and that structured optimization yields an average 3.3% revenue lift [McKinsey & Company, 2024].\n\n*Prioritized action plan:*\n1. Increase ${p4name} and ${p3name} prices by ${priceFmt(Math.round((p[4]?.price || 625) * 0.12))}-${priceFmt(Math.round((p[4]?.price || 625) * 0.15))} (est. ${$s(840)}/mo)\n2. Add one staff member during ${peak} peak window (est. ${$s(520)}/mo)\n3. Clear 4 dead-stock items via bundles or markdowns (est. ${$s(450)}/mo)`,
       details: { components: {
         pricing: { amount_cents: cx(sm(84000)), detail: 'Underpriced items with inelastic demand' },
@@ -332,7 +332,7 @@ function generateInsights(): { insights: Insight[]; total: number } {
     {
       id: uuid(),
       type: 'pricing',
-      title: `\u{1F4CA} Gross Margin Compression: 58% → 54% Over 8 Weeks`,
+      title: `Gross Margin Compression: 58% → 54% Over 8 Weeks`,
       summary: `Your gross margin has eroded 4 points over the past 8 weeks — from 58.2% to 54.1%. At current revenue levels, that 4-point compression represents ${$s(1120)}/month in lost profit.\n\n*Root cause analysis (Meridian AI):*\nCOGS increased 6.3% while prices remained flat. Investopedia's gross margin research notes that ${indLabel} businesses operating below 55% gross margin are in the "danger zone" where one bad month eliminates quarterly profit [Investopedia, 2026]. CFI analysis of 2,400 SMBs found that businesses monitoring margins weekly recover from compression 2.3x faster than those reviewing monthly [Corporate Finance Institute, 2026].\n\n*Recovery plan:*\n1. Audit your top 5 COGS items — identify which suppliers raised prices\n2. Renegotiate or find alternative suppliers for the 2 highest-impact items\n3. Implement a 3-5% selective price increase on items with inelastic demand\n4. Target: Recover to 57%+ within 4 weeks`,
       details: {
         current_margin_pct: 54.1,
@@ -347,7 +347,7 @@ function generateInsights(): { insights: Insight[]; total: number } {
     {
       id: uuid(),
       type: 'pricing',
-      title: `\u{1F4B0} 3 Data-Backed Pricing Opportunities — ${$s(840)}/Month Potential`,
+      title: `3 Data-Backed Pricing Opportunities — ${$s(840)}/Month Potential`,
       summary: `Our analysis identified 3 products where data supports a price adjustment. Top opportunity: *${p4name}* — current price ${priceFmt(p[4]?.price || 625)}, demand elasticity analysis shows highly inelastic demand (elasticity: -0.3), supporting a ${priceFmt(Math.round((p[4]?.price || 625) * 0.12))} increase.\n\n*Economic rationale:*\nHarvard Business Review research demonstrates that a 1% price increase yields an average 11.1% improvement in operating profit — making pricing the single highest-leverage variable in the P&L [Harvard Business Review, 2023]. Businesses using data-driven menu engineering achieve 8-15% higher gross margins vs. cost-plus pricing [Cornell Hospitality Quarterly, 2024].\n\nMeta-analysis data shows items with <5% price increases exhibit near-zero demand reduction (mean elasticity: -1.2 for staples) [Journal of Marketing Research, 2023].\n\n*Implementation:*\n1. ${p4name}: $${p4price.toFixed(2)} → $${p4suggest.toFixed(2)} (+12%, still below competitor avg)\n2. ${p3name}: $${p3price.toFixed(2)} → $${p3suggest.toFixed(2)} (+10%, high demand inelasticity)\n3. ${p10name}: $${p10price.toFixed(2)} → $${p10suggest.toFixed(2)} (+11%, premium positioning supports it)\n4. Total combined potential: ${$s(840)}/month`,
       details: {
         opportunities: [
@@ -363,7 +363,7 @@ function generateInsights(): { insights: Insight[]; total: number } {
     {
       id: uuid(),
       type: 'seasonal',
-      title: `\u{1F327}️ Weather Correlation Detected: Rain Days = -23% Revenue`,
+      title: `Weather Correlation Detected: Rain Days = -23% Revenue`,
       summary: `Meridian's pattern analysis detected a strong negative correlation between precipitation and your daily revenue. On days with >0.1" rainfall, revenue drops an average of 23% (${$s(387)} below daily mean).\n\n*Intelligence synthesis:*\nNation's Restaurant News reports that weather accounts for $22B in annual U.S. restaurant revenue variability [NRN, 2026]. Deloitte's retail analytics practice found that businesses with weather-responsive operations (adjusting staffing, promotions, and inventory based on forecasts) recover 40-60% of weather-related revenue losses [Deloitte Insights, 2026].\n\n*Weather playbook:*\n1. Monitor 3-day forecasts — reduce prep by 20% on predicted rain days\n2. Launch "rainy day specials" via push notification or social media\n3. Cut one staff member on rain days to protect labor ratio\n4. Promote delivery/pickup options more aggressively when rain is forecast\n5. *Estimated recovery:* 40% of weather losses = ${$s(155)}/rain day`,
       details: {
         rain_impact_pct: -23,
@@ -378,7 +378,7 @@ function generateInsights(): { insights: Insight[]; total: number } {
     {
       id: uuid(),
       type: 'staffing',
-      title: `\u{1F525} Golden Window: ${peak} — 47% of Revenue`,
+      title: `Golden Window: ${peak} — 47% of Revenue`,
       summary: `Your most profitable operating window is ${peak}, concentrating 47% of daily revenue into a focused block. This exceeds the industry benchmark of 45% for ${indLabel} businesses.\n\n*Staffing economics:*\nMIT Sloan research shows each understaffed peak hour costs 8-15% of that hour's potential revenue through lost sales, longer wait times, and reduced upselling capacity [MIT Sloan Management Review, 2024]. Cornell's demand-driven scheduling research found that aligning staff to 15-minute demand blocks (vs. shift-based) improves revenue-per-labor-hour by 18% [Cornell Center for Hospitality Research, 2023].\n\n*Action items:*\n1. Ensure maximum staffing during ${peak} — every position filled\n2. Pre-prep high-volume items 30 min before peak to maximize throughput\n3. Schedule breaks and training during off-peak hours only\n4. Track revenue-per-labor-hour weekly to optimize scheduling`,
       details: {
         golden_window: { label: peak, revenue_share_pct: 47 },
@@ -391,7 +391,7 @@ function generateInsights(): { insights: Insight[]; total: number } {
     {
       id: uuid(),
       type: 'staffing',
-      title: `⏱️ Labor Cost Ratio: 31.2% — 3.2 Points Above Optimal`,
+      title: `Labor Cost Ratio: 31.2% — 3.2 Points Above Optimal`,
       summary: `Your labor-to-revenue ratio is 31.2%, exceeding the ${indLabel} benchmark of 28%. BLS data shows the median labor cost is 28.0% of revenue [Bureau of Labor Statistics, 2026]. At your revenue level, the 3.2-point gap equals ~${$s(890)}/month in excess labor spend.\n\n*Intelligence from 7shifts and Toast research:*\nBusinesses using demand-driven scheduling (aligning staff counts to 15-minute revenue blocks rather than fixed shifts) reduce labor costs by 4-8% while maintaining or improving service quality [7shifts Blog, 2026]. Toast's 2026 Restaurant Trends report found that 67% of operators who adopted predictive scheduling software saw labor cost reductions within 60 days.\n\n*Action plan:*\n1. Map hourly revenue vs. hourly labor cost for the past 4 weeks\n2. Identify "overstaffed hours" where labor cost exceeds 35% of that hour's revenue\n3. Shift 2-3 hours from overstaffed periods to understaffed ${peak} windows\n4. *Target:* Reduce labor ratio to 28.5% within 6 weeks = ${$s(890)}/mo savings`,
       details: {
         labor_pct: 31.2,
@@ -421,7 +421,7 @@ function generateInsights(): { insights: Insight[]; total: number } {
     {
       id: uuid(),
       type: 'product_recommendation',
-      title: `\u{1F9EA} Menu Engineering Matrix: 3 "Puzzles" Identified`,
+      title: `Menu Engineering Matrix: 3 "Puzzles" Identified`,
       summary: `Meridian's menu engineering analysis classified your products into the Boston Consulting Group matrix. Three items are "Puzzles" — high profitability but low popularity: ${p4name} (${priceFmt(pzM4)} margin, 3.1% of orders), ${p[7]?.name || 'Item H'} (${priceFmt(pzM7)} margin, 2.8% of orders), and ${p[11]?.name || 'Item L'} (${priceFmt(pzM11)} margin, 1.9% of orders).\n\n*Research-backed strategy:*\nCornell's menu engineering framework shows that repositioning Puzzles through strategic placement, staff recommendations, and bundling converts 30-50% into Stars within 4-6 weeks [Cornell Hospitality Quarterly, 2024]. McKinsey's consumer research confirms that item visibility drives 22% of customer selection — meaning placement changes alone can shift order patterns [McKinsey Consumer, 2025].\n\n*Conversion playbook:*\n1. Move all 3 Puzzles to the "golden triangle" on your menu board (top-right quadrant)\n2. Train staff to recommend one Puzzle per customer interaction\n3. Create a combo: Puzzle item + Star item at 10% bundle discount\n4. *Expected lift:* Convert 1-2 Puzzles to Stars = ${$s(340)}-${$s(680)}/mo additional margin`,
       details: {
         puzzles: [
@@ -437,7 +437,7 @@ function generateInsights(): { insights: Insight[]; total: number } {
     {
       id: uuid(),
       type: 'inventory',
-      title: `\u{1F6AB} 4 Dead Stock Items — ${$s(450)}/Month Hidden Cost`,
+      title: `4 Dead Stock Items — ${$s(450)}/Month Hidden Cost`,
       summary: `4 products have generated zero revenue over the past 30 days: ${deadItems[0] || 'Item 1'}, ${deadItems[1] || 'Item 2'}, ${deadItems[2] || 'Item 3'}, and ${deadItems[3] || 'Item 4'} (seasonal decline).\n\n*The hidden economics of dead stock:*\nAccording to NRF research, dead stock accounts for 25-30% of total inventory shrinkage, which averages 1.6% of annual revenue [National Retail Federation, 2024]. Beyond direct cost, dead stock occupies shelf space that could house your top performers, and perishable items compound losses through spoilage. The National Restaurant Association estimates reducing waste by 20% improves net margin by 1-3 points [National Restaurant Association / ReFED, 2024].\n\n*Action plan:*\n1. Immediate: Mark down remaining inventory 40-60% or bundle with star products\n2. Within 7 days: Remove from active ordering. Redirect budget to top performers\n3. Going forward: Set a 14-day zero-sales trigger for automatic review`,
       details: {
         dead_stock: [
@@ -454,7 +454,7 @@ function generateInsights(): { insights: Insight[]; total: number } {
     {
       id: uuid(),
       type: 'general',
-      title: `\u{1F504} Cash Flow Velocity: 4.2 Days Average Collection`,
+      title: `Cash Flow Velocity: 4.2 Days Average Collection`,
       summary: `Your average cash conversion cycle is 4.2 days — revenue takes 4.2 days from transaction to usable cash in your account. This is within the healthy range for POS-connected businesses (1-5 days), but optimization is possible.\n\n*Key finding from Investopedia and Freshbooks research:*\nCash flow is the #1 reason small businesses fail, with 82% of failures attributed to cash management problems rather than profitability issues [Investopedia, 2026]. Freshbooks' SMB survey found that businesses with same-day or next-day deposit access are 34% less likely to take on short-term debt [Freshbooks Blog, 2026].\n\n*Opportunities:*\n1. Switch to same-day deposit if your POS provider offers it (Square, Toast offer this)\n2. Negotiate net-15 → net-30 with your top 3 suppliers to extend payables\n3. Build a 2-week cash reserve equal to ~${$s(5600)} based on your burn rate\n4. Set up automated low-balance alerts at $${sm(2000).toLocaleString()}`,
       details: {
         avg_collection_days: 4.2,
@@ -468,7 +468,7 @@ function generateInsights(): { insights: Insight[]; total: number } {
     {
       id: uuid(),
       type: 'seasonal',
-      title: `\u{1F4C5} Monday Revenue Gap: 38% Below Saturday — ${$s(620)}/Mo Recovery Potential`,
+      title: `Monday Revenue Gap: 38% Below Saturday — ${$s(620)}/Mo Recovery Potential`,
       summary: `Saturday averages ${$s(2180)} while Monday generates only ${$s(1350)} — a 38% revenue gap.\n\nNRA daypart research shows businesses capturing 3+ strong dayparts achieve 40% higher revenue per square foot [National Restaurant Association, 2025]. Counter-seasonal promotions can recover 30-50% of the weakest day's revenue gap [National Restaurant Association, 2025].\n\n*Monday recovery playbook:*\n1. Launch a Monday-specific promotion (e.g., "Happy Monday" with a featured item at 15% off)\n2. Test a loyalty multiplier (2x points on Mondays)\n3. Shift marketing spend to drive traffic on slow days\n4. *Target:* Close 25% of the gap = ${$s(620)}/month`,
       details: {
         best_day: { name: 'Saturday', avg_cents: cx(sm(218000)) },
@@ -482,7 +482,7 @@ function generateInsights(): { insights: Insight[]; total: number } {
     {
       id: uuid(),
       type: 'anomaly',
-      title: `\u{1F4C8} Statistical Anomaly: 42% Above Expected (Last Saturday)`,
+      title: `Statistical Anomaly: 42% Above Expected (Last Saturday)`,
       summary: `Revenue of ${$s(3180)} last Saturday represents a 42% deviation from the expected ${$s(2240)} (z-score: 2.8σ, confidence: 56%).\n\n*Positive anomaly investigation:*\nIdentify the driver — was it higher traffic, larger tickets, or a specific product? If replicable, this pattern could be worth ~${$s(940)}/occurrence. McKinsey's customer analytics research shows businesses that identify and replicate positive anomalies see 10-30% lift in targeted segments [McKinsey & Company, 2024].\n\nPreliminary analysis suggests the spike correlated with a local event. Consider partnering for recurring cross-promotion.`,
       details: {
         anomaly: { date: daysAgo(2), revenue_cents: cx(sm(318000)), expected_cents: cx(sm(224000)), z_score: 2.8, type: 'spike' },
@@ -494,7 +494,7 @@ function generateInsights(): { insights: Insight[]; total: number } {
     {
       id: uuid(),
       type: 'pricing',
-      title: `\u{1F3F7}️ Discount Rate at 4.8% — Margin Erosion Risk`,
+      title: `Discount Rate at 4.8% — Margin Erosion Risk`,
       summary: `Your discount rate (4.8%) exceeds the industry benchmark of 3.0%. This costs you an estimated $${cx(sm(310)).toLocaleString()} in unnecessary margin erosion. Shift from blanket discounts to targeted, time-limited promotions — research shows targeted promotions outperform blanket discounts 3:1.\n\nResearch from Harvard Business Review shows that targeted, time-limited promotions outperform blanket discounts by a 3:1 margin in terms of incremental revenue generated [Harvard Business Review, 2023].\n\n*Recommended strategy:*\n1. Audit current discount triggers — identify which are driving new customers vs. subsidizing existing ones\n2. Cap blanket discounts at 3% of revenue\n3. Shift budget to targeted offers: loyalty rewards, slow-day promotions, and new customer incentives`,
       details: {
         actual_rate_pct: 4.8,
@@ -508,7 +508,7 @@ function generateInsights(): { insights: Insight[]; total: number } {
     {
       id: uuid(),
       type: 'general',
-      title: `\u{1F4A1} Tip Rate at 12.4% — Optimization Can Boost Staff Retention`,
+      title: `Tip Rate at 12.4% — Optimization Can Boost Staff Retention`,
       summary: `Your tip rate (12.4%) is 5.6 points below the optimal 18.0%. Research from Cornell shows that POS tip prompts with suggested amounts (18%/20%/25%) increase average tips by 38% vs. open-entry fields. Implementing this alone could add ~$${cx(sm(480)).toLocaleString()}/month to your staff's take-home pay, improving retention [Cornell Hospitality Quarterly, 2023].\n\nHigher tips don't just help your staff — they directly reduce turnover. With labor costs averaging 28% of revenue in ${indLabel} businesses [Bureau of Labor Statistics, 2025], reducing turnover through better tip income is one of the highest-ROI operational changes available.\n\n*Implementation:* Update your POS tip screen to show preset buttons at 18%, 20%, and 25% (plus custom). Cornell research shows this single change increases tip probability by 27%.`,
       details: {
         current_rate_pct: 12.4,
@@ -523,7 +523,7 @@ function generateInsights(): { insights: Insight[]; total: number } {
     {
       id: uuid(),
       type: 'benchmark',
-      title: `\u{1F4C8} Strong Revenue Momentum — Compounding Growth Detected`,
+      title: `Strong Revenue Momentum — Compounding Growth Detected`,
       summary: `Week-over-week revenue grew +8.3%, reflecting sustained demand acceleration. Your trailing average of ${$s(1680)}/day across ${txPerDay} daily transactions indicates healthy throughput. Relative to the ${indLabel} industry benchmark, your daily revenue places you in the above median (+16.2% vs. industry median of ${$s(1450)}/day).\n\nAt this trajectory, annualized revenue projects to ~${$s(613200)}, assuming no seasonal adjustment. To sustain this growth curve, ensure staffing scales proportionally — understaffed peak hours cost 8-15% of potential revenue [MIT Sloan Management Review, 2024].\n\n*Recommended actions:*\n1. Lock in supplier agreements at current volume to protect margins\n2. Evaluate whether current ${peak} staffing can support continued growth\n3. Consider modest price increases on top sellers while demand is strong — a 1% price lift yields ~11% operating profit improvement [Harvard Business Review, 2023]`,
       details: {
         wow_growth_pct: 8.3,

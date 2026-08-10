@@ -1142,6 +1142,9 @@ async def _run_incremental_sync(org_id: str, pos_system: str, connection: dict):
                 {
                     "last_sync_at": datetime.now(timezone.utc).isoformat(),
                     "last_error": None,
+                    # Match the other sync paths: a successful sync clears the
+                    # FAILED state, otherwise status stays `error` forever.
+                    "status": "connected",
                     "updated_at": datetime.now(timezone.utc).isoformat(),
                 },
                 filters={"id": f"eq.{connection['id']}"},
@@ -1156,6 +1159,9 @@ async def _run_incremental_sync(org_id: str, pos_system: str, connection: dict):
             {
                 "last_sync_at": datetime.now(timezone.utc).isoformat(),
                 "last_error": None,
+                # Match the other sync paths: a successful sync clears the
+                # FAILED state, otherwise status stays `error` forever.
+                "status": "connected",
                 "updated_at": datetime.now(timezone.utc).isoformat(),
             },
             filters={"id": f"eq.{connection['id']}"},

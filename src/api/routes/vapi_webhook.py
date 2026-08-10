@@ -473,6 +473,7 @@ def _system_prompt(config, transfer_number: str = "") -> str:
         "item, then add sides and drinks). Read back the COMPLETE order — every item, size, "
         "and toppings — with the total, then ask 'Does that all look right?'\n"
         f"{_cash_offer_step(config)}"
+        f"{_sms_consent_step(config)}"
         "7. Call submit_order ONLY after the customer confirms the order is correct.\n"
         "8. After submit_order returns, tell the caller: 'I've sent a secure payment link to "
         "your phone — you'll get a receipt once it goes through.'\n\n"
@@ -480,6 +481,9 @@ def _system_prompt(config, transfer_number: str = "") -> str:
         f"- Available order types: {order_types}.\n"
         f"{reservation_lines}"
         f"{_cash_guard_line(config)}"
+        "- The caller must clearly agree to receive texts before submit_order with "
+        "pay_choice 'pay_now'. If they decline texting, use pay_choice 'pay_at_pickup' — "
+        "never send a text to someone who said no.\n"
         "- Delivery without an address → ask for the address before calling submit_order.\n"
         "- Off-menu items → say so warmly and suggest a similar item.\n"
         "- Mishear → ask the caller to repeat just THAT item; never restart the order from scratch.\n"
@@ -489,6 +493,26 @@ def _system_prompt(config, transfer_number: str = "") -> str:
         f"{transfer_block}"
         f"{menu}"
         f"{_smart_upsell_block(config)}"
+    )
+
+
+def _sms_consent_step(config) -> str:
+    """A2P 10DLC verbal opt-in, spoken before any SMS is sent.
+
+    The exact wording is filed verbatim in the Telnyx campaign's message flow
+    (TCR requires brand name, message types, frequency, rates, STOP, HELP, and
+    no-share language) — change it here and the campaign filing must be updated
+    to match, or vetting fails again. Decline path routes to pay_at_pickup,
+    which sends no text by design.
+    """
+    business = getattr(config, "business_name", None) or "the restaurant"
+    return (
+        "6c. Before any text is sent, say: 'I\'ll text your confirmation and secure "
+        f"payment link to this number — usually 1 to 3 texts per order, from Meridian "
+        f"on behalf of {business}. Message and data rates may apply; reply STOP anytime "
+        "or HELP for help. We never share your mobile information. Sound good?' "
+        "If they agree, continue. If they decline texting, set pay_choice to "
+        "'pay_at_pickup' — no text is sent and they pay at the counter.\n"
     )
 
 
@@ -518,6 +542,65 @@ def _overage_minutes(dur_min: float, included_min: int, cap_min: int) -> int:
     if cap_min > 0:
         over = min(over, max(cap_min - included_min, 0))
     return over
+
+
+async def _bill_monthly_bucket(merchant_id: str, call_id: str, dur_min: float,
+                               config, terms: dict) -> None:
+    """Meter one call against the merchant's MONTHLY minutes bucket and bill
+    the whole-minute overage past it — zero-per-order (minutes licensing)
+    deals only; the caller gates on terms['pricing_model'].
+
+    billed_min = ceil(duration) clamped to the same effective hard call cap as
+    maxDurationSeconds, so a rounding-minute past the drop can't inflate usage.
+
+    Idempotency: the PRIMARY KEY on voice_monthly_calls.vapi_call_id is the
+    gate — a Vapi end-of-call retry finds the row and returns before touching
+    the ledger, so month-to-date never double-counts. The ledger's own
+    (source, ref) dedupe backstops the insert-then-crash window.
+
+    Concurrency: two calls ending in the same instant can read the same
+    month-to-date and each bill against it — worst case UNDER-bills one call's
+    overage by the other's minutes (never over-bills). Accepted: same
+    best-effort posture as every other ledger path here.
+    """
+    from ...db import get_db
+    from ...services.voice_ledger import credit
+    from datetime import datetime, timezone
+
+    included = max(int(terms.get("included_monthly_min") or 0), 0)
+    rate = max(int(terms.get("monthly_overage_cents_per_min") or 0), 0)
+    billed_min = math.ceil(max(dur_min, 0.0))
+    cap_min = _effective_cap_min(config)
+    if cap_min > 0:
+        billed_min = min(billed_min, cap_min)
+    if billed_min <= 0:
+        return
+    month = datetime.now(timezone.utc).strftime("%Y-%m")
+    db = get_db()
+    existing = await db.select(
+        "voice_monthly_calls",
+        filters={"vapi_call_id": f"eq.{call_id}"}, limit=1)
+    if existing:
+        return  # retry — already metered (and billed, if it crossed the bucket)
+    rows = await db.select(
+        "voice_monthly_calls", "billed_min",
+        filters={"merchant_id": f"eq.{merchant_id}", "month": f"eq.{month}"})
+    used_before = sum(int(r.get("billed_min") or 0) for r in (rows or []))
+    await db.insert("voice_monthly_calls", {
+        "vapi_call_id": call_id,
+        "merchant_id": merchant_id,
+        "month": month,
+        "billed_min": billed_min,
+    })
+    used_after = used_before + billed_min
+    over_min = max(0, used_after - max(included, used_before))
+    over_cents = over_min * rate
+    if over_cents > 0:
+        await credit(merchant_id, over_cents, source="monthly_overage",
+                     ref=call_id,
+                     note=f"{over_min}min over bucket ({used_after}/{included}min {month})")
+        logger.info("Monthly bucket overage billed: merchant=%s %dmin over → %d¢ (%d/%d min %s)",
+                    merchant_id, over_min, over_cents, used_after, included, month)
 
 
 def _menu_link_line(config) -> str:
@@ -641,15 +724,40 @@ def _persona_prompt_block(config) -> str:
         return ""
 
 
-def _transcriber_for(config) -> dict:
+def _transcriber_for(config, keyterms: list[str] | None = None) -> dict:
     """Deepgram nova-3; language=multi enables code-switch understanding
     (Hindi/Punjabi + English on one call) — set by the wizard's multilingual
-    toggle under the Indian accent group. Default stays EN-only."""
+    toggle under the Indian accent group. Default stays EN-only.
+
+    `keyterms` are this store's learned proper nouns (menu items, street and
+    neighbourhood names). They bias RECOGNITION only — nothing here changes a
+    word the agent says. Empty/None leaves the payload byte-identical to before,
+    so a merchant with no approved vocabulary is unaffected.
+    """
     t = {"provider": "deepgram", "model": "nova-3"}
     lang = (getattr(config, "language", "") or "").strip().lower()
     if lang in ("multi", "multilingual"):
         t["language"] = "multi"
+    if keyterms:
+        t["keyterm"] = list(keyterms)
     return t
+
+
+async def _keyterms_for(config) -> list[str]:
+    """Approved vocabulary for this merchant, or [] on any failure.
+
+    Never raises: a vocabulary lookup problem must not stop a phone call from
+    being answered.
+    """
+    merchant_id = getattr(config, "merchant_id", "") or ""
+    if not merchant_id:
+        return []
+    try:
+        from ...analytics.phone_vocab import approved_terms
+        return await approved_terms(merchant_id)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("keyterm lookup failed for merchant=%s: %s", merchant_id, e)
+        return []
 
 
 _SUBMIT_ORDER_TOOL = {
@@ -755,7 +863,7 @@ def _owner_notes_block(config) -> str:
 
 
 def _assistant_for(config, transfer_number: str | None = None,
-                   caller_context: str = "") -> dict:
+                   caller_context: str = "", keyterms: list[str] | None = None) -> dict:
     # personality.customGreeting (when set) overrides the standard greeting as
     # the spoken opener; _system_prompt's step-1 greet line uses the same value
     # so the prompt never contradicts what the caller just heard.
@@ -781,7 +889,7 @@ def _assistant_for(config, transfer_number: str | None = None,
     assistant = {
         "name": f"{config.business_name} — Order Taker",
         "firstMessage": _effective_greeting(config) or f"Thanks for calling {config.business_name}! What can I get for you?",
-        "transcriber": _transcriber_for(config),
+        "transcriber": _transcriber_for(config, keyterms),
         "voice": _voice_for(config),
         "model": {"provider": "openai", "model": "gpt-4.1",
                   "messages": [{"role": "system", "content": system_content}],
@@ -1168,7 +1276,10 @@ async def vapi_webhook(request: Request):
 
             return {"assistant": _assistant_for(
                 config, transfer_number=transfer_override,
-                caller_context=caller_context or "")}
+                caller_context=caller_context or "",
+                # This store's learned proper nouns, biasing recognition only.
+                # [] for merchants with nothing approved — payload unchanged.
+                keyterms=await _keyterms_for(config))}
         except Exception as e:  # noqa: BLE001 — never strand the call
             logger.error("assistant-request failed: %s", e)
             return {"error": "Sorry, we couldn't connect your call. Please try again."}
@@ -1268,6 +1379,7 @@ async def vapi_webhook(request: Request):
             # STRICTLY fail-open — any lookup problem bills the env defaults.
             included_min = VOICE_INCLUDED_MIN
             overage_rate = VOICE_OVERAGE_CENTS_PER_MIN
+            terms = None
             if merchant_id != "demo":
                 try:
                     from ...billing.fee_terms import get_active_terms
@@ -1289,6 +1401,20 @@ async def vapi_webhook(request: Request):
                              ref=call_id, note=f"{over_min}min over @ {dur_min:.1f}min")
                 logger.info("Duration overage billed: merchant=%s %dmin over → %d¢",
                             merchant_id, over_min, overage)
+            # Monthly minutes bucket — zero-per-order deals only (migration
+            # 077). The deal has NO per-order fee; instead N minutes/calendar
+            # month are included and minutes past the bucket bill at
+            # monthly_overage_cents_per_min. Metered per call, billed via the
+            # same ledger. STRICTLY fail-open: a metering error never affects
+            # the call (and never blocks the cost debit above, which already
+            # posted).
+            try:
+                if terms and terms.get("pricing_model") == "zero_per_order":
+                    await _bill_monthly_bucket(
+                        merchant_id, call_id, dur_min, config, terms)
+            except Exception as bucket_err:  # noqa: BLE001
+                logger.error("monthly-bucket metering failed for %s: %s",
+                             merchant_id, bucket_err)
         except Exception as e:  # noqa: BLE001 — accounting never affects the call
             logger.error("voice_ledger end-of-call failed: %s", e)
 
@@ -1302,6 +1428,14 @@ async def vapi_webhook(request: Request):
                                       config=config)
         except Exception as e:  # noqa: BLE001 — telemetry never affects the call
             logger.error("voice_call_endings record failed: %s", e)
+
+        # Keep what the caller said, so the vocabulary miner has something to
+        # learn this store's proper nouns from. Same contract as the recorder
+        # above: never let it affect the call.
+        try:
+            await _record_call_transcript(msg, call_id, config=config)
+        except Exception as e:  # noqa: BLE001
+            logger.error("phone_call_transcripts record failed: %s", e)
 
     return {"received": True}
 
@@ -1325,6 +1459,72 @@ def _had_order(msg: dict) -> bool | None:
             if fn.get("name") == "submit_order":
                 return True
     return False
+
+
+def _caller_turns(msg: dict) -> list[str]:
+    """Pull just the CALLER's lines out of an end-of-call report.
+
+    The assistant's own turns are deliberately dropped: they are the script we
+    wrote, so mining them would only teach the transcriber the words it already
+    puts in the agent's mouth. What we want is how real people in this
+    neighbourhood ask for things.
+    """
+    artifact = msg.get("artifact") or {}
+    messages = artifact.get("messages") or msg.get("messages")
+    if not isinstance(messages, list):
+        return []
+    turns: list[str] = []
+    for m in messages:
+        if not isinstance(m, dict):
+            continue
+        # Vapi uses "user" for the caller; "customer" appears in some payloads.
+        if (m.get("role") or "").lower() not in ("user", "customer"):
+            continue
+        text = (m.get("message") or m.get("content") or "").strip()
+        if text:
+            turns.append(text)
+    return turns
+
+
+async def _record_call_transcript(msg: dict, call_id: str, config=None) -> None:
+    """Persist the caller side of one call for the vocabulary miner.
+
+    Deduped on vapi_call_id by a partial unique index, because Vapi re-sends the
+    end-of-call report on retry and a duplicate would inflate a term's
+    frequency — the very signal the miner ranks on.
+    """
+    turns = _caller_turns(msg)
+    if not turns:
+        return
+    from datetime import datetime, timezone
+    from uuid import uuid4
+
+    from ...db import get_db
+
+    if config is None:
+        config = await _resolve_config(_dialed_number(msg))
+    merchant_id = getattr(config, "merchant_id", "") or "demo"
+    db = get_db()
+    if call_id:
+        existing = await db.select(
+            "phone_call_transcripts",
+            columns="id",
+            filters={"vapi_call_id": f"eq.{call_id}"},
+            limit=1,
+        )
+        if existing:
+            return
+    await db.insert("phone_call_transcripts", {
+        "id": str(uuid4()),
+        "merchant_id": merchant_id,
+        "vapi_call_id": call_id or None,
+        "caller_text": "\n".join(turns)[:20000],
+        "turn_count": len(turns),
+        "had_order": _had_order(msg),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    logger.info("Stored caller transcript: merchant=%s turns=%d call=%s",
+                merchant_id, len(turns), call_id)
 
 
 async def _record_call_ending(msg: dict, call_id: str, ended: str | None,

@@ -52,6 +52,10 @@ export default function ScrollReveal({
 
   return (
     <motion.div
+      // The prerender snapshot captures the "hidden" state inline; index.css holds
+      // anything with this attribute visible until the bundle is running (.js-live),
+      // or whole sections stay blank for as long as hydration takes on a phone.
+      data-scroll-reveal=""
       initial="hidden"
       animate={forceVisible ? 'visible' : undefined}
       whileInView="visible"

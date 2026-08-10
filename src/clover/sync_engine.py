@@ -372,6 +372,12 @@ class CloverSyncEngine:
             result.errors.append(f"incremental: {e}")
             self.progress.update("error", str(e))
             self._emit_progress()
+            # Re-raise, matching the Square engine. Swallowing here meant the
+            # caller saw a normal return, stamped last_sync_at, cleared
+            # last_error and left status='connected' — so a Clover token that
+            # had been revoked looked healthy while the 15-minute sweep 401'd
+            # forever and the merchant's data silently went stale.
+            raise
 
         return result
 

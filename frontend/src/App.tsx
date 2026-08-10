@@ -7,7 +7,7 @@ import ErrorBoundary, { lazyRetry } from '@/components/ErrorBoundary'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import Layout from '@/components/Layout'
 import MerchantPillarPage from '@/pages/canada/merchant/MerchantPillarPage'
-import { merchantPillars, demoMerchantPillars } from '@/config/merchantPillars'
+import { merchantPillars, usDemoPillars, canadaDemoPillars } from '@/config/merchantPillars'
 import { DemoContextProvider } from '@/lib/demo-context'
 import BusinessTypeSelector from '@/components/BusinessTypeSelector'
 import CookieConsentBanner from '@/components/compliance/CookieConsentBanner'
@@ -124,6 +124,11 @@ const VsToastAnalyticsPage = lazyRetry(() => import('@/pages/seo/VsToastAnalytic
 const VsSquareAnalyticsPage = lazyRetry(() => import('@/pages/seo/VsSquareAnalyticsPage'))
 const VsCloverAnalyticsPage = lazyRetry(() => import('@/pages/seo/VsCloverAnalyticsPage'))
 const VsRestaurant365Page = lazyRetry(() => import('@/pages/seo/VsRestaurant365Page'))
+const VsSlangAiPage = lazyRetry(() => import('@/pages/seo/VsSlangAiPage'))
+const VsSoundHoundPage = lazyRetry(() => import('@/pages/seo/VsSoundHoundPage'))
+const VsPopmenuAnsweringPage = lazyRetry(() => import('@/pages/seo/VsPopmenuAnsweringPage'))
+const VsNoryPage = lazyRetry(() => import('@/pages/seo/VsNoryPage'))
+const VsMartyLavuPage = lazyRetry(() => import('@/pages/seo/VsMartyLavuPage'))
 const VsMarketManPage = lazyRetry(() => import('@/pages/seo/VsMarketManPage'))
 const VsDorPage = lazyRetry(() => import('@/pages/seo/VsDorPage'))
 const VsPlacerAiPage = lazyRetry(() => import('@/pages/seo/VsPlacerAiPage'))
@@ -302,6 +307,11 @@ export default function App() {
               <Route path="/vs/dor" element={<VsDorPage />} />
               <Route path="/vs/placer-ai" element={<VsPlacerAiPage />} />
               <Route path="/vs/foot-traffic-counters" element={<VsFootTrafficCountersPage />} />
+              <Route path="/vs/slang-ai" element={<VsSlangAiPage />} />
+              <Route path="/vs/soundhound-smart-answering" element={<VsSoundHoundPage />} />
+              <Route path="/vs/popmenu-answering" element={<VsPopmenuAnsweringPage />} />
+              <Route path="/vs/nory" element={<VsNoryPage />} />
+              <Route path="/vs/marty-by-lavu" element={<VsMartyLavuPage />} />
               <Route path="/features/camera-intelligence" element={<CameraIntelligencePage />} />
               <Route path="/best-restaurant-analytics-software" element={<BestAnalyticsSoftwarePage />} />
               <Route path="/faq" element={<FAQHubPage />} />
@@ -423,7 +433,7 @@ export default function App() {
                   <USMerchantDemoLayout />
                 </Suspense>
               }>
-                {demoMerchantPillars.map(pillar => (
+                {usDemoPillars.map(pillar => (
                   <Route
                     key={pillar.path || '_home'}
                     index={pillar.path === ''}
@@ -446,7 +456,7 @@ export default function App() {
                   <MerchantDemoLayout />
                 </Suspense>
               }>
-                {demoMerchantPillars.map(pillar => (
+                {canadaDemoPillars.map(pillar => (
                   <Route
                     key={pillar.path || '_home'}
                     index={pillar.path === ''}

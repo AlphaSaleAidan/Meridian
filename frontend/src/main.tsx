@@ -5,6 +5,10 @@ import { HelmetProvider } from 'react-helmet-async'
 import App from './App'
 import './index.css'
 
+// From here the animation libraries own every reveal; until this class lands,
+// index.css keeps the prerendered snapshot's hidden states visible (see @layer base).
+document.documentElement.classList.add('js-live')
+
 // ── Sentry error tracking (optional, only if DSN configured) ──
 const sentryDsn = import.meta.env.VITE_SENTRY_DSN
 if (sentryDsn) {

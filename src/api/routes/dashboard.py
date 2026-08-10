@@ -1343,11 +1343,11 @@ async def get_trends(
 # ─── Cache Management ───────────────────────────────────
 
 @router.post("/burn-rate/send", dependencies=[Depends(require_admin)])
-async def trigger_burn_rate_sms():
-    """Manually trigger daily burn rate SMS. Admin only."""
-    from ...analytics.burn_rate import send_burn_rate_sms
+async def trigger_burn_rate_report():
+    """Manually trigger the daily burn rate report. Admin only."""
+    from ...analytics.burn_rate import send_burn_rate_report
 
-    result = await send_burn_rate_sms()
+    result = await send_burn_rate_report()
     return result
 
 

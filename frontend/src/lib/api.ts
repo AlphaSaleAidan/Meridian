@@ -82,10 +82,19 @@ export interface Overview {
   days_with_data: number
 }
 
+export interface MoneyLeftAction {
+  description: string
+  impact_cents?: number
+  /** Which component produced it — set by MoneyLeftCalculator. */
+  component?: string
+}
+
 export interface MoneyLeftScore {
   id: string
   total_score_cents: number
   components: Record<string, { amount_cents: number; [key: string]: any }>
+  /** Top 5 actions by impact. Emitted by src/ai/analyzers/money_left.py. */
+  top_actions?: MoneyLeftAction[]
   scored_at: string
 }
 

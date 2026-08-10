@@ -1,6 +1,6 @@
 """
 Daily Burn Rate Calculator — Tracks platform metrics and estimated costs.
-Sends daily SMS summary to the admin.
+Sends a daily summary email to the admin.
 """
 import logging
 import os
@@ -8,8 +8,8 @@ from datetime import datetime, timezone, timedelta
 
 logger = logging.getLogger("meridian.analytics.burn_rate")
 
-ADMIN_PHONE = os.environ.get("ADMIN_PHONE", "")
-ADMIN_NAME = os.environ.get("ADMIN_NAME", "Aidan")
+# Leads are stored per market; there is no combined table.
+LEAD_TABLES = ("canada_leads", "us_leads")
 
 
 async def calculate_daily_burn_rate() -> dict:
@@ -18,17 +18,20 @@ async def calculate_daily_burn_rate() -> dict:
     now = datetime.now(timezone.utc)
     yesterday = (now - timedelta(days=1)).isoformat()
 
-    orgs = await db.select("organizations", filters={"is_active": "eq.true"})
-    active_orgs = len(orgs) if orgs else 0
+    orgs = await db.select("organizations", columns="pos_connection_status")
+    total_orgs = len(orgs)
+    connected_orgs = sum(1 for o in orgs if o.get("pos_connection_status") == "connected")
 
     insights = await db.select("insights", filters={"created_at": f"gte.{yesterday}"})
-    insights_count = len(insights) if insights else 0
+    insights_count = len(insights)
 
-    leads = await db.select("deals", filters={"created_at": f"gte.{yesterday}"})
-    leads_count = len(leads) if leads else 0
+    leads_count = 0
+    for table in LEAD_TABLES:
+        rows = await db.select(table, columns="id", filters={"created_at": f"gte.{yesterday}"})
+        leads_count += len(rows)
 
     notifs = await db.select("notifications", filters={"created_at": f"gte.{yesterday}"})
-    notifs_count = len(notifs) if notifs else 0
+    notifs_count = len(notifs)
 
     ai_cost = insights_count * 0.05
     sms_cost = notifs_count * 0.01
@@ -38,7 +41,8 @@ async def calculate_daily_burn_rate() -> dict:
 
     return {
         "date": now.strftime("%Y-%m-%d"),
-        "active_orgs": active_orgs,
+        "total_orgs": total_orgs,
+        "connected_orgs": connected_orgs,
         "insights_generated": insights_count,
         "new_leads": leads_count,
         "notifications_sent": notifs_count,
@@ -52,30 +56,63 @@ async def calculate_daily_burn_rate() -> dict:
     }
 
 
-async def send_burn_rate_sms():
-    if not ADMIN_PHONE:
-        logger.warning("ADMIN_PHONE not set — skipping burn rate SMS")
-        return {"sent": False, "reason": "no_admin_phone"}
+def _render_html(m: dict) -> str:
+    c = m["costs"]
+    rows = [
+        ("Organizations", f"{m['total_orgs']} ({m['connected_orgs']} POS-connected)"),
+        ("New leads", m["new_leads"]),
+        ("Insights generated", m["insights_generated"]),
+        ("Notifications sent", m["notifications_sent"]),
+        ("AI cost", f"${c['ai']:.2f}"),
+        ("SMS cost", f"${c['sms']:.2f}"),
+        ("Infra cost", f"${c['infra']:.2f}"),
+    ]
+    cells = "".join(
+        f"<tr><td style='padding:6px 16px 6px 0;color:#555'>{label}</td>"
+        f"<td style='padding:6px 0;font-weight:600'>{value}</td></tr>"
+        for label, value in rows
+    )
+    return (
+        f"<div style='font-family:system-ui,sans-serif;font-size:14px;color:#111'>"
+        f"<h2 style='margin:0 0 4px'>Meridian daily burn rate</h2>"
+        f"<p style='margin:0 0 16px;color:#666'>{m['date']}</p>"
+        f"<table style='border-collapse:collapse'>{cells}</table>"
+        f"<p style='margin:16px 0 0;font-size:16px'>"
+        f"<strong>${c['total_daily']:.2f}/day</strong> "
+        f"<span style='color:#666'>(${c['monthly_projected']:.2f}/mo projected)</span></p>"
+        f"</div>"
+    )
 
-    from ..sms.client import send_sms
 
-    try:
-        metrics = await calculate_daily_burn_rate()
-        c = metrics["costs"]
+async def send_burn_rate_report() -> dict:
+    """Email the daily burn-rate summary to the admin.
 
-        message = (
-            f"Meridian Daily ({metrics['date']})\n"
-            f"---\n"
-            f"Orgs: {metrics['active_orgs']} | Leads: {metrics['new_leads']}\n"
-            f"Insights: {metrics['insights_generated']} | Notifs: {metrics['notifications_sent']}\n"
-            f"---\n"
-            f"Burn: ${c['total_daily']:.2f}/day (${c['monthly_projected']:.2f}/mo)\n"
-            f"AI ${c['ai']:.2f} | SMS ${c['sms']:.2f} | Infra ${c['infra']:.2f}"
-        )
+    Raises on failure so the scheduled task surfaces as failed rather than
+    reporting success while sending nothing.
+    """
+    # Importing config is what loads .env; nothing else in the Celery task
+    # chain does it, so read the recipient at call time rather than at import.
+    from .. import config  # noqa: F401
+    from ..email import PostalClient
 
-        result = await send_sms(ADMIN_PHONE, message)
-        logger.info(f"Burn rate SMS sent: daily=${c['total_daily']:.2f}")
-        return {**result, "metrics": metrics}
-    except Exception as e:
-        logger.error(f"Burn rate SMS failed: {e}", exc_info=True)
-        return {"sent": False, "reason": str(e)}
+    admin_email = os.environ.get("ADMIN_EMAIL", "")
+    if not admin_email:
+        raise RuntimeError("ADMIN_EMAIL not set — cannot deliver daily burn-rate report")
+
+    metrics = await calculate_daily_burn_rate()
+    c = metrics["costs"]
+
+    result = await PostalClient().send(
+        admin_email,
+        # No currency figure in the subject — dollar amounts are a common
+        # spam-filter trigger and this lands in a personal Gmail inbox.
+        f"Meridian daily report — {metrics['date']}",
+        _render_html(metrics),
+        tag="burn_rate",
+    )
+
+    if result.get("status") != "sent":
+        raise RuntimeError(f"Burn-rate email not delivered: {result}")
+
+    logger.info("Burn rate email sent: daily=$%.2f", c["total_daily"])
+    return {"sent": True, "metrics": metrics, "delivery": result}

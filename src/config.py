@@ -241,8 +241,15 @@ OAUTH_SCOPES = [
 ]
 
 
-# ─── AI Feature Flags (all default ON) ──────────────────
-ENABLE_LLM_INSIGHTS: bool = os.getenv("ENABLE_LLM_INSIGHTS", "1").lower() in ("1", "true")
+# ─── AI Feature Flags ───────────────────────────────────
+# LLM insight enhancement defaults OFF and has no consumer here: the only
+# reader is src/ai/engine.py, which reads the env directly and also defaults
+# off. This declaration used to default "1" under an "all default ON" heading,
+# which read as if the layer were live in production — it is not, because
+# DeepSeek rejects the JSON mode enhance_insights requires and the OpenAI
+# fallback is out of quota (docs/known_issues.md §1). Kept in sync so the
+# declared default matches the effective one; flip both once §1 is fixed.
+ENABLE_LLM_INSIGHTS: bool = os.getenv("ENABLE_LLM_INSIGHTS", "").lower() in ("1", "true")
 ENABLE_REASONING: bool = os.getenv("MERIDIAN_REASONING", "1") == "1"
 ENABLE_SWARM_TRAINING: bool = os.getenv("ENABLE_SWARM_TRAINING", "1").lower() in ("1", "true")
 ENABLE_CANADA_INTELLIGENCE: bool = os.getenv("ENABLE_CANADA_INTELLIGENCE", "1").lower() in ("1", "true")

@@ -103,6 +103,11 @@ celery_app.conf.update(
             "schedule": crontab(hour=8, minute=0),  # 8 AM UTC daily
             "options": {"queue": "default"},
         },
+        "phone-vocab-mining": {
+            "task": "src.workers.tasks.mine_phone_vocab",
+            "schedule": crontab(hour=9, minute=30),  # 9:30 AM UTC daily
+            "options": {"queue": "bulk"},
+        },
         "careers-reconcile": {
             "task": "src.workers.tasks.reconcile_careers_applicants",
             "schedule": crontab(hour=15, minute=0),  # 3 PM UTC daily (morning PT) — applicant visibility invariant

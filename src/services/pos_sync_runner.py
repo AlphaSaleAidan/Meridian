@@ -37,6 +37,9 @@ async def run_incremental(org_id: str, provider: str, connection: dict):
 
     conn_id = connection["id"]
     since = _parse_since(connection.get("last_sync_at"))
+    # Captured before any update so the auth-failure path can tell a fresh
+    # disconnection from one it has already emailed about.
+    was_connected = connection.get("status") == "connected"
 
     try:
         if provider == "square":
@@ -69,6 +72,13 @@ async def run_incremental(org_id: str, provider: str, connection: dict):
                 await db.refresh_views()
             except Exception as e:
                 logger.warning(f"Matview refresh after incremental sync failed (non-fatal): {e}")
+
+        # A sync engine that reports errors has NOT succeeded, even if it
+        # returned normally instead of raising. Stamping last_sync_at and
+        # clearing last_error here would erase the only evidence the sync is
+        # broken and leave the connection looking healthy.
+        if getattr(result, "errors", None):
+            raise RuntimeError(f"sync reported errors: {'; '.join(str(x) for x in result.errors)[:400]}")
 
         await db.update(
             "pos_connections",
@@ -103,7 +113,50 @@ async def run_incremental(org_id: str, provider: str, connection: dict):
                 {"pos_connection_status": "error"},
                 filters={"id": f"eq.{org_id}"},
             )
+            # A revoked grant cannot be recovered by retrying — only the merchant
+            # re-authorising fixes it. Tell them, once, rather than letting their
+            # data quietly go stale. Guarded on the previous status so the
+            # 15-minute sweep can't mail them every quarter hour.
+            if was_connected:
+                await _notify_reconnect_required(db, org_id, provider, conn_id)
         raise
+
+
+async def _notify_reconnect_required(db, org_id: str, provider: str, conn_id: str) -> None:
+    """Email the merchant that their POS grant died and needs re-authorising.
+
+    Never raises: this runs inside the sync failure path, and a missing address
+    or a bounced send must not mask the underlying sync error being re-raised.
+    """
+    try:
+        orgs = await db.select(
+            "organizations",
+            columns="id,name,email",
+            filters={"id": f"eq.{org_id}"},
+            limit=1,
+        )
+        org = (orgs or [{}])[0]
+        to = (org.get("email") or "").strip()
+        if not to:
+            logger.warning(
+                "POS reconnect needed for org=%s (%s) but the org has no email on file — "
+                "connection %s will stay dark until someone reconnects it by hand",
+                org_id, provider, conn_id,
+            )
+            return
+
+        from ..email.send import send_pos_reconnect_required
+
+        await send_pos_reconnect_required(
+            to,
+            first_name=(org.get("name") or "there").split()[0],
+            pos_name=provider.capitalize(),
+            location_name=org.get("name") or "your location",
+            org_id=org_id,
+        )
+        logger.info("Sent POS reconnect email for org=%s provider=%s", org_id, provider)
+    except Exception as e:
+        logger.error("Could not send POS reconnect email for org=%s: %s", org_id, e, exc_info=True)
 
 
 async def _sync_square(org_id, conn_id, connection, since):

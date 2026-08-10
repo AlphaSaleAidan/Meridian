@@ -299,6 +299,20 @@ class ProvisionCustomerRequest(BaseModel):
     # Fee allocation mode chosen by the rep at close, FIXED thereafter
     # (business_pays | split_5050 | customer_pays). None → legacy fee behavior.
     fee_allocation_mode: str | None = None
+    # Pricing model chosen by the rep at close (migration 077):
+    # None/'per_order' = per-order fee model; 'zero_per_order' = minutes
+    # licensing — order fee forced to 0, monthly minute bucket + overage, and
+    # fee_allocation_mode is IGNORED (there is no per-order fee to allocate).
+    pricing_model: str | None = None
+
+    @field_validator("pricing_model")
+    @classmethod
+    def _validate_pricing_model(cls, v: str | None) -> str | None:
+        if v is None or v == "":
+            return None
+        if v not in ("per_order", "zero_per_order"):
+            raise ValueError("pricing_model must be per_order or zero_per_order")
+        return v
 
     @field_validator("fee_allocation_mode")
     @classmethod
@@ -398,6 +412,7 @@ async def _record_provision_fee_terms(db, req: ProvisionCustomerRequest) -> tupl
             plan_tier=req.plan,
             monthly_fee_cents=req.monthly_price * 100 if req.monthly_price else None,
             order_fee_cents=req.order_fee_cents,
+            pricing_model=req.pricing_model,
         )
         if lead_row is not None:
             locked = await lock_lead_fee_terms(db, market, req.lead_id, terms, locked_by)
@@ -541,13 +556,17 @@ async def provision_customer(req: ProvisionCustomerRequest):
         # per-order fee (standard) — so the mode is FIXED from the moment of
         # provisioning.
         _seed_order_fee = billing_terms_recorded and terms.get("order_fee_cents") is not None
-        if _seed_order_fee or req.fee_allocation_mode:
+        # Zero-per-order deals have no per-order fee to allocate — a stray
+        # client-sent fee_allocation_mode is dropped, never seeded.
+        _zero_per_order = (terms or {}).get("pricing_model") == "zero_per_order"
+        _seed_fee_mode = bool(req.fee_allocation_mode) and not _zero_per_order
+        if _seed_order_fee or _seed_fee_mode:
             try:
                 pac_seed: dict = {}
                 if _seed_order_fee:
                     pac_seed["order_fee_cents"] = int(terms["order_fee_cents"])
                     pac_seed["plan_tier"] = terms.get("plan_tier")
-                if req.fee_allocation_mode:
+                if _seed_fee_mode:
                     pac_seed["fee_allocation_mode"] = req.fee_allocation_mode
                 existing_pac = await db.select(
                     "phone_agent_config", "id",

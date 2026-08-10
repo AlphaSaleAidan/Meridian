@@ -15,6 +15,7 @@ from .templates import (
     weekly_report,
     anomaly_alert,
     pos_connected,
+    pos_reconnect_required,
     password_reset,
     invite,
     lead_assigned,
@@ -193,6 +194,32 @@ async def send_pos_connected(
     subject = f"{pos_name} Connected — You're All Set!"
     result = await _client.send(to, subject, html, tag="pos_connected")
     await _log_send(to, "pos_connected", subject, result, org_id=org_id, tag="pos_connected")
+    return result
+
+
+async def send_pos_reconnect_required(
+    to: str,
+    first_name: str,
+    pos_name: str,
+    location_name: str,
+    *,
+    org_id: Optional[str] = None,
+) -> dict:
+    """Tell a merchant their POS authorisation died and needs re-granting.
+
+    Sent once per disconnection (the caller de-dupes), because a POS whose grant
+    has been revoked cannot be recovered by any amount of retrying — only the
+    merchant re-authorising fixes it.
+    """
+    html = pos_reconnect_required.render(
+        first_name=first_name,
+        pos_name=pos_name,
+        location_name=location_name,
+        reconnect_url=f"{_FRONTEND}/app/settings/integrations",
+    )
+    subject = f"Action needed: reconnect {pos_name} to Meridian"
+    result = await _client.send(to, subject, html, tag="pos_reconnect_required")
+    await _log_send(to, "pos_reconnect_required", subject, result, org_id=org_id, tag="pos_reconnect_required")
     return result
 
 

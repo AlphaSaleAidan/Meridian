@@ -39,9 +39,14 @@ async def refresh_expiring_tokens() -> dict:
     db = get_db()
 
     cutoff = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
+    # Include `error` rows, not just `connected`. A failed sync sets status=error
+    # and nothing ever sets it back except a fresh OAuth authorization, so
+    # filtering on connected-only permanently excluded those rows from refresh —
+    # their tokens then lapsed and the merchant had to reconnect by hand. A
+    # refresh is precisely how such a connection recovers, so attempt it.
     all_conns = await db.select(
         "pos_connections",
-        filters={"status": "eq.connected"},
+        filters={"status": "in.(connected,error)"},
     )
     # Refresh anything expiring within 7 days OR with a missing/blank expiry. The
     # manual /connect path never set token_expires_at, and a server-side `lt` filter
@@ -52,7 +57,7 @@ async def refresh_expiring_tokens() -> dict:
         if not c.get("token_expires_at") or c["token_expires_at"] < cutoff
     ]
 
-    stats = {"refreshed": 0, "failed": 0, "errors": []}
+    stats = {"refreshed": 0, "failed": 0, "recovered": 0, "expiring_unfixed": [], "errors": []}
 
     for conn in connections:
         connection_id = conn.get("id", "unknown")
@@ -78,7 +83,12 @@ async def refresh_expiring_tokens() -> dict:
                 "access_token_enc": encrypt_token(tokens["access_token"]),
                 "token_expires_at": tokens.get("expires_at"),
                 "updated_at": datetime.now(timezone.utc).isoformat(),
+                # A working token means the connection is healthy again. Without
+                # this the row stays `error` forever and is re-stranded next run.
+                "status": "connected",
+                "last_error": None,
             }
+            was_errored = conn.get("status") == "error"
             # Square may omit refresh_token in the refresh response.
             # Only overwrite when a non-empty new value is returned —
             # encrypting an empty string would brick future refreshes.
@@ -94,16 +104,52 @@ async def refresh_expiring_tokens() -> dict:
 
             logger.info(f"Refreshed token for org={org_id} connection={connection_id}, new expiry: {tokens['expires_at']}")
             stats["refreshed"] += 1
+            if was_errored:
+                stats["recovered"] += 1
+                logger.info(f"Recovered errored connection {connection_id} (org={org_id})")
 
         except (OAuthError, CloverOAuthError) as e:
             logger.error(f"Token refresh failed for connection {connection_id}: {e}")
             stats["errors"].append(f"{connection_id}: {str(e)}")
             stats["failed"] += 1
+            _note_if_lapsing(stats, conn, connection_id, org_id, str(e))
 
         except Exception as e:
             logger.error(f"Unexpected error refreshing {connection_id}: {e}", exc_info=True)
             stats["errors"].append(f"{connection_id}: {str(e)}")
             stats["failed"] += 1
+            _note_if_lapsing(stats, conn, connection_id, org_id, str(e))
 
-    logger.info(f"Token refresh complete: {stats['refreshed']} refreshed, {stats['failed']} failed")
+    logger.info(
+        f"Token refresh complete: {stats['refreshed']} refreshed "
+        f"({stats['recovered']} recovered), {stats['failed']} failed"
+    )
+    if stats["expiring_unfixed"]:
+        # Loud, greppable line: these merchants lose POS sync when the clock runs
+        # out and only a manual reconnect brings them back.
+        logger.error(
+            "POS TOKEN LAPSE IMMINENT — refresh failed for %d connection(s) expiring within 7 days: %s",
+            len(stats["expiring_unfixed"]),
+            stats["expiring_unfixed"],
+        )
     return stats
+
+
+def _note_if_lapsing(stats: dict, conn: dict, connection_id: str, org_id: str, error: str) -> None:
+    """Flag a failed refresh whose token actually runs out soon.
+
+    A failure on a token with months left is noise; a failure on one expiring
+    this week means the merchant is about to go dark.
+    """
+    expires_at = conn.get("token_expires_at")
+    if not expires_at:
+        return
+    stats["expiring_unfixed"].append(
+        {
+            "connection_id": connection_id,
+            "org_id": org_id,
+            "provider": conn.get("provider"),
+            "expires_at": expires_at,
+            "error": error[:200],
+        }
+    )

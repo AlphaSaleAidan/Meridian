@@ -18,13 +18,22 @@ export function formatCents(cents: number | null | undefined): string {
 }
 
 export function formatCentsCompact(cents: number | null | undefined): string {
-  if (cents == null) return '$0'
   const { locale, currency } = getLocaleConfig()
-  const dollars = cents / 100
   const prefix = currency === 'CAD' ? 'CA$' : '$'
-  if (dollars >= 1_000_000) return `${prefix}${(dollars / 1_000_000).toFixed(1)}M`
-  if (dollars >= 1_000) return `${prefix}${(dollars / 1_000).toFixed(1)}K`
-  return dollars.toLocaleString(locale, { style: 'currency', currency, minimumFractionDigits: 0, maximumFractionDigits: 0 })
+  if (cents == null) return `${prefix}0`
+  const dollars = cents / 100
+  // Magnitude drives the unit, sign is re-applied outside the prefix, so
+  // negatives read "-CA$1.2K" rather than "CA$-1.2K" (and no longer skip the
+  // K/M branches entirely by failing a `>=` test).
+  const sign = dollars < 0 ? '-' : ''
+  const abs = Math.abs(dollars)
+  if (abs >= 1_000_000) return `${sign}${prefix}${(abs / 1_000_000).toFixed(1)}M`
+  if (abs >= 1_000) return `${sign}${prefix}${(abs / 1_000).toFixed(1)}K`
+  // Under a thousand, `Intl` renders CAD under en-CA as a bare "$", which put
+  // "CA$13.5K" and "$378" side by side in one stat row. Carrying the prefix
+  // across every branch makes a single formatter read a single way.
+  const amount = abs.toLocaleString(locale, { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+  return `${sign}${prefix}${amount}`
 }
 
 export function formatNumber(n: number | null | undefined): string {
