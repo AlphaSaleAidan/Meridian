@@ -101,7 +101,7 @@ class GenericOAuthManager:
             params["code_challenge"] = code_challenge
             params["code_challenge_method"] = "S256"
         params.update(self.cfg.extra_authorize_params)
-        return f"{self.cfg.authorize_url}?{urlencode(params)}"
+        return f"{self.cfg.effective_authorize_url()}?{urlencode(params)}"
 
     def _token_url(self, domain_prefix: str = "") -> str:
         return self.cfg.token_url.replace("{domain_prefix}", domain_prefix or "")

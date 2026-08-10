@@ -33,6 +33,10 @@ class ProviderConfig:
     #   "userinfo:<url>:<dotted.path>" → GET <url> with bearer token, read path
     merchant_id_strategy: str
     uses_pkce: bool = False
+    # Optional env var that overrides authorize_url when set (Stripe Apps:
+    # pre-publish installs go through a channel-scoped external-test link;
+    # the canonical marketplace URL only activates once the app is published).
+    authorize_url_env: str = ""
     # Token-endpoint auth style: False → client_id/client_secret in the form
     # body (the common OAuth2 pattern); True → HTTP basic with client_secret
     # as the username (Stripe Apps' /v1/oauth/token contract).
@@ -45,6 +49,11 @@ class ProviderConfig:
     market_note: str = ""
     docs_url: str = ""
     extra_authorize_params: dict[str, str] = field(default_factory=dict)
+
+    def effective_authorize_url(self) -> str:
+        if self.authorize_url_env:
+            return os.environ.get(self.authorize_url_env, "") or self.authorize_url
+        return self.authorize_url
 
     def client_id(self) -> str:
         return os.environ.get(self.client_id_env, "")
@@ -110,6 +119,11 @@ _REGISTRY: dict[str, ProviderConfig] = {
             key="stripe",
             label="Stripe",
             authorize_url="https://marketplace.stripe.com/oauth/v2/authorize",
+            # Until the app passes marketplace review, installs go through the
+            # channel-scoped external-test link — set STRIPE_POS_AUTHORIZE_URL
+            # to it on Railway (value in /root/.secrets/meridian-integrations-
+            # stripe.env), unset after publish.
+            authorize_url_env="STRIPE_POS_AUTHORIZE_URL",
             token_url="https://api.stripe.com/v1/oauth/token",
             scopes=[],  # permissions are declared in stripe-app/stripe-app.json
             client_id_env="STRIPE_POS_CLIENT_ID",

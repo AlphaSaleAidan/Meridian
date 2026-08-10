@@ -95,6 +95,24 @@ def test_stripe_authorize_url_and_state_roundtrip(monkeypatch):
     assert "client_id=app_client_test123" in url
     # App permissions are manifest-declared — a scope param would be rejected.
     assert "scope=" not in url
+
+
+def test_stripe_authorize_url_external_test_override(monkeypatch):
+    """Pre-publish, installs go through the channel-scoped external-test link;
+    STRIPE_POS_AUTHORIZE_URL swaps the base URL without touching the params."""
+    cfg = get_provider("stripe")
+    monkeypatch.setenv("STRIPE_POS_CLIENT_ID", "app_client_test123")
+    monkeypatch.setenv("STRIPE_POS_CLIENT_SECRET", "sk_test_x")
+    chnlink = "https://marketplace.stripe.com/oauth/v2/chnlink_abc123/authorize"
+    monkeypatch.setenv("STRIPE_POS_AUTHORIZE_URL", chnlink)
+    state = sign_state("stripe", ORG, "/app/settings")
+    url = GenericOAuthManager(cfg, "https://api.example.com/api/pos/stripe/callback").authorize_url(state)
+    assert url.startswith(chnlink + "?")
+    assert "client_id=app_client_test123" in url
+    # Unset → falls back to the canonical marketplace URL (post-publish).
+    monkeypatch.delenv("STRIPE_POS_AUTHORIZE_URL")
+    url2 = GenericOAuthManager(cfg, "https://api.example.com/api/pos/stripe/callback").authorize_url(state)
+    assert url2.startswith("https://marketplace.stripe.com/oauth/v2/authorize?")
     verified = verify_state(state)
     assert verified == ("stripe", ORG, "/app/settings")
     # provider-scoped: a square-signed state must not pass for stripe
