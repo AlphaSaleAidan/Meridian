@@ -141,6 +141,15 @@
   .success svg{color:var(--ok);margin-bottom:10px}
   .success h3{font-size:18px;margin-bottom:6px}
   .success p{font-size:14px;color:var(--muted)}
+  .bookbtn{
+    display:inline-flex;align-items:center;justify-content:center;gap:9px;
+    margin:14px 0 4px;padding:15px 26px;border-radius:12px;text-decoration:none;
+    background:linear-gradient(100deg,var(--brand),#1478B8);color:#fff;
+    font-size:16px;font-weight:700;box-shadow:0 10px 24px -10px rgba(26,143,214,.6);
+    transition:transform .15s var(--ease-out);
+  }
+  .bookbtn:active{transform:scale(.97)}
+  .finealt{font-size:12px;margin-top:10px}
 
   .stickybar{
     position:fixed;left:0;right:0;bottom:0;padding:10px 16px calc(10px + env(safe-area-inset-bottom));
@@ -365,9 +374,14 @@
     </form>
     <div class="success" id="success">
       <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg>
-      <h3>Got it — talk soon.</h3>
-      <p>We'll reach out within one business day. Want a head start?
-      Call the demo line above and hear your future phone line in action.</p>
+      <h3>Got it — now grab a time.</h3>
+      <p>Pick a slot that works and it goes straight on the calendar — you'll
+      get an invite by email.</p>
+      <a class="bookbtn" href="https://schedule.meridian.tips" target="_blank" rel="noopener">
+        Pick your call time
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+      </a>
+      <p class="finealt">Prefer us to call you? Just close this — we reach out within one business day.</p>
     </div>
   </div>
 
