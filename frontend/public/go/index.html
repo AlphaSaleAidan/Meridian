@@ -57,6 +57,10 @@
   .callnote{text-align:center;font-size:12.5px;color:var(--muted);margin-top:8px}
 
   .benefits{margin:28px 0;display:grid;gap:14px}
+  .trio{display:grid;gap:12px;margin-bottom:22px}
+  .trio .benefit .ic{width:36px;height:36px}
+  .trio h3{font-size:15px}
+  .trio p{font-size:13.5px}
   .kicker{display:flex;align-items:center;gap:9px;font-size:11.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--brand)}
   .kicker::before{content:"";width:22px;height:2px;border-radius:2px;background:linear-gradient(90deg,var(--brand),var(--accent))}
   .payflow{margin-top:4px;padding:16px;border-radius:14px;background:linear-gradient(135deg,rgba(26,143,214,.05),rgba(23,197,176,.07));border:1px solid rgba(23,197,176,.25)}
@@ -64,7 +68,19 @@
   .payflow ol{list-style:none;display:grid;gap:10px}
   .payflow li{display:flex;gap:10px;font-size:13.5px;color:var(--muted);line-height:1.45}
   .payflow li span{flex:none;width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#12A796);color:#fff;font-size:11px;font-weight:800;display:grid;place-items:center;margin-top:1px;box-shadow:0 4px 10px -4px rgba(23,197,176,.6)}
-  .paytrust{margin-top:10px;padding-top:10px;border-top:1px solid var(--line);font-size:12.5px;font-weight:600;color:var(--ink)}
+  .paytrust{
+    display:flex;align-items:flex-start;gap:8px;
+    margin-top:12px;padding-top:12px;border-top:1px solid var(--line);
+    font-size:15px;font-weight:700;line-height:1.4;color:var(--ink);letter-spacing:-.01em;
+  }
+  .paytrust svg{flex:none;color:var(--accent);margin-top:2px}
+  .paytrust em{
+    font-style:normal;
+    background:linear-gradient(100deg,var(--brand),var(--accent));
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+  }
+  .film{margin:26px 0}
+  .film video{width:100%;margin-top:10px;border-radius:14px;display:block;background:#0A0A0B;border:1px solid var(--line);box-shadow:0 10px 26px -12px rgba(22,24,29,.3)}
   .bridge{
     text-align:center;font-size:16.5px;font-weight:700;letter-spacing:-.01em;
     margin:26px 0;color:var(--ink);
@@ -112,6 +128,27 @@
   @media (min-width:640px){ .stickybar{display:none} .wrap{padding-bottom:40px} }
   footer{margin-top:34px;padding-top:16px;border-top:1px solid var(--line);font-size:12px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap}
   footer a{color:var(--muted)}
+
+  /* ── motion ─────────────────────────────────────────────
+     Entrances only exist once JS is running (html.js) — without JS the page
+     is simply visible, so prerender/no-JS never shows a blank band. */
+  :root{--ease-out:cubic-bezier(.16,1,.3,1)}
+  .js [data-reveal]{opacity:0;transform:translateY(14px);filter:blur(5px)}
+  .js [data-reveal].in{
+    opacity:1;transform:none;filter:blur(0);
+    transition:opacity .5s var(--ease-out),transform .55s var(--ease-out),filter .5s var(--ease-out);
+    transition-delay:calc(var(--i,0)*70ms);
+  }
+  .callbtn,.submit,.stickybar a{transition:transform .15s var(--ease-out),box-shadow .3s var(--ease-out)}
+  .callbtn:active,.submit:active,.stickybar a:active{transform:scale(.97)}
+  @media (prefers-reduced-motion:no-preference){
+    .mark,.card:first-of-type{animation:floaty 7s ease-in-out infinite}
+    .card:first-of-type{animation-duration:9s;animation-delay:-3s}
+    @keyframes floaty{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .js [data-reveal]{opacity:1;transform:none;filter:none;transition:none}
+  }
 </style>
 </head>
 <body>
@@ -146,17 +183,54 @@
 <text x="50" y="51.5" text-anchor="middle" dominant-baseline="central" fill="#0A0A0B" font-size="5" font-weight="800" font-family="system-ui,-apple-system,sans-serif">M</text>
 <circle cx="50" cy="50" r="47" fill="none" stroke="#17C5B0" stroke-width="0.8" stroke-opacity="0.25"/>
 <circle cx="50" cy="50" r="48.5" fill="none" stroke="#1A8FD6" stroke-width="0.3" stroke-opacity="0.15"/>
-<style>@keyframes mer-sweep-mk2{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}</style>
+<style>@keyframes mer-sweep-mk2{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+  /* ── motion ─────────────────────────────────────────────
+     Entrances only exist once JS is running (html.js) — without JS the page
+     is simply visible, so prerender/no-JS never shows a blank band. */
+  :root{--ease-out:cubic-bezier(.16,1,.3,1)}
+  .js [data-reveal]{opacity:0;transform:translateY(14px);filter:blur(5px)}
+  .js [data-reveal].in{
+    opacity:1;transform:none;filter:blur(0);
+    transition:opacity .5s var(--ease-out),transform .55s var(--ease-out),filter .5s var(--ease-out);
+    transition-delay:calc(var(--i,0)*70ms);
+  }
+  .callbtn,.submit,.stickybar a{transition:transform .15s var(--ease-out),box-shadow .3s var(--ease-out)}
+  .callbtn:active,.submit:active,.stickybar a:active{transform:scale(.97)}
+  @media (prefers-reduced-motion:no-preference){
+    .mark,.card:first-of-type{animation:floaty 7s ease-in-out infinite}
+    .card:first-of-type{animation-duration:9s;animation-delay:-3s}
+    @keyframes floaty{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .js [data-reveal]{opacity:1;transform:none;filter:none;transition:none}
+  }
+</style>
 </svg>
     <span class="word">MERIDIAN</span>
   </header>
 
-  <h1>Your phone. Your register. Your door. <em>One AI.</em></h1>
-  <p class="sub">Money moves through your restaurant three ways. Meridian watches
+  <h1 data-reveal>Your phone. Your register. Your door. <em>One AI.</em></h1>
+  <p class="sub" data-reveal style="--i:1">Money moves through your restaurant three ways. Meridian watches
   all three — and turns what it sees into orders taken, leaks plugged, and
   hours staffed right.</p>
 
-  <div class="card">
+  <div class="trio">
+    <div class="benefit" data-reveal style="--i:1">
+      <span class="ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="10"/></svg></span>
+      <div><h3>Never miss a call again</h3><p>Busy line, mid-rush, after close — it picks up every time.</p></div>
+    </div>
+    <div class="benefit" data-reveal style="--i:2">
+      <span class="ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg></span>
+      <div><h3>Finds the leaks</h3><p>Voids, comps, discounts, cancelled tickets — flagged the day patterns start.</p></div>
+    </div>
+    <div class="benefit" data-reveal style="--i:3">
+      <span class="ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+      <div><h3>True conversion</h3><p>Walk-ins vs. orders, by hour — your register only sees the buyers.</p></div>
+    </div>
+  </div>
+
+
+  <div class="card" data-reveal style="--i:2">
     <div class="demo">
       <span class="dot" aria-hidden="true"></span>
       <p><strong>Don't take our word for it.</strong> Call and order a pizza — a real AI answers. No card, no charge.</p>
@@ -170,58 +244,51 @@
   </div>
 
   <div class="benefits">
-    <p class="kicker">It watches the phone</p>
-    <div class="benefit">
-      <span class="ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="10"/></svg></span>
-      <div><h3>Never miss a call again</h3><p>Busy line, mid-rush, after close — it picks up every time.</p></div>
-    </div>
-    <div class="benefit">
+    <p class="kicker" data-reveal>It watches the phone</p>
+        <div class="benefit" data-reveal style="--i:1">
       <span class="ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></span>
       <div><h3>Orders land in your POS</h3><p>A complete order in Square or Clover — not a voicemail, not a link.</p></div>
     </div>
 
-    <div class="payflow">
+    <div class="payflow" data-reveal style="--i:1">
       <p class="payhead">And the money follows</p>
       <ol>
         <li><span>1</span>Mid-call, the AI texts a secure checkout link for the exact order.</li>
         <li><span>2</span>The guest taps and pays — card or wallet — before pickup.</li>
         <li><span>3</span>Order marked paid in your POS, money settles to you.</li>
       </ol>
-      <p class="paytrust">Your staff never reads a card number over the phone again.</p>
+      <p class="paytrust"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg><span>Your staff <em>never</em> reads a card number over the phone again.</span></p>
     </div>
 
-    <p class="kicker" style="margin-top:14px">It watches the register</p>
-    <div class="benefit">
-      <span class="ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg></span>
-      <div><h3>Finds the leaks</h3><p>Voids, comps, discounts, cancelled tickets — flagged the day patterns start.</p></div>
-    </div>
-    <div class="benefit">
+    <p class="kicker" data-reveal style="margin-top:14px">It watches the register</p>
+        <div class="benefit" data-reveal style="--i:1">
       <span class="ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="m7 13 4-4 3 3 5-6"/></svg></span>
       <div><h3>Sees what's coming</h3><p>Revenue forecast by daypart — prep, ordering, and staffing follow.</p></div>
     </div>
-    <div class="benefit">
+    <div class="benefit" data-reveal style="--i:1">
       <span class="ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="2" x2="12" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span>
       <div><h3>Knows your margins</h3><p>Which dishes earn, which just fill the menu.</p></div>
     </div>
 
-    <p class="kicker" style="margin-top:14px">It watches the door</p>
-    <div class="benefit">
-      <span class="ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
-      <div><h3>True conversion</h3><p>Walk-ins vs. orders, by hour — your register only sees the buyers.</p></div>
-    </div>
-    <div class="benefit">
+    <p class="kicker" data-reveal style="margin-top:14px">It watches the door</p>
+        <div class="benefit" data-reveal style="--i:1">
       <span class="ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 22h14"/><path d="M5 2h14"/><path d="M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22"/><path d="M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2"/></svg></span>
       <div><h3>The cost of the wait</h3><p>Walk-outs counted, and priced.</p></div>
     </div>
-    <div class="benefit">
+    <div class="benefit" data-reveal style="--i:1">
       <span class="ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></span>
       <div><h3>Staff to reality</h3><p>Schedules from real door traffic, not gut feel. Anonymous by design — it counts people, never identifies them.</p></div>
     </div>
   </div>
 
-  <p class="bridge">Three doors. One brain. Every location, one dashboard.</p>
+  <div class="film" data-reveal>
+    <p class="kicker">The 30-second version</p>
+    <video controls playsinline preload="none" poster="/media/captains-poster.jpg" src="/media/captains-30s.mp4" aria-label="The Captains — Meridian's 30 second commercial"></video>
+  </div>
 
-  <div class="card" id="quote">
+  <p class="bridge" data-reveal>Three doors. One brain. Every location, one dashboard.</p>
+
+  <div class="card" id="quote" data-reveal>
     <form id="leadform" autocomplete="on">
       <label for="f-name">See what it costs for your restaurant</label>
       <input id="f-name" name="full_name" placeholder="Your name" required autocomplete="name">
@@ -257,6 +324,13 @@
 
 <script>
 (() => {
+  document.documentElement.classList.add('js')
+  const io = new IntersectionObserver((entries) => {
+    for (const e of entries) if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target) }
+  }, { threshold: 0.15, rootMargin: '4000px 0px -40px 0px' })
+  document.querySelectorAll('[data-reveal]').forEach((el) => io.observe(el))
+})()
+;(() => {
   const form = document.getElementById('leadform')
   const success = document.getElementById('success')
   const sticky = document.getElementById('stickybar')
