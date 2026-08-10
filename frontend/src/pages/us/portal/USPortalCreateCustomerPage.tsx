@@ -1117,14 +1117,14 @@ export default function USPortalCreateCustomerPage() {
                   Pricing Model <span className="text-[#4a5550]">(how the phone agent bills — set now, fixed after)</span>
                 </label>
                 <div className="grid gap-2 sm:grid-cols-2">
-                  <button onClick={() => { update('pricingModel', 'per_order'); update('priceBump', 0) }}
+                  <button onClick={() => update('pricingModel', 'per_order')}
                     className={`p-4 rounded-xl border text-left transition-all duration-200 ${
                       !zeroPerOrder ? 'border-[#17C5B0]/50 bg-[#17C5B0]/5' : 'border-[#1F1F23] hover:border-[#4a5550] bg-[#0A0A0B]'
                     }`}>
                     <p className="text-[13px] font-semibold text-white">Per-order pricing</p>
                     <p className="text-[11px] text-[#A1A1A8] mt-0.5">${selectedPlan.price}/mo + ${selectedPlan.orderFee.toFixed(2)} per phone order</p>
                   </button>
-                  <button onClick={() => { update('pricingModel', 'zero_per_order'); update('priceBump', 0) }}
+                  <button onClick={() => update('pricingModel', 'zero_per_order')}
                     className={`p-4 rounded-xl border text-left transition-all duration-200 ${
                       zeroPerOrder ? 'border-[#17C5B0]/50 bg-[#17C5B0]/5' : 'border-[#1F1F23] hover:border-[#4a5550] bg-[#0A0A0B]'
                     }`}>
@@ -1138,22 +1138,6 @@ export default function USPortalCreateCustomerPage() {
                 </div>
               </div>
             )}
-
-            <div className="mb-4">
-              <label className="block text-[11px] font-medium text-[#A1A1A8] mb-1.5">
-                Price Adjustment <span className="text-[#4a5550]">(add up to ${REP_PRICE_HEADROOM}/mo on top of base)</span>
-              </label>
-              <div className="flex items-center gap-3">
-                <input type="range" min={0} max={REP_PRICE_HEADROOM} step={5}
-                  value={form.priceBump}
-                  onChange={e => update('priceBump', Number(e.target.value))}
-                  className="flex-1 h-2 bg-[#1F1F23] rounded-full appearance-none cursor-pointer accent-[#17C5B0]" />
-                <span className="text-[13px] font-semibold text-white w-32 text-right">
-                  {form.priceBump > 0 ? `+$${form.priceBump} = $${price}/mo` : `$${price}/mo`}
-                </span>
-              </div>
-              <p className="text-[10px] text-[#4a5550] mt-1">All amounts in USD. Base price is the floor — no discounts.</p>
-            </div>
 
             {!zeroPerOrder ? (
               <div className="mb-4">

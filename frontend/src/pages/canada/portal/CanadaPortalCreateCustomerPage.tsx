@@ -1121,14 +1121,14 @@ export default function CanadaPortalCreateCustomerPage() {
                   Pricing Model <span className="text-pm-canada-text-faint">(how the phone agent bills — set now, fixed after)</span>
                 </label>
                 <div className="grid gap-2 sm:grid-cols-2">
-                  <button onClick={() => { update('pricingModel', 'per_order'); update('priceBump', 0) }}
+                  <button onClick={() => update('pricingModel', 'per_order')}
                     className={`p-4 rounded-xl border text-left transition-all duration-200 ${
                       !zeroPerOrder ? 'border-pm-accent/50 bg-pm-accent/5' : 'border-pm-canada-border hover:border-pm-canada-text-faint bg-pm-canada-bg'
                     }`}>
                     <p className="text-sm-tight font-semibold text-white">Per-order pricing</p>
                     <p className="text-2xs text-pm-canada-text-muted mt-0.5">CA${selectedPlan.price}/mo + CA${selectedPlan.orderFee.toFixed(2)} per phone order</p>
                   </button>
-                  <button onClick={() => { update('pricingModel', 'zero_per_order'); update('priceBump', 0) }}
+                  <button onClick={() => update('pricingModel', 'zero_per_order')}
                     className={`p-4 rounded-xl border text-left transition-all duration-200 ${
                       zeroPerOrder ? 'border-pm-accent/50 bg-pm-accent/5' : 'border-pm-canada-border hover:border-pm-canada-text-faint bg-pm-canada-bg'
                     }`}>
@@ -1142,22 +1142,6 @@ export default function CanadaPortalCreateCustomerPage() {
                 </div>
               </div>
             )}
-
-            <div className="mb-4">
-              <label className="block text-2xs font-medium text-pm-canada-text-muted mb-1.5">
-                Price Adjustment <span className="text-pm-canada-text-faint">(add up to CA${REP_PRICE_HEADROOM_CAD}/mo on top of base)</span>
-              </label>
-              <div className="flex items-center gap-3">
-                <input type="range" min={0} max={REP_PRICE_HEADROOM_CAD} step={5}
-                  value={form.priceBump}
-                  onChange={e => update('priceBump', Number(e.target.value))}
-                  className="flex-1 h-2 bg-pm-canada-border rounded-full appearance-none cursor-pointer accent-pm-accent" />
-                <span className="text-sm-tight font-semibold text-white w-36 text-right">
-                  {form.priceBump > 0 ? `+CA$${form.priceBump} = CA$${price}/mo` : `CA$${price}/mo`}
-                </span>
-              </div>
-              <p className="text-2xs text-pm-canada-text-faint mt-1">All amounts in CAD. Base price is the floor — no discounts.</p>
-            </div>
 
             {!zeroPerOrder ? (
               <div className="mb-4">

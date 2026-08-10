@@ -189,11 +189,13 @@ CANONICAL_FEE_TERMS: dict[str, dict[str, dict[str, int]]] = {
 }
 
 # ── Zero-per-order (minutes) canonical table ─────────────────────────────────
-# Bucket sizes + overage from Aidan's settled licensing card (2026-08-09) — do
-# NOT re-derive; they change only on his explicit instruction (update the
-# partner deck artifact dd6d28c1 together with this table):
-#   Premium 600 min / Command 1,000 min per month, CA$0.35/min past the
-#   bucket, 5-min hard cap unchanged. US overage derived ÷1.4 (25¢).
+# Bucket sizes from Aidan's settled licensing card (2026-08-09); merchant
+# overage set by Aidan 2026-08-10 — do NOT re-derive; these change only on
+# his explicit instruction:
+#   Premium 600 min / Command 1,000 min per month, $0.20/min past the bucket
+#   in BOTH markets (flat, not FX-derived), 5-min hard cap unchanged. (The
+#   partner wholesale card's CA$0.35/min overage is a separate, backend-side
+#   number — deck artifact dd6d28c1.)
 #
 # THE MERCHANT'S MONTHLY DOES NOT CHANGE (Aidan 2026-08-10): a $0/order deal
 # bills the SAME tier retail monthly as a per-order deal — the minutes are
@@ -207,12 +209,12 @@ CANONICAL_FEE_TERMS: dict[str, dict[str, dict[str, int]]] = {
 # coerces standard/unknown tiers to DEFAULT_PLAN_TIER.
 ZERO_PER_ORDER_TERMS: dict[str, dict[str, dict[str, int]]] = {
     "ca": {
-        "premium": {"included_monthly_min": 600, "monthly_overage_cents_per_min": 35},
-        "command": {"included_monthly_min": 1000, "monthly_overage_cents_per_min": 35},
+        "premium": {"included_monthly_min": 600, "monthly_overage_cents_per_min": 20},
+        "command": {"included_monthly_min": 1000, "monthly_overage_cents_per_min": 20},
     },
     "us": {
-        "premium": {"included_monthly_min": 600, "monthly_overage_cents_per_min": 25},
-        "command": {"included_monthly_min": 1000, "monthly_overage_cents_per_min": 25},
+        "premium": {"included_monthly_min": 600, "monthly_overage_cents_per_min": 20},
+        "command": {"included_monthly_min": 1000, "monthly_overage_cents_per_min": 20},
     },
 }
 

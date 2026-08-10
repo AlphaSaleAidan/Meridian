@@ -30,10 +30,10 @@ from src.billing import fee_terms as ft  # noqa: E402
 # ── Canonical card ───────────────────────────────────────────────────────────
 
 @pytest.mark.parametrize("market,tier,minutes,overage", [
-    ("ca", "premium", 600, 35),   # the settled card buckets
-    ("ca", "command", 1000, 35),
-    ("us", "premium", 600, 25),   # overage derived ÷1.4
-    ("us", "command", 1000, 25),
+    ("ca", "premium", 600, 20),   # $0.20/min both markets (Aidan 2026-08-10)
+    ("ca", "command", 1000, 20),
+    ("us", "premium", 600, 20),
+    ("us", "command", 1000, 20),
 ])
 def test_canonical_zero_per_order_card(market, tier, minutes, overage):
     card = ft.ZERO_PER_ORDER_TERMS[market][tier]
@@ -71,7 +71,7 @@ def test_zpo_defaults_keep_retail_monthly_and_fill_bucket():
     assert t["monthly_fee_cents"] == 50000  # the SAME retail monthly as per-order
     assert t["order_fee_cents"] == 0
     assert t["included_monthly_min"] == 600
-    assert t["monthly_overage_cents_per_min"] == 35
+    assert t["monthly_overage_cents_per_min"] == 20
 
 
 def test_zpo_forces_order_fee_to_zero_even_when_client_sends_one():

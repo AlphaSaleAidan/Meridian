@@ -59,8 +59,8 @@ export interface ZeroPerOrderCard {
 }
 
 export const ZERO_PER_ORDER_CARDS: Partial<Record<PlanTier['id'], ZeroPerOrderCard>> = {
-  premium: { includedMinutes: 600, overagePerMin: 0.25 },
-  command: { includedMinutes: 1000, overagePerMin: 0.25 },
+  premium: { includedMinutes: 600, overagePerMin: 0.2 },
+  command: { includedMinutes: 1000, overagePerMin: 0.2 },
 }
 
 export const PLAN_TIERS: PlanTier[] = [
