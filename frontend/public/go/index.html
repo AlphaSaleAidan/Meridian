@@ -7,7 +7,7 @@
      SPA — a static file loads instantly on cellular, which is the whole point.
      noindex: this page exists for ad clicks, not search. -->
 <meta name="robots" content="noindex,nofollow">
-<title>Meridian — More Than a Phone Agent for Restaurants</title>
+<title>Meridian — One AI for Your Phone, Register, and Door</title>
 <style>
   :root{
     --bg:#FAFBFC; --card:#FFFFFF; --ink:#16181D; --muted:#5A6472;
@@ -65,15 +65,11 @@
   .payflow li{display:flex;gap:10px;font-size:13.5px;color:var(--muted);line-height:1.45}
   .payflow li span{flex:none;width:22px;height:22px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#12A796);color:#fff;font-size:11px;font-weight:800;display:grid;place-items:center;margin-top:1px;box-shadow:0 4px 10px -4px rgba(23,197,176,.6)}
   .paytrust{margin-top:10px;padding-top:10px;border-top:1px solid var(--line);font-size:12.5px;font-weight:600;color:var(--ink)}
-  .camera{margin:4px 0 28px;padding:20px;border-radius:14px;background:linear-gradient(135deg,rgba(26,143,214,.05),rgba(23,197,176,.08));border:1px solid rgba(23,197,176,.3)}
-  .camera .kicker{color:var(--brand)}
-  .camera h2{font-size:21px;letter-spacing:-.01em;margin:8px 0}
-  .camsub{font-size:14px;color:var(--muted);margin-bottom:12px}
-  .camlist{list-style:none;display:grid;gap:9px}
-  .camlist li{font-size:13.5px;color:var(--muted);padding-left:20px;position:relative;line-height:1.45}
-  .camlist li::before{content:"";position:absolute;left:0;top:7px;width:8px;height:8px;border-radius:50%;background:linear-gradient(135deg,var(--brand),var(--accent))}
-  .camlist strong{color:var(--ink)}
-  .camtrust{margin-top:12px;padding-top:12px;border-top:1px solid var(--line);font-size:12.5px;font-weight:600;color:var(--ink)}
+  .bridge{
+    text-align:center;font-size:16.5px;font-weight:700;letter-spacing:-.01em;
+    margin:26px 0;color:var(--ink);
+  }
+  .bridge::after{content:"";display:block;width:44px;height:3px;border-radius:2px;margin:10px auto 0;background:linear-gradient(90deg,var(--brand),var(--accent))}
   .benefit{display:flex;gap:14px;align-items:flex-start}
   .benefit .ic{width:40px;height:40px;flex:none;border-radius:12px;display:grid;place-items:center;color:#fff;
     background:linear-gradient(135deg,var(--brand),#1478B8);box-shadow:0 6px 14px -6px rgba(26,143,214,.5)}
@@ -155,9 +151,10 @@
     <span class="word">MERIDIAN</span>
   </header>
 
-  <h1>More than a <em>phone agent.</em></h1>
-  <p class="sub">It answers every call and puts the order straight into your POS —
-  then finds your leaks, forecasts your revenue, and watches every door.</p>
+  <h1>Your phone. Your register. Your door. <em>One AI.</em></h1>
+  <p class="sub">Money moves through your restaurant three ways. Meridian watches
+  all three — and turns what it sees into orders taken, leaks plugged, and
+  hours staffed right.</p>
 
   <div class="card">
     <div class="demo">
@@ -173,7 +170,7 @@
   </div>
 
   <div class="benefits">
-    <p class="kicker">It answers the phone</p>
+    <p class="kicker">It watches the phone</p>
     <div class="benefit">
       <span class="ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="10"/></svg></span>
       <div><h3>Never miss a call again</h3><p>Busy line, mid-rush, after close — it picks up every time.</p></div>
@@ -182,13 +179,9 @@
       <span class="ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></span>
       <div><h3>Orders land in your POS</h3><p>A complete order in Square or Clover — not a voicemail, not a link.</p></div>
     </div>
-    <div class="benefit">
-      <span class="ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg></span>
-      <div><h3>Guests pay by text</h3><p>A payment link lands on the caller's phone before they hang up.</p></div>
-    </div>
 
     <div class="payflow">
-      <p class="payhead">How the money moves</p>
+      <p class="payhead">And the money follows</p>
       <ol>
         <li><span>1</span>Mid-call, the AI texts a secure checkout link for the exact order.</li>
         <li><span>2</span>The guest taps and pays — card or wallet — before pickup.</li>
@@ -197,37 +190,36 @@
       <p class="paytrust">Your staff never reads a card number over the phone again.</p>
     </div>
 
-    <p class="kicker" style="margin-top:14px">Then it runs the numbers</p>
+    <p class="kicker" style="margin-top:14px">It watches the register</p>
     <div class="benefit">
       <span class="ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></svg></span>
-      <div><h3>Finds the leaks</h3><p>Voids, comps, discounts, cancelled tickets — patterns flagged the day they start, not at month-end.</p></div>
+      <div><h3>Finds the leaks</h3><p>Voids, comps, discounts, cancelled tickets — flagged the day patterns start.</p></div>
     </div>
     <div class="benefit">
       <span class="ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="m7 13 4-4 3 3 5-6"/></svg></span>
-      <div><h3>Sees what's coming</h3><p>Revenue forecast by daypart, so prep, ordering, and staffing follow what&rsquo;s coming.</p></div>
-    </div>
-    <div class="benefit">
-      <span class="ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></span>
-      <div><h3>One view of everything</h3><p>Every location benchmarked side by side — one dashboard.</p></div>
+      <div><h3>Sees what's coming</h3><p>Revenue forecast by daypart — prep, ordering, and staffing follow.</p></div>
     </div>
     <div class="benefit">
       <span class="ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="2" x2="12" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span>
-      <div><h3>Knows your margins</h3><p>Item-level margins — which dishes earn, which just fill the menu.</p></div>
+      <div><h3>Knows your margins</h3><p>Which dishes earn, which just fill the menu.</p></div>
+    </div>
+
+    <p class="kicker" style="margin-top:14px">It watches the door</p>
+    <div class="benefit">
+      <span class="ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+      <div><h3>True conversion</h3><p>Walk-ins vs. orders, by hour — your register only sees the buyers.</p></div>
+    </div>
+    <div class="benefit">
+      <span class="ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 22h14"/><path d="M5 2h14"/><path d="M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22"/><path d="M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2"/></svg></span>
+      <div><h3>The cost of the wait</h3><p>Walk-outs counted, and priced.</p></div>
+    </div>
+    <div class="benefit">
+      <span class="ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></span>
+      <div><h3>Staff to reality</h3><p>Schedules from real door traffic, not gut feel. Anonymous by design — it counts people, never identifies them.</p></div>
     </div>
   </div>
 
-  <div class="camera">
-    <p class="kicker">Sales data × camera intelligence</p>
-    <h2>Your door and your register, finally talking.</h2>
-    <p class="camsub">Your register only sees buyers. Meridian also counts who walked in,
-    waited, or left — numbers a POS alone can&rsquo;t produce:</p>
-    <ul class="camlist">
-      <li><strong>True conversion</strong> — walk-ins vs. orders, by hour.</li>
-      <li><strong>The cost of the wait</strong> — walk-outs counted, and priced.</li>
-      <li><strong>Staff to reality</strong> — schedules from real door traffic, not gut feel.</li>
-    </ul>
-    <p class="camtrust">Anonymous by design — it counts people, it never identifies them.</p>
-  </div>
+  <p class="bridge">Three doors. One brain. Every location, one dashboard.</p>
 
   <div class="card" id="quote">
     <form id="leadform" autocomplete="on">
