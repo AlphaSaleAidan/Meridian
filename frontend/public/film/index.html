@@ -37,6 +37,9 @@
 }
 
 *{box-sizing:border-box}
+/* iOS Safari inflates text it judges too small for a phone unless this is pinned,
+   and inflated copy is what pushes the picture out of its box */
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased}
 .wrap{max-width:1120px;margin:0 auto;padding:clamp(16px,3vw,34px) clamp(14px,3vw,26px) 64px}
 
@@ -177,15 +180,23 @@ body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--sans);
 /* -- embedded on the marketing site (?embed=1) --------------
    The film and its transport only; the page furniture around them belongs to the
    standalone version. The host page supplies its own frame and background. */
-html.embed,html.embed body{overflow:hidden}
+html.embed,html.embed body{overflow:hidden;height:100%}
 html.embed body{background:transparent}
-html.embed .wrap{padding:0;max-width:none}
+/* Embedded, the host's box (.explainer-frame) is the one source of truth for the
+   proportions — the film pins itself to the frame and flexes to whatever is left
+   above the transport, instead of asserting its own aspect-ratio. If the two ever
+   disagree (iOS text inflation, an engine sizing the frame to its content), the
+   picture absorbs the difference and the transport stays put and visible. */
+html.embed .wrap{padding:0;max-width:none;height:100%;display:flex;flex-direction:column}
+html.embed .film{flex:1 1 auto;min-height:0;aspect-ratio:auto}
 html.embed .chapters,html.embed .hint,html.embed .doc{display:none}
 /* the host page puts its own Unmute control over the picture, so this would be a
    second prompt saying the same thing */
 html.embed .sndnote{display:none}
+/* the host's Unmute pill sits top-right where the watermark lives */
+html.embed .mark{display:none}
 html.embed .film{border:0;border-radius:10px}
-html.embed .transport{padding-top:10px}
+html.embed .transport{flex:none;padding-top:10px}
 .sndnote{flex:none;font-family:var(--mono);font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--brand);white-space:nowrap;overflow:hidden;max-width:24em;transition:opacity .3s ease,max-width .45s ease,margin-right .45s ease}
 .sndnote.gone{opacity:0;max-width:0;margin-right:-10px}   /* collapse, so the timeline takes the width back */
 @media (max-width:680px){.sndnote{display:none}}
