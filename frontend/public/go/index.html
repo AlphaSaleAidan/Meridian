@@ -94,6 +94,21 @@
     margin:26px 0;color:var(--ink);
   }
   .bridge::after{content:"";display:block;width:44px;height:3px;border-radius:2px;margin:10px auto 0;background:linear-gradient(90deg,var(--brand),var(--accent))}
+  .pos{margin:0 0 18px}
+  .posgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+  .postile{
+    display:flex;align-items:center;justify-content:center;gap:9px;
+    padding:15px;border-radius:12px;border:1.5px solid var(--line);background:var(--card);
+    color:var(--ink);font-size:15.5px;font-weight:700;cursor:pointer;
+    transition:border-color .2s var(--ease-out),box-shadow .2s var(--ease-out),transform .15s var(--ease-out);
+  }
+  .postile svg{border-radius:6px}
+  .postile:active{transform:scale(.97)}
+  .postile[aria-pressed="true"]{
+    border-color:var(--accent);
+    box-shadow:0 0 0 3px rgba(23,197,176,.15),0 6px 16px -8px rgba(23,197,176,.4);
+  }
+  .posnote{font-size:12.5px;color:var(--muted);margin-top:9px;text-align:center}
   .benefit{display:flex;gap:14px;align-items:flex-start}
   .benefit .ic{width:40px;height:40px;flex:none;border-radius:12px;display:grid;place-items:center;color:#fff;
     background:linear-gradient(135deg,var(--brand),#1478B8);box-shadow:0 6px 14px -6px rgba(26,143,214,.5)}
@@ -300,6 +315,32 @@
 
   <p class="bridge" data-reveal>Three doors. One brain. Every location, one dashboard.</p>
 
+  <div class="pos" data-reveal>
+    <p class="kicker">Works with the POS you already run</p>
+    <div class="posgrid">
+      <button type="button" class="postile" data-pos="Square" aria-pressed="false">
+        <svg width="24" height="24" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="64" height="64" rx="12" fill="#006AFF"/>
+  <rect x="18" y="18" width="28" height="28" rx="4" stroke="white" stroke-width="3.5" fill="none"/>
+  <rect x="27" y="27" width="10" height="10" rx="2" fill="white"/>
+</svg>
+        Square
+      </button>
+      <button type="button" class="postile" data-pos="Clover" aria-pressed="false">
+        <svg width="24" height="24" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="64" height="64" rx="12" fill="#1DC167"/>
+  <circle cx="32" cy="23" r="8" fill="white"/>
+  <circle cx="23" cy="32" r="8" fill="white"/>
+  <circle cx="41" cy="32" r="8" fill="white"/>
+  <circle cx="32" cy="41" r="8" fill="white"/>
+  <circle cx="32" cy="32" r="4" fill="#1DC167"/>
+</svg>
+        Clover
+      </button>
+    </div>
+    <p class="posnote">One-click connect. Keep your hardware, keep your menu.</p>
+  </div>
+
   <div class="card" id="quote" data-reveal>
     <form id="leadform" autocomplete="on">
       <label for="f-name">See what it costs for your restaurant</label>
@@ -353,6 +394,10 @@
     v.muted = true
     v.play().catch(() => {})
   })
+  document.querySelectorAll('.postile').forEach((t) => t.addEventListener('click', () => {
+    document.querySelectorAll('.postile').forEach((o) => o.setAttribute('aria-pressed', String(o === t && o.getAttribute('aria-pressed') !== 'true')))
+    document.getElementById('f-name').focus({ preventScroll: false })
+  }))
   pill.addEventListener('click', () => {
     v.currentTime = 0
     v.muted = false
@@ -380,7 +425,11 @@
     const data = Object.fromEntries(new FormData(form).entries())
     // attribution: the ad platform's query string travels with the lead
     data.source = 'ad-lander'
-    data.notes = location.search ? 'utm: ' + location.search.slice(1, 400) : ''
+    const pos = document.querySelector('.postile[aria-pressed="true"]')
+    const parts = []
+    if (pos) parts.push('pos: ' + pos.dataset.pos)
+    if (location.search) parts.push('utm: ' + location.search.slice(1, 400))
+    data.notes = parts.join(' | ')
     try {
       const res = await fetch('/api/quote-request', {
         method: 'POST',
