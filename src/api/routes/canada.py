@@ -14,7 +14,11 @@ from pydantic import BaseModel, EmailStr, field_validator
 
 from ..auth import ADMIN_EMAILS, require_jwt, require_admin_jwt, rate_limit_signup
 from .. import hierarchy
-from ...billing.fee_terms import ORDER_FEE_CAP_CENTS, ORDER_FEE_FLOOR_CENTS
+from ...billing.fee_terms import (
+    ORDER_FEE_CAP_CENTS,
+    ORDER_FEE_FLOOR_CENTS,
+    normalize_pricing_model,
+)
 from .careers import submit_application, CareerApplication
 from ._supabase_admin import delete_auth_user_by_email
 
@@ -110,6 +114,18 @@ class CreateCustomerRequest(BaseModel):
     # tier redline so a crafted request can't undercut the floor.
     plan_id: str | None = None
     order_fee_cents: int | None = None
+    # Pricing model chosen by the rep at close (migration 077):
+    # None / 'per_order' = the per-order fee model above, byte-for-byte;
+    # 'zero_per_order'   = the minutes-licensing card — order fee FORCED to 0,
+    # monthly minute bucket + overage from fee_terms.ZERO_PER_ORDER_TERMS.
+    pricing_model: str | None = None
+
+    @field_validator("pricing_model")
+    @classmethod
+    def validate_pricing_model(cls, v: str | None) -> str | None:
+        if v is not None and v not in ("per_order", "zero_per_order"):
+            raise ValueError("pricing_model must be per_order or zero_per_order")
+        return v
 
     @field_validator("business_name", "contact_name")
     @classmethod
@@ -152,6 +168,7 @@ async def _provision_fee_terms(
     monthly_price: int,
     order_fee_cents: int | None,
     locked_by: str,
+    pricing_model: str | None = None,
 ) -> dict:
     """Fee parity at deal close (shared by canada + us create-customer).
 
@@ -181,6 +198,7 @@ async def _provision_fee_terms(
             plan_tier=plan_id,
             monthly_fee_cents=monthly_price * 100 if monthly_price else None,
             order_fee_cents=order_fee_cents,
+            pricing_model=pricing_model,
         )
         lead_id = deal_id if (deal_id and _UUID_RE.match(deal_id)) else None
         if lead_id:
@@ -454,6 +472,7 @@ async def create_customer(req: CreateCustomerRequest, claims: dict = Depends(req
                 monthly_price=req.monthly_price,
                 order_fee_cents=req.order_fee_cents,
                 locked_by=claims.get("email") or user_id,
+                pricing_model=req.pricing_model,
             )
 
             # Commission accrual (Canada, LIVE + flag-gated). Writes the rep's
@@ -487,8 +506,18 @@ async def create_customer(req: CreateCustomerRequest, claims: dict = Depends(req
             # per-order fee so every payment rail picks it up the moment the
             # phone agent goes live. Best-effort — a fee-seed hiccup must never
             # fail customer creation (the fee falls back to the tier default).
-            if req.order_fee_cents is not None:
-                fee = _clamp_order_fee_cents(req.order_fee_cents, req.plan_id)
+            # Zero-per-order (minutes plan): the per-order fee is $0 BY MODEL,
+            # so the seed always runs with fee=0 and skips the redline clamp
+            # (the floors are per-order-model redlines; $0 here is the deal).
+            _zero_per_order = normalize_pricing_model(req.pricing_model) == "zero_per_order"
+            if _zero_per_order:
+                _seed_fee: int | None = 0
+            elif req.order_fee_cents is not None:
+                _seed_fee = _clamp_order_fee_cents(req.order_fee_cents, req.plan_id)
+            else:
+                _seed_fee = None
+            if _seed_fee is not None:
+                fee = _seed_fee
                 fee_seeded = False
                 try:
                     pac_headers = {

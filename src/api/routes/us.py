@@ -169,6 +169,17 @@ class CreateCustomerRequest(BaseModel):
     # tier redline (premium ≥ 65¢, command ≥ 45¢).
     plan_id: str | None = None
     order_fee_cents: int | None = None
+    # Pricing model chosen by the rep at close (mirrors canada.py, migration
+    # 077): None/'per_order' = per-order fee model; 'zero_per_order' = minutes
+    # licensing — order fee forced to 0, monthly minute bucket + overage.
+    pricing_model: str | None = None
+
+    @field_validator("pricing_model")
+    @classmethod
+    def validate_pricing_model(cls, v: str | None) -> str | None:
+        if v is not None and v not in ("per_order", "zero_per_order"):
+            raise ValueError("pricing_model must be per_order or zero_per_order")
+        return v
 
     @field_validator("business_name", "contact_name")
     @classmethod
@@ -422,6 +433,7 @@ async def create_customer(req: CreateCustomerRequest, caller: dict = Depends(req
                 monthly_price=req.monthly_price,
                 order_fee_cents=req.order_fee_cents,
                 locked_by=caller.get("email") or caller.get("id", ""),
+                pricing_model=req.pricing_model,
             )
 
             # Commission accrual (US) — path wired in lockstep with Canada
@@ -456,10 +468,20 @@ async def create_customer(req: CreateCustomerRequest, caller: dict = Depends(req
             # Rep fee slider — pre-seed phone_agent_config with the negotiated
             # per-order fee (mirrors canada.create_customer). Best-effort: a
             # seed failure never fails customer creation.
-            if req.order_fee_cents is not None:
+            # Zero-per-order (minutes plan): seed fee=0, skip the redline
+            # clamp — mirrors canada.create_customer.
+            from ...billing.fee_terms import normalize_pricing_model
+            _zero_per_order = normalize_pricing_model(req.pricing_model) == "zero_per_order"
+            if _zero_per_order:
+                _seed_fee: int | None = 0
+            elif req.order_fee_cents is not None:
                 from .canada import _clamp_order_fee_cents
-                fee = _clamp_order_fee_cents(req.order_fee_cents, req.plan_id,
-                                             market="us")
+                _seed_fee = _clamp_order_fee_cents(req.order_fee_cents, req.plan_id,
+                                                   market="us")
+            else:
+                _seed_fee = None
+            if _seed_fee is not None:
+                fee = _seed_fee
                 fee_seeded = False
                 try:
                     pac_headers = {

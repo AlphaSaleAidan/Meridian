@@ -520,6 +520,65 @@ def _overage_minutes(dur_min: float, included_min: int, cap_min: int) -> int:
     return over
 
 
+async def _bill_monthly_bucket(merchant_id: str, call_id: str, dur_min: float,
+                               config, terms: dict) -> None:
+    """Meter one call against the merchant's MONTHLY minutes bucket and bill
+    the whole-minute overage past it — zero-per-order (minutes licensing)
+    deals only; the caller gates on terms['pricing_model'].
+
+    billed_min = ceil(duration) clamped to the same effective hard call cap as
+    maxDurationSeconds, so a rounding-minute past the drop can't inflate usage.
+
+    Idempotency: the PRIMARY KEY on voice_monthly_calls.vapi_call_id is the
+    gate — a Vapi end-of-call retry finds the row and returns before touching
+    the ledger, so month-to-date never double-counts. The ledger's own
+    (source, ref) dedupe backstops the insert-then-crash window.
+
+    Concurrency: two calls ending in the same instant can read the same
+    month-to-date and each bill against it — worst case UNDER-bills one call's
+    overage by the other's minutes (never over-bills). Accepted: same
+    best-effort posture as every other ledger path here.
+    """
+    from ...db import get_db
+    from ...services.voice_ledger import credit
+    from datetime import datetime, timezone
+
+    included = max(int(terms.get("included_monthly_min") or 0), 0)
+    rate = max(int(terms.get("monthly_overage_cents_per_min") or 0), 0)
+    billed_min = math.ceil(max(dur_min, 0.0))
+    cap_min = _effective_cap_min(config)
+    if cap_min > 0:
+        billed_min = min(billed_min, cap_min)
+    if billed_min <= 0:
+        return
+    month = datetime.now(timezone.utc).strftime("%Y-%m")
+    db = get_db()
+    existing = await db.select(
+        "voice_monthly_calls",
+        filters={"vapi_call_id": f"eq.{call_id}"}, limit=1)
+    if existing:
+        return  # retry — already metered (and billed, if it crossed the bucket)
+    rows = await db.select(
+        "voice_monthly_calls", "billed_min",
+        filters={"merchant_id": f"eq.{merchant_id}", "month": f"eq.{month}"})
+    used_before = sum(int(r.get("billed_min") or 0) for r in (rows or []))
+    await db.insert("voice_monthly_calls", {
+        "vapi_call_id": call_id,
+        "merchant_id": merchant_id,
+        "month": month,
+        "billed_min": billed_min,
+    })
+    used_after = used_before + billed_min
+    over_min = max(0, used_after - max(included, used_before))
+    over_cents = over_min * rate
+    if over_cents > 0:
+        await credit(merchant_id, over_cents, source="monthly_overage",
+                     ref=call_id,
+                     note=f"{over_min}min over bucket ({used_after}/{included}min {month})")
+        logger.info("Monthly bucket overage billed: merchant=%s %dmin over → %d¢ (%d/%d min %s)",
+                    merchant_id, over_min, over_cents, used_after, included, month)
+
+
 def _menu_link_line(config) -> str:
     """One guard-rule line when the merchant has a published hosted menu page
     (merchant_menus.public_slug → meridian.tips/m/{slug}). Absent → "" so the
@@ -1296,6 +1355,7 @@ async def vapi_webhook(request: Request):
             # STRICTLY fail-open — any lookup problem bills the env defaults.
             included_min = VOICE_INCLUDED_MIN
             overage_rate = VOICE_OVERAGE_CENTS_PER_MIN
+            terms = None
             if merchant_id != "demo":
                 try:
                     from ...billing.fee_terms import get_active_terms
@@ -1317,6 +1377,20 @@ async def vapi_webhook(request: Request):
                              ref=call_id, note=f"{over_min}min over @ {dur_min:.1f}min")
                 logger.info("Duration overage billed: merchant=%s %dmin over → %d¢",
                             merchant_id, over_min, overage)
+            # Monthly minutes bucket — zero-per-order deals only (migration
+            # 077). The deal has NO per-order fee; instead N minutes/calendar
+            # month are included and minutes past the bucket bill at
+            # monthly_overage_cents_per_min. Metered per call, billed via the
+            # same ledger. STRICTLY fail-open: a metering error never affects
+            # the call (and never blocks the cost debit above, which already
+            # posted).
+            try:
+                if terms and terms.get("pricing_model") == "zero_per_order":
+                    await _bill_monthly_bucket(
+                        merchant_id, call_id, dur_min, config, terms)
+            except Exception as bucket_err:  # noqa: BLE001
+                logger.error("monthly-bucket metering failed for %s: %s",
+                             merchant_id, bucket_err)
         except Exception as e:  # noqa: BLE001 — accounting never affects the call
             logger.error("voice_ledger end-of-call failed: %s", e)
 
