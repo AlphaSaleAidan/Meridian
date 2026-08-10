@@ -42,6 +42,11 @@ export default function ExplainerFilm({ accent = '#0066FF' }: { accent?: string 
                 transport on desktop, but below 720px of frame width it restacks to
                 its 4:5 mobile layout — the box has to follow or the film crops. */}
             <div ref={holderRef} className="relative w-full explainer-frame">
+              {/* iOS Safari sizes an iframe to its content's intrinsic width and scales
+                  the result down to fit — the film then lays out at desktop width and
+                  lands here squashed. width:1px + min-width:100% makes the frame's own
+                  width the only width iOS can resolve; scrolling="no" opts out of the
+                  content-driven expansion entirely. */}
               {mounted && (
                 <iframe
                   ref={frameRef}
@@ -49,7 +54,9 @@ export default function ExplainerFilm({ accent = '#0066FF' }: { accent?: string 
                   title="Meridian explainer film"
                   allow="autoplay"
                   onLoad={onFrameLoad}
-                  className="absolute inset-0 w-full h-full border-0 block rounded-lg"
+                  scrolling="no"
+                  className="absolute inset-0 h-full border-0 block rounded-lg"
+                  style={{ width: '1px', minWidth: '100%' }}
                 />
               )}
 
