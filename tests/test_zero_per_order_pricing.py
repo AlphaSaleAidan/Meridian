@@ -29,17 +29,19 @@ from src.billing import fee_terms as ft  # noqa: E402
 
 # ── Canonical card ───────────────────────────────────────────────────────────
 
-@pytest.mark.parametrize("market,tier,monthly,minutes,overage", [
-    ("ca", "premium", 17500, 600, 35),   # CA$175 / 600 min — the settled card
-    ("ca", "command", 22000, 1000, 35),  # CA$220 / 1,000 min
-    ("us", "premium", 12500, 600, 25),   # derived ÷1.4
-    ("us", "command", 15500, 1000, 25),  # 22000/1.4=15714 → down to clean $5
+@pytest.mark.parametrize("market,tier,minutes,overage", [
+    ("ca", "premium", 600, 35),   # the settled card buckets
+    ("ca", "command", 1000, 35),
+    ("us", "premium", 600, 25),   # overage derived ÷1.4
+    ("us", "command", 1000, 25),
 ])
-def test_canonical_zero_per_order_card(market, tier, monthly, minutes, overage):
+def test_canonical_zero_per_order_card(market, tier, minutes, overage):
     card = ft.ZERO_PER_ORDER_TERMS[market][tier]
-    assert card["monthly_fee_cents"] == monthly
     assert card["included_monthly_min"] == minutes
     assert card["monthly_overage_cents_per_min"] == overage
+    # Wholesale monthlies (CA$175/220) are what a partner org pays on the
+    # backend — they must NEVER appear as merchant pricing.
+    assert "monthly_fee_cents" not in card
 
 
 def test_standard_tier_has_no_card():
@@ -63,10 +65,10 @@ def test_normalize_pricing_model(raw, expected):
 
 # ── resolve_fee_terms: zero-per-order path ───────────────────────────────────
 
-def test_zpo_defaults_fill_from_card():
+def test_zpo_defaults_keep_retail_monthly_and_fill_bucket():
     t = ft.resolve_fee_terms("ca", plan_tier="premium", pricing_model="zero_per_order")
     assert t["pricing_model"] == "zero_per_order"
-    assert t["monthly_fee_cents"] == 17500
+    assert t["monthly_fee_cents"] == 50000  # the SAME retail monthly as per-order
     assert t["order_fee_cents"] == 0
     assert t["included_monthly_min"] == 600
     assert t["monthly_overage_cents_per_min"] == 35
@@ -78,21 +80,15 @@ def test_zpo_forces_order_fee_to_zero_even_when_client_sends_one():
     assert t["order_fee_cents"] == 0
 
 
-def test_zpo_monthly_floor_is_the_card_never_below():
+def test_zpo_monthly_clamps_exactly_like_per_order():
+    # Floor = tier retail (a crafted request can't discount to wholesale) …
     t = ft.resolve_fee_terms("ca", plan_tier="premium",
-                             pricing_model="zero_per_order", monthly_fee_cents=10000)
-    assert t["monthly_fee_cents"] == 17500
-
-
-def test_zpo_monthly_cap_is_retail_plus_headroom():
-    # CA premium retail 50000 + 15000 headroom = 65000: a rep may sell the
-    # minutes plan anywhere up to that (their margin), never above.
+                             pricing_model="zero_per_order", monthly_fee_cents=17500)
+    assert t["monthly_fee_cents"] == 50000
+    # … cap = retail + rep headroom, same as the legacy path.
     t = ft.resolve_fee_terms("ca", plan_tier="premium",
                              pricing_model="zero_per_order", monthly_fee_cents=99999)
     assert t["monthly_fee_cents"] == 65000
-    t = ft.resolve_fee_terms("ca", plan_tier="premium",
-                             pricing_model="zero_per_order", monthly_fee_cents=50000)
-    assert t["monthly_fee_cents"] == 50000  # selling at retail is fine
 
 
 def test_zpo_standard_tier_coerces_to_default_tier():
@@ -139,7 +135,7 @@ def test_zpo_row_adds_the_three_077_columns():
 def test_terms_from_lead_row_keeps_locked_zpo_model():
     lead = {
         "plan_tier": "command",
-        "monthly_fee_cents": 22000,
+        "monthly_fee_cents": 70000,  # retail — the monthly a zpo deal actually closes at
         "order_fee_cents": 0,
         "call_overage_cents_per_min": 0,
         "included_call_min": 3,
@@ -152,7 +148,7 @@ def test_terms_from_lead_row_keeps_locked_zpo_model():
     assert t["order_fee_cents"] == 0
     assert t["included_monthly_min"] == 1000
     assert t["monthly_overage_cents_per_min"] == 35
-    assert t["monthly_fee_cents"] == 22000
+    assert t["monthly_fee_cents"] == 70000
 
 
 def test_terms_from_lead_row_legacy_lead_stays_legacy():

@@ -45,23 +45,22 @@ export const VOICE_OVERAGE_PER_MIN = 0
 /** Hard cap — Vapi force-ends every call at this length. */
 export const VOICE_MAX_CALL_MINUTES = 5
 
-/** "$0 per order" minutes-licensing card — the alternative pricing model a rep
- *  can pick at close (Aidan 2026-08-09). The deal carries NO per-order fee;
- *  instead each month includes a bucket of AI-call minutes, and minutes past
- *  the bucket bill per-minute. CAD is the settled card
- *  (canada-proposal-plans.ts); USD here is DERIVED ÷1.4, rounded down to clean
- *  $5 / 5¢ — pending sign-off on a US card. Mirrors backend
- *  fee_terms.ZERO_PER_ORDER_TERMS — keep in sync. Standard has no phone
- *  agent, so it has no card (the option simply doesn't render). */
+/** "$0 per order" minutes plan — the alternative fee model a rep can pick at
+ *  close (Aidan 2026-08-09/10). THE MONTHLY DOES NOT CHANGE: the merchant
+ *  pays the same tier retail as a per-order deal; the deal simply swaps the
+ *  per-order fee for a monthly bucket of AI-call minutes (overage per minute
+ *  past it). Wholesale numbers (what a partner org is charged on the backend)
+ *  never appear here. CAD overage is the settled card; USD derived ÷1.4.
+ *  Mirrors backend fee_terms.ZERO_PER_ORDER_TERMS — keep in sync. Standard
+ *  has no phone agent, so it has no card (the option simply doesn't render). */
 export interface ZeroPerOrderCard {
-  monthly: number
   includedMinutes: number
   overagePerMin: number
 }
 
 export const ZERO_PER_ORDER_CARDS: Partial<Record<PlanTier['id'], ZeroPerOrderCard>> = {
-  premium: { monthly: 125, includedMinutes: 600, overagePerMin: 0.25 },
-  command: { monthly: 155, includedMinutes: 1000, overagePerMin: 0.25 },
+  premium: { includedMinutes: 600, overagePerMin: 0.25 },
+  command: { includedMinutes: 1000, overagePerMin: 0.25 },
 }
 
 export const PLAN_TIERS: PlanTier[] = [

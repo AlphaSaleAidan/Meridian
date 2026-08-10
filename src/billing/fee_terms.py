@@ -188,32 +188,31 @@ CANONICAL_FEE_TERMS: dict[str, dict[str, dict[str, int]]] = {
     },
 }
 
-# ── Zero-per-order (minutes licensing) canonical table ──────────────────────
-# Aidan's settled licensing card (2026-08-09) — do NOT re-derive these numbers;
-# they change only on his explicit instruction (update the partner deck
-# artifact dd6d28c1 together with this table):
-#   CA Premium  CA$175 / 600 min included   (~200 orders @ 3 min)
-#   CA Command  CA$220 / 1,000 min included (~333 orders)
-#   Overage     CA$0.35/min past the monthly bucket; 5-min hard cap unchanged.
-# CAD is canonical HERE (the card was set in CAD); US values are DERIVED ÷1.4,
-# rounded DOWN to clean $5 / 5¢ — pending Aidan's sign-off on the US card.
-# The monthly price is the FLOOR: reps sell the plan at or above it (partner
-# retail CA$500/700 is "their margin, their problem") up to the tier's retail
-# monthly + the standard rep headroom.
+# ── Zero-per-order (minutes) canonical table ─────────────────────────────────
+# Bucket sizes + overage from Aidan's settled licensing card (2026-08-09) — do
+# NOT re-derive; they change only on his explicit instruction (update the
+# partner deck artifact dd6d28c1 together with this table):
+#   Premium 600 min / Command 1,000 min per month, CA$0.35/min past the
+#   bucket, 5-min hard cap unchanged. US overage derived ÷1.4 (25¢).
+#
+# THE MERCHANT'S MONTHLY DOES NOT CHANGE (Aidan 2026-08-10): a $0/order deal
+# bills the SAME tier retail monthly as a per-order deal — the minutes are
+# funded out of that existing monthly ("pulling the money from the existing
+# monthly to fill the gap"). The card's CA$175/220 monthlies are WHOLESALE —
+# what Meridian charges a partner/rep org on the backend — and must never
+# surface as merchant pricing, so there is deliberately NO monthly in this
+# table; resolve_fee_terms clamps the zpo monthly exactly like the legacy
+# path (tier base → base + rep headroom).
 # `standard` has no phone agent, so it has no zero-per-order card — resolution
 # coerces standard/unknown tiers to DEFAULT_PLAN_TIER.
 ZERO_PER_ORDER_TERMS: dict[str, dict[str, dict[str, int]]] = {
     "ca": {
-        "premium": {"monthly_fee_cents": 17500, "included_monthly_min": 600,
-                    "monthly_overage_cents_per_min": 35},
-        "command": {"monthly_fee_cents": 22000, "included_monthly_min": 1000,
-                    "monthly_overage_cents_per_min": 35},
+        "premium": {"included_monthly_min": 600, "monthly_overage_cents_per_min": 35},
+        "command": {"included_monthly_min": 1000, "monthly_overage_cents_per_min": 35},
     },
-    "us": {  # CAD ÷ 1.4: 17500→12500 ($125), 22000→15714→$155 (down to $5), 35¢→25¢
-        "premium": {"monthly_fee_cents": 12500, "included_monthly_min": 600,
-                    "monthly_overage_cents_per_min": 25},
-        "command": {"monthly_fee_cents": 15500, "included_monthly_min": 1000,
-                    "monthly_overage_cents_per_min": 25},
+    "us": {
+        "premium": {"included_monthly_min": 600, "monthly_overage_cents_per_min": 25},
+        "command": {"included_monthly_min": 1000, "monthly_overage_cents_per_min": 25},
     },
 }
 
@@ -319,13 +318,10 @@ def resolve_fee_terms(
     monthly = int(monthly_fee_cents) if monthly_fee_cents else base_monthly
     if model == "zero_per_order":
         card = ZERO_PER_ORDER_TERMS[m][tier]
-        if not monthly_fee_cents:
-            monthly = int(card["monthly_fee_cents"])
-        # Floor = the licensing card; cap = the tier's retail monthly + the
-        # standard rep headroom (the rep's margin room, never a discount
-        # below the card).
+        # Monthly clamps EXACTLY like the legacy path — the merchant's
+        # subscription price is unchanged by the fee model (see table note).
         monthly = max(min(monthly, base_monthly + REP_PRICE_HEADROOM_CENTS[m]),
-                      int(card["monthly_fee_cents"]))
+                      base_monthly)
         order_fee = 0
         bucket_min = (
             max(int(included_monthly_min), 0)

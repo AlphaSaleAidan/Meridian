@@ -4,6 +4,7 @@ import {
   ArrowLeft, ArrowRight, CheckCircle2, Copy, Send, Check,
   Store, User, Mail, Phone, DollarSign, FileDown,
   Loader2, Eye, Gift, Sparkles, QrCode, ExternalLink, X, Globe, Users,
+  AlertTriangle,
 } from 'lucide-react'
 import { useSalesAuth } from '@/lib/sales-auth'
 import { posSystems } from '@/data/pos-systems'
@@ -566,17 +567,12 @@ export default function CanadaPortalCreateCustomerPage() {
   const websiteMonthly = WEBSITE_MODULES.filter(m => m.monthly && websiteModules.includes(m.id)).reduce((t, m) => t + m.price, 0)
 
   const selectedPlan = getPlan(form.plan)
-  // "$0 per order" minutes plan: the base monthly is the licensing card, not
-  // the tier retail price. The bump slider then runs the whole rep range —
-  // from the card floor up to retail + headroom (the backend clamps to the
-  // same window, fee_terms.resolve_fee_terms).
+  // "$0 per order" minutes plan: the monthly is UNCHANGED (same tier retail,
+  // same slider) — the deal just swaps the per-order fee for a monthly
+  // minutes bucket. The backend enforces the same clamp either way.
   const zpoCard = ZERO_PER_ORDER_CARDS[selectedPlan.id]
   const zeroPerOrder = form.pricingModel === 'zero_per_order' && !!zpoCard
-  const basePrice = zeroPerOrder && zpoCard ? zpoCard.monthly : selectedPlan.price
-  const priceBumpMax = zeroPerOrder && zpoCard
-    ? selectedPlan.price + REP_PRICE_HEADROOM_CAD - zpoCard.monthly
-    : REP_PRICE_HEADROOM_CAD
-  const price = basePrice + Math.min(form.priceBump, priceBumpMax)
+  const price = selectedPlan.price + form.priceBump
   // Maintenance + hosting come free with Premium and up — only Standard
   // pays the buildout's monthly line items.
   const monthlyFree = websiteMonthlyFree(selectedPlan.id)
@@ -1115,7 +1111,7 @@ export default function CanadaPortalCreateCustomerPage() {
                   <p className="text-sm-tight font-semibold text-white">{selectedPlan.label} Plan{zeroPerOrder ? ' — $0/order minutes plan' : ''}</p>
                   <p className="text-2xs text-pm-canada-text-muted">{zeroPerOrder && zpoCard ? `${zpoCard.includedMinutes} AI-call minutes/mo included · CA$${zpoCard.overagePerMin.toFixed(2)}/min after · no per-order fee` : `${(selectedPlan.features || []).length} features included`}</p>
                 </div>
-                <p className="text-lg font-bold text-pm-accent">CA${basePrice}{interval}</p>
+                <p className="text-lg font-bold text-pm-accent">CA${selectedPlan.price}{interval}</p>
               </div>
             </div>
 
@@ -1137,7 +1133,11 @@ export default function CanadaPortalCreateCustomerPage() {
                       zeroPerOrder ? 'border-pm-accent/50 bg-pm-accent/5' : 'border-pm-canada-border hover:border-pm-canada-text-faint bg-pm-canada-bg'
                     }`}>
                     <p className="text-sm-tight font-semibold text-white">$0 per order — minutes plan</p>
-                    <p className="text-2xs text-pm-canada-text-muted mt-0.5">CA${zpoCard.monthly}/mo · {zpoCard.includedMinutes} min included · CA${zpoCard.overagePerMin.toFixed(2)}/min after</p>
+                    <p className="text-2xs text-pm-canada-text-muted mt-0.5">Same CA${selectedPlan.price}/mo · {zpoCard.includedMinutes} min included · CA${zpoCard.overagePerMin.toFixed(2)}/min after</p>
+                    <p className="text-2xs text-pm-amber-gold mt-1.5 flex items-start gap-1.5">
+                      <AlertTriangle size={12} className="flex-shrink-0 mt-[1px]" />
+                      Lower commission on $0/order deals
+                    </p>
                   </button>
                 </div>
               </div>
@@ -1145,11 +1145,11 @@ export default function CanadaPortalCreateCustomerPage() {
 
             <div className="mb-4">
               <label className="block text-2xs font-medium text-pm-canada-text-muted mb-1.5">
-                Price Adjustment <span className="text-pm-canada-text-faint">(add up to CA${priceBumpMax}/mo on top of base)</span>
+                Price Adjustment <span className="text-pm-canada-text-faint">(add up to CA${REP_PRICE_HEADROOM_CAD}/mo on top of base)</span>
               </label>
               <div className="flex items-center gap-3">
-                <input type="range" min={0} max={priceBumpMax} step={5}
-                  value={Math.min(form.priceBump, priceBumpMax)}
+                <input type="range" min={0} max={REP_PRICE_HEADROOM_CAD} step={5}
+                  value={form.priceBump}
                   onChange={e => update('priceBump', Number(e.target.value))}
                   className="flex-1 h-2 bg-pm-canada-border rounded-full appearance-none cursor-pointer accent-pm-accent" />
                 <span className="text-sm-tight font-semibold text-white w-36 text-right">
@@ -1179,7 +1179,7 @@ export default function CanadaPortalCreateCustomerPage() {
               <div className="mb-4 p-4 rounded-xl border border-pm-canada-border bg-pm-canada-bg">
                 <p className="text-sm-tight font-semibold text-white">$0 per order — how it bills</p>
                 <p className="text-2xs text-pm-canada-text-muted mt-1">
-                  {zpoCard.includedMinutes} AI-call minutes included each month, then CA${zpoCard.overagePerMin.toFixed(2)}/min.
+                  The monthly stays CA${price} — it now covers {zpoCard.includedMinutes} AI-call minutes each month, then CA${zpoCard.overagePerMin.toFixed(2)}/min.
                   There is no per-order fee, so there is no fee handling to choose. The 5-minute call cap still applies.
                 </p>
               </div>
