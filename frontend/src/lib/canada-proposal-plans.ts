@@ -81,7 +81,8 @@ export { VOICE_INCLUDED_MINUTES, VOICE_OVERAGE_PER_MIN, VOICE_MAX_CALL_MINUTES }
 // "$0 per order" minutes plan — buckets from Aidan's settled card
 // (2026-08-09): Premium 600 min / Command 1,000 min per month; merchant
 // overage CA$0.20/min past the bucket (Aidan 2026-08-10; the partner
-// wholesale card's CA$0.35 is a separate backend number), 5-min hard cap
+// wholesale card's overage is a separate backend number, also CA$0.20
+// since 2026-08-10), 5-min hard cap
 // unchanged. THE MONTHLY DOES NOT CHANGE —
 // the merchant pays the same tier retail; wholesale (CA$175/220, what a
 // partner org is charged on the backend) never appears in merchant pricing.

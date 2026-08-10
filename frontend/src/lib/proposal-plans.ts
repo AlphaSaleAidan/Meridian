@@ -50,7 +50,9 @@ export const VOICE_MAX_CALL_MINUTES = 5
  *  pays the same tier retail as a per-order deal; the deal simply swaps the
  *  per-order fee for a monthly bucket of AI-call minutes (overage per minute
  *  past it). Wholesale numbers (what a partner org is charged on the backend)
- *  never appear here. CAD overage is the settled card; USD derived ÷1.4.
+ *  never appear here. Overage is a flat $0.20/min in BOTH markets (Aidan
+ *  2026-08-10, not FX-derived); the wholesale card's overage matches since
+ *  the same date.
  *  Mirrors backend fee_terms.ZERO_PER_ORDER_TERMS — keep in sync. Standard
  *  has no phone agent, so it has no card (the option simply doesn't render). */
 export interface ZeroPerOrderCard {
