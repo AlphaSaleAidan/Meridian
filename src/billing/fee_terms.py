@@ -194,8 +194,8 @@ CANONICAL_FEE_TERMS: dict[str, dict[str, dict[str, int]]] = {
 # his explicit instruction:
 #   Premium 600 min / Command 1,000 min per month, $0.20/min past the bucket
 #   in BOTH markets (flat, not FX-derived), 5-min hard cap unchanged. (The
-#   partner wholesale card's CA$0.35/min overage is a separate, backend-side
-#   number — deck artifact dd6d28c1.)
+#   partner wholesale card's overage is a separate, backend-side number —
+#   also CA$0.20/min since 2026-08-10 — deck artifact dd6d28c1.)
 #
 # THE MERCHANT'S MONTHLY DOES NOT CHANGE (Aidan 2026-08-10): a $0/order deal
 # bills the SAME tier retail monthly as a per-order deal — the minutes are
