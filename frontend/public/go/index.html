@@ -150,6 +150,28 @@
   }
   .bookbtn:active{transform:scale(.97)}
   .finealt{font-size:12px;margin-top:10px}
+  .schedmodal{position:fixed;inset:0;z-index:50}
+  .schedback{position:absolute;inset:0;background:rgba(10,10,11,.5);backdrop-filter:blur(4px)}
+  .schedsheet{
+    position:absolute;inset:12px 0 0 0;display:flex;flex-direction:column;
+    background:#0A0A0B;border-radius:18px 18px 0 0;overflow:hidden;
+    transform:translateY(14px);opacity:0;
+    transition:transform .4s var(--ease-out),opacity .35s var(--ease-out);
+  }
+  .schedmodal.open .schedsheet{transform:none;opacity:1}
+  @media (prefers-reduced-motion:reduce){.schedsheet{transition:none}}
+  @media (min-width:640px){.schedsheet{inset:4vh 0;max-width:480px;margin:0 auto;border-radius:18px}}
+  .schedbar{
+    display:flex;align-items:center;justify-content:space-between;flex:none;
+    padding:13px 16px;color:#F5F5F7;font-size:14px;font-weight:700;
+    border-bottom:1px solid #1F1F23;
+  }
+  .schedclose{
+    display:grid;place-items:center;width:32px;height:32px;border-radius:9px;
+    border:1px solid #1F1F23;background:transparent;color:#F5F5F7;cursor:pointer;
+  }
+  .schedframe{flex:1;min-height:0;-webkit-overflow-scrolling:touch;overflow:auto}
+  .schedframe iframe{display:block;width:1px;min-width:100%;height:100%;border:0;background:#0A0A0B}
 
   .stickybar{
     position:fixed;left:0;right:0;bottom:0;padding:10px 16px calc(10px + env(safe-area-inset-bottom));
@@ -393,6 +415,19 @@
   </footer>
 </div>
 
+<div class="schedmodal" id="schedmodal" role="dialog" aria-modal="true" aria-label="Book your call" hidden>
+  <div class="schedback" id="schedback"></div>
+  <div class="schedsheet">
+    <div class="schedbar">
+      <span>Book your call</span>
+      <button type="button" class="schedclose" id="schedclose" aria-label="Close">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="schedframe"><iframe id="schediframe" title="Meridian scheduling calendar" scrolling="yes"></iframe></div>
+  </div>
+</div>
+
 <div class="stickybar" id="stickybar">
   <a href="#quote">Get my quote</a>
 </div>
@@ -441,6 +476,29 @@
     v.play().then(() => pill.classList.add('gone')).catch(() => { v.muted = true })
   }
   document.addEventListener('pointerdown', firstTouch, true)
+})()
+;(() => {
+  const modal = document.getElementById('schedmodal')
+  const frame = document.getElementById('schediframe')
+  const open = (e) => {
+    e.preventDefault()
+    if (!frame.src) frame.src = 'https://schedule.meridian.tips'
+    modal.hidden = false
+    requestAnimationFrame(() => modal.classList.add('open'))
+    document.body.style.overflow = 'hidden'
+  }
+  const close = () => {
+    modal.classList.remove('open')
+    document.body.style.overflow = ''
+    setTimeout(() => { modal.hidden = true }, 300)
+  }
+  document.addEventListener('click', (e) => {
+    const a = e.target.closest && e.target.closest('.bookbtn')
+    if (a) open(e)
+  })
+  document.getElementById('schedclose').addEventListener('click', close)
+  document.getElementById('schedback').addEventListener('click', close)
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !modal.hidden) close() })
   // Aidan's call 2026-08-10: once the visitor opts into sound, the audio
   // keeps playing as they scroll the pitch — no pause on leaving view.
 })()
