@@ -136,7 +136,7 @@ def test_map_charge_canonical_columns():
     assert row["type"] == "sale"
     assert row["total_cents"] == 4250
     assert row["subtotal_cents"] == 4250
-    assert row["payment_method"] == "card"
+    assert row["payment_method"] == "credit_card"
     assert row["currency"] == "USD"
     assert row["customer_email"] == "card@example.com"
     # canonical NOT NULL column is transaction_at (not transaction_time)
@@ -164,11 +164,11 @@ def test_map_charge_deterministic_id_and_refund_semantics():
 def test_map_charge_payment_method_variants():
     mapper = StripePOSMapper(org_id=ORG)
     assert mapper.map_charge_to_transaction(
-        _charge(payment_method_details={"type": "interac_present"}))["payment_method"] == "debit"
+        _charge(payment_method_details={"type": "interac_present"}))["payment_method"] == "debit_card"
     assert mapper.map_charge_to_transaction(
         _charge(payment_method_details={"type": "us_bank_account"}))["payment_method"] == "other"
     assert mapper.map_charge_to_transaction(
-        _charge(payment_method_details=None))["payment_method"] == "unknown"
+        _charge(payment_method_details=None))["payment_method"] == "other"
 
 
 # ─── Sync engine ─────────────────────────────────────────────────────────────
