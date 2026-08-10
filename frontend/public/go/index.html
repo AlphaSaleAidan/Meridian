@@ -22,7 +22,8 @@
   }
   .wrap{max-width:480px;margin:0 auto;padding:0 20px 96px}
   header{display:flex;align-items:center;gap:10px;padding:18px 0}
-  .mark{width:26px;height:26px;flex:none}
+  .mark{width:30px;height:30px;flex:none;display:block}
+  @media (prefers-reduced-motion:reduce){.mark g{animation:none !important}}
   .word{font-weight:700;letter-spacing:.14em;font-size:14px}
   h1{font-size:clamp(28px,8vw,36px);line-height:1.15;letter-spacing:-.02em;margin:18px 0 12px;font-weight:800}
   h1 em{font-style:normal;color:var(--brand)}
@@ -50,6 +51,15 @@
   .benefit .ic{width:38px;height:38px;flex:none;border-radius:10px;background:rgba(26,143,214,.08);display:grid;place-items:center;color:var(--brand)}
   .benefit h3{font-size:15.5px;margin-bottom:2px}
   .benefit p{font-size:14px;color:var(--muted)}
+
+  .more{margin:6px 0 24px;padding:20px;border-radius:14px;background:linear-gradient(135deg,rgba(26,143,214,.06),rgba(23,197,176,.06));border:1px solid var(--line)}
+  .kicker{font-size:11.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--brand);margin-bottom:6px}
+  .more h2{font-size:21px;letter-spacing:-.01em;margin-bottom:8px}
+  .moresub{font-size:14.5px;color:var(--muted);margin-bottom:12px}
+  .morelist{list-style:none;display:grid;gap:9px}
+  .morelist li{font-size:14px;color:var(--muted);padding-left:20px;position:relative}
+  .morelist li::before{content:"";position:absolute;left:0;top:7px;width:8px;height:8px;border-radius:50%;background:var(--accent)}
+  .morelist strong{color:var(--ink)}
 
   form{display:grid;gap:10px}
   label{font-size:13px;font-weight:600}
@@ -87,10 +97,36 @@
 <div class="wrap">
   <header>
     <svg class="mark" viewBox="0 0 100 100" fill="none" aria-hidden="true">
-      <circle cx="50" cy="50" r="46" stroke="#1A8FD6" stroke-width="4"/>
-      <line x1="50" y1="50" x2="50" y2="14" stroke="#17C5B0" stroke-width="5" stroke-linecap="round"/>
-      <circle cx="50" cy="50" r="6" fill="#17C5B0"/>
-    </svg>
+<defs>
+<linearGradient id="mk2-sweep" x1="0" y1="0" x2="1" y2="0">
+<stop offset="0%" stop-color="#17C5B0" stop-opacity="0"/>
+<stop offset="60%" stop-color="#17C5B0" stop-opacity="0.25"/>
+<stop offset="100%" stop-color="#17C5B0" stop-opacity="0.7"/>
+</linearGradient>
+<radialGradient id="mk2-glow" cx="50%" cy="50%" r="50%">
+<stop offset="0%" stop-color="#17C5B0" stop-opacity="0.15"/>
+<stop offset="70%" stop-color="#17C5B0" stop-opacity="0.05"/>
+<stop offset="100%" stop-color="#17C5B0" stop-opacity="0"/>
+</radialGradient>
+</defs>
+<circle cx="50" cy="50" r="48" fill="#0A0A0B" stroke="#1A8FD6" stroke-width="1" stroke-opacity="0.3"/>
+<circle cx="50" cy="50" r="46" fill="url(#mk2-glow)"/>
+<circle cx="50" cy="50" r="16" fill="none" stroke="#17C5B0" stroke-width="0.5" stroke-opacity="0.15"/><circle cx="50" cy="50" r="30" fill="none" stroke="#17C5B0" stroke-width="0.5" stroke-opacity="0.15"/><circle cx="50" cy="50" r="43" fill="none" stroke="#17C5B0" stroke-width="0.5" stroke-opacity="0.15"/>
+<line x1="50" y1="8" x2="50" y2="92" stroke="#17C5B0" stroke-width="0.4" stroke-opacity="0.12"/>
+<line x1="8" y1="50" x2="92" y2="50" stroke="#17C5B0" stroke-width="0.4" stroke-opacity="0.12"/>
+<g style="animation: mer-sweep-mk2 3s linear infinite; transform-origin: 50px 50px;">
+<path d="M 50 50 L 50 6 A 44 44 0 0 0 11.895 28.000 Z" fill="url(#mk2-sweep)" opacity="0.5"/>
+<line x1="50" y1="50" x2="50" y2="6" stroke="#17C5B0" stroke-width="1.5" stroke-linecap="round"/>
+<circle cx="50" cy="8" r="2" fill="#17C5B0" opacity="0.9"/>
+</g>
+<circle cx="62" cy="34" r="2.5" fill="#17C5B0" opacity="0.7"/><circle cx="38" cy="62" r="2.0" fill="#17C5B0" opacity="0.5"/><circle cx="68" cy="58" r="1.8" fill="#1A8FD6" opacity="0.6"/><circle cx="35" cy="38" r="1.5" fill="#17C5B0" opacity="0.4"/>
+<circle cx="50" cy="50" r="3" fill="#17C5B0"/>
+<circle cx="50" cy="50" r="5" fill="none" stroke="#17C5B0" stroke-width="0.8" stroke-opacity="0.5"/>
+<text x="50" y="51.5" text-anchor="middle" dominant-baseline="central" fill="#0A0A0B" font-size="5" font-weight="800" font-family="system-ui,-apple-system,sans-serif">M</text>
+<circle cx="50" cy="50" r="47" fill="none" stroke="#17C5B0" stroke-width="0.8" stroke-opacity="0.25"/>
+<circle cx="50" cy="50" r="48.5" fill="none" stroke="#1A8FD6" stroke-width="0.3" stroke-opacity="0.15"/>
+<style>@keyframes mer-sweep-mk2{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}</style>
+</svg>
     <span class="word">MERIDIAN</span>
   </header>
 
@@ -125,6 +161,18 @@
       <span class="ic"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg></span>
       <div><h3>Guests pay by text</h3><p>A payment link lands on the caller's phone before they hang up.</p></div>
     </div>
+  </div>
+
+  <div class="more">
+    <p class="kicker">More than a phone agent</p>
+    <h2>The phone is just the front door.</h2>
+    <p class="moresub">Every order — phone, POS, walk-in — feeds one intelligence layer
+    that works for you around the clock:</p>
+    <ul class="morelist">
+      <li><strong>Finds the leaks</strong> — anomaly detection flags voids, comps, and theft patterns before month-end.</li>
+      <li><strong>Sees what's coming</strong> — AI revenue forecasting, not just yesterday's report.</li>
+      <li><strong>One view of everything</strong> — every location, every channel, one dashboard.</li>
+    </ul>
   </div>
 
   <div class="card" id="quote">
