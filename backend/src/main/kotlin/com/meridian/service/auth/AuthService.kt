@@ -6,5 +6,6 @@ import com.meridian.dto.SignupRequest
 interface AuthService {
     suspend fun signup(request: SignupRequest)
 
-    suspend fun login(request: LoginRequest): String
+    /** Verifies credentials with Supabase and returns the token plus the authenticated user. */
+    suspend fun login(request: LoginRequest): SupabaseSession
 }

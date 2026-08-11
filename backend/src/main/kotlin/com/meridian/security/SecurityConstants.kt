@@ -8,4 +8,7 @@ object SecurityConstants {
     const val USER_EMAIL_SESSION_ATTRIBUTE = "USER_EMAIL"
     const val BUSINESS_IDS_SESSION_ATTRIBUTE = "BUSINESS_IDS"
     const val SUPABASE_TOKEN_SESSION_ATTRIBUTE = "SUPABASE_TOKEN"
+
+    /** Full [com.meridian.service.user.UserIdentity] resolved at login; served by GET /api/auth/me. */
+    const val USER_IDENTITY_SESSION_ATTRIBUTE = "USER_IDENTITY"
 }

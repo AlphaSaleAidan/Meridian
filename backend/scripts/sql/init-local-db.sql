@@ -16,6 +16,36 @@ CREATE TABLE IF NOT EXISTS public.businesses (
     onboarded BOOLEAN DEFAULT FALSE
 );
 
+-- Login identity resolution (user_port slice) reads owner linkage + these tables.
+-- Prod/staging already have them via Supabase migrations; IF NOT EXISTS keeps this idempotent.
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS owner_user_id UUID;
+
+CREATE TABLE IF NOT EXISTS public.business_users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    business_id TEXT NOT NULL,
+    user_id UUID,
+    email TEXT NOT NULL,
+    full_name TEXT,
+    role TEXT NOT NULL DEFAULT 'staff',
+    location_id TEXT,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    last_login_at TIMESTAMPTZ,
+    login_count INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS public.admin_users (
+    user_id UUID PRIMARY KEY,
+    email TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.sales_reps (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL,
+    email TEXT NOT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT FALSE
+);
+
 -- Seed default local test record
 INSERT INTO public.businesses (id, name, plan_tier, access_token, token_status, status, pos_provider, onboarded)
 VALUES ('demo-org-123', 'Maple Bakery', 'starter', 'demo-portal-token-999', 'active', 'active', 'square', true)

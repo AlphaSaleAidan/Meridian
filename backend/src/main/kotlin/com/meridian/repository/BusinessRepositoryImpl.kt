@@ -2,9 +2,11 @@ package com.meridian.repository
 
 import com.meridian.entity.Business
 import io.r2dbc.spi.Row
+import kotlinx.coroutines.flow.toList
 import org.springframework.r2dbc.core.DatabaseClient
 import org.springframework.r2dbc.core.await
 import org.springframework.r2dbc.core.awaitOneOrNull
+import org.springframework.r2dbc.core.flow
 import org.springframework.stereotype.Repository
 
 @Repository
@@ -43,6 +45,22 @@ class BusinessRepositoryImpl(
             .bind("status", status)
             .map { row, _ -> mapRow(row) }
             .awaitOneOrNull()
+    }
+
+    override suspend fun findByOwnerUserId(ownerUserId: String): List<Business> {
+        val sql =
+            """
+            SELECT id, name, plan_tier, access_token, token_status, status, pos_provider, onboarded
+            FROM businesses
+            WHERE owner_user_id = CAST(:ownerUserId AS uuid)
+            """.trimIndent()
+
+        return databaseClient
+            .sql(sql)
+            .bind("ownerUserId", ownerUserId)
+            .map { row, _ -> mapRow(row) }
+            .flow()
+            .toList()
     }
 
     override suspend fun save(business: Business): Business {

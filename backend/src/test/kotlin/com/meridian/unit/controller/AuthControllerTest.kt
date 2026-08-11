@@ -6,6 +6,12 @@ import com.meridian.dto.SignupRequest
 import com.meridian.exception.UnauthorizedException
 import com.meridian.security.SecurityConstants
 import com.meridian.service.auth.AuthService
+import com.meridian.service.auth.SupabaseSession
+import com.meridian.service.auth.SupabaseUser
+import com.meridian.service.auth.SupabaseUserMetadata
+import com.meridian.service.user.UserBusiness
+import com.meridian.service.user.UserIdentity
+import com.meridian.service.user.UserIdentityService
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -19,7 +25,29 @@ import org.springframework.http.HttpStatus
 
 class AuthControllerTest {
     private val authService = mockk<AuthService>()
-    private val authController = AuthController(authService)
+    private val userIdentityService = mockk<UserIdentityService>()
+    private val authController = AuthController(authService, userIdentityService)
+
+    private val supabaseUser =
+        SupabaseUser(
+            id = "uuid-1",
+            email = "test@test.com",
+            emailConfirmedAt = "2026-08-11T00:00:00Z",
+            userMetadata = SupabaseUserMetadata(displayName = "Test Owner"),
+        )
+
+    private val identity =
+        UserIdentity(
+            userId = "uuid-1",
+            email = "test@test.com",
+            displayName = "Test Owner",
+            role = "owner",
+            orgId = "biz_1",
+            isVerified = true,
+            isAdmin = false,
+            isSalesRep = false,
+            businesses = listOf(UserBusiness(businessId = "biz_1", businessName = "Test Biz", role = "owner")),
+        )
 
     @Test
     fun `signup returns 200 OK`() =
@@ -49,12 +77,21 @@ class AuthControllerTest {
         }
 
     @Test
-    fun `login returns 200 OK and creates session`() =
+    fun `login returns 200 OK and stores resolved identity in session`() =
         runBlocking {
             val request = LoginRequest("test@test.com", "password")
             val httpSession = mockk<HttpSession>(relaxed = true)
 
-            coEvery { authService.login(any()) } returns "fake-jwt"
+            coEvery { authService.login(any()) } returns SupabaseSession(accessToken = "fake-jwt", user = supabaseUser)
+            coEvery {
+                userIdentityService.resolveIdentity(
+                    userId = "uuid-1",
+                    email = "test@test.com",
+                    displayName = "Test Owner",
+                    isVerified = true,
+                )
+            } returns identity
+            coEvery { userIdentityService.recordLogin("uuid-1") } returns Unit
 
             val response = authController.login(request, httpSession)
 
@@ -62,10 +99,36 @@ class AuthControllerTest {
             assertEquals("success", response.body?.status)
 
             coVerify { authService.login(request) }
+            coVerify { userIdentityService.recordLogin("uuid-1") }
             verify { httpSession.setAttribute(SecurityConstants.USER_EMAIL_SESSION_ATTRIBUTE, "test@test.com") }
             verify { httpSession.setAttribute(SecurityConstants.SUPABASE_TOKEN_SESSION_ATTRIBUTE, "fake-jwt") }
-            verify { httpSession.setAttribute(SecurityConstants.USER_ID_SESSION_ATTRIBUTE, "dummy_user_id_test@test.com") }
-            verify { httpSession.setAttribute(SecurityConstants.BUSINESS_IDS_SESSION_ATTRIBUTE, emptyList<String>()) }
+            verify { httpSession.setAttribute(SecurityConstants.USER_ID_SESSION_ATTRIBUTE, "uuid-1") }
+            verify { httpSession.setAttribute(SecurityConstants.BUSINESS_IDS_SESSION_ATTRIBUTE, arrayListOf("biz_1")) }
+            verify { httpSession.setAttribute(SecurityConstants.USER_IDENTITY_SESSION_ATTRIBUTE, identity) }
+        }
+
+    @Test
+    fun `login falls back to request email when Supabase omits it`() =
+        runBlocking {
+            val request = LoginRequest("fallback@test.com", "password")
+            val httpSession = mockk<HttpSession>(relaxed = true)
+            val userWithoutEmail = supabaseUser.copy(email = null, userMetadata = null)
+
+            coEvery { authService.login(any()) } returns SupabaseSession(accessToken = "fake-jwt", user = userWithoutEmail)
+            coEvery {
+                userIdentityService.resolveIdentity(
+                    userId = "uuid-1",
+                    email = "fallback@test.com",
+                    displayName = null,
+                    isVerified = true,
+                )
+            } returns identity.copy(email = "fallback@test.com")
+            coEvery { userIdentityService.recordLogin("uuid-1") } returns Unit
+
+            val response = authController.login(request, httpSession)
+
+            assertEquals(HttpStatus.OK, response.statusCode)
+            verify { httpSession.setAttribute(SecurityConstants.USER_EMAIL_SESSION_ATTRIBUTE, "fallback@test.com") }
         }
 
     @Test
@@ -85,17 +148,28 @@ class AuthControllerTest {
         }
 
     @Test
-    fun `me returns session email when logged in`() =
+    fun `me returns full session identity when logged in`() =
         runBlocking {
-            val response = authController.me("test@test.com")
+            val response = authController.me(identity)
 
             assertEquals(HttpStatus.OK, response.statusCode)
             assertEquals("success", response.body?.status)
-            assertEquals("test@test.com", response.body?.data?.email)
+            val data = response.body?.data
+            assertEquals("uuid-1", data?.id)
+            assertEquals("test@test.com", data?.email)
+            assertEquals("Test Owner", data?.displayName)
+            assertEquals("owner", data?.role)
+            assertEquals("biz_1", data?.orgId)
+            assertEquals(true, data?.isVerified)
+            assertEquals(false, data?.isAdmin)
+            assertEquals(false, data?.isSalesRep)
+            assertEquals(1, data?.businesses?.size)
+            assertEquals("biz_1", data?.businesses?.first()?.businessId)
+            assertEquals("Test Biz", data?.businesses?.first()?.businessName)
         }
 
     @Test
-    fun `me throws UnauthorizedException when no session email`(): Unit =
+    fun `me throws UnauthorizedException when no session identity`(): Unit =
         runBlocking {
             assertThrows<UnauthorizedException> {
                 authController.me(null)

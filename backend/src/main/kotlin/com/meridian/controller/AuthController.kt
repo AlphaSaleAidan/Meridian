@@ -2,11 +2,14 @@ package com.meridian.controller
 
 import com.meridian.dto.ApiResponse
 import com.meridian.dto.LoginRequest
+import com.meridian.dto.SessionBusinessResponse
 import com.meridian.dto.SessionInfoResponse
 import com.meridian.dto.SignupRequest
 import com.meridian.exception.UnauthorizedException
 import com.meridian.security.SecurityConstants
 import com.meridian.service.auth.AuthService
+import com.meridian.service.user.UserIdentity
+import com.meridian.service.user.UserIdentityService
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.servlet.http.HttpSession
@@ -33,6 +36,7 @@ import org.springframework.web.bind.annotation.SessionAttribute
 )
 class AuthController(
     private val authService: AuthService,
+    private val userIdentityService: UserIdentityService,
 ) {
     private val log = LoggerFactory.getLogger(AuthController::class.java)
 
@@ -59,25 +63,36 @@ class AuthController(
         @RequestBody request: LoginRequest,
         session: HttpSession,
     ): ResponseEntity<ApiResponse<Any>> {
-        val supabaseToken = authService.login(request)
+        val supabaseSession = authService.login(request)
+        val supabaseUser = supabaseSession.user
+        val email = supabaseUser.email ?: request.email
+        val identity =
+            userIdentityService.resolveIdentity(
+                userId = supabaseUser.id,
+                email = email,
+                displayName = supabaseUser.userMetadata?.displayName ?: supabaseUser.userMetadata?.fullName,
+                isVerified = supabaseUser.emailConfirmedAt != null,
+            )
+        userIdentityService.recordLogin(identity.userId)
 
         // Inform Spring Security that the user is authenticated
-        val auth = UsernamePasswordAuthenticationToken(request.email, null, emptyList())
+        val auth = UsernamePasswordAuthenticationToken(email, null, emptyList())
         val securityContext = SecurityContextHolder.createEmptyContext()
         securityContext.authentication = auth
         SecurityContextHolder.setContext(securityContext)
 
         // Save the context to the session so it persists across requests
         session.setAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY, securityContext)
-        session.setAttribute(SecurityConstants.USER_EMAIL_SESSION_ATTRIBUTE, request.email)
-        session.setAttribute(SecurityConstants.SUPABASE_TOKEN_SESSION_ATTRIBUTE, supabaseToken)
+        session.setAttribute(SecurityConstants.USER_EMAIL_SESSION_ATTRIBUTE, email)
+        session.setAttribute(SecurityConstants.SUPABASE_TOKEN_SESSION_ATTRIBUTE, supabaseSession.accessToken)
+        session.setAttribute(SecurityConstants.USER_ID_SESSION_ATTRIBUTE, identity.userId)
+        session.setAttribute(
+            SecurityConstants.BUSINESS_IDS_SESSION_ATTRIBUTE,
+            ArrayList(identity.businesses.map { it.businessId }),
+        )
+        session.setAttribute(SecurityConstants.USER_IDENTITY_SESSION_ATTRIBUTE, identity)
 
-        // TODO: Populate USER_ID and BUSINESS_IDS from user_profiles / business_access tables upon login
-        // Temporary placeholder dummy identity until user management / business mapping tables are created
-        session.setAttribute(SecurityConstants.USER_ID_SESSION_ATTRIBUTE, "dummy_user_id_${request.email}")
-        session.setAttribute(SecurityConstants.BUSINESS_IDS_SESSION_ATTRIBUTE, emptyList<String>())
-
-        log.info("Created backend JDBC session for: {}", request.email)
+        log.info("Created backend JDBC session for: {} ({} businesses)", email, identity.businesses.size)
 
         return ResponseEntity.ok(ApiResponse.success(message = "Login successful"))
     }
@@ -85,18 +100,44 @@ class AuthController(
     @Operation(
         summary = "Who is logged in",
         description =
-            "Returns the current session's user identity. The SPA calls this on load to decide between " +
-                "the logged-in dashboard and the login screen — with cookie sessions it has no JWT to decode. " +
+            "Returns the current session's resolved identity: profile, table-derived role, admin/sales-rep " +
+                "flags and business memberships. The SPA calls this on load to decide between the logged-in " +
+                "dashboard and the login screen — with cookie sessions it has no JWT to decode. It also " +
+                "replaces the SPA's direct is_admin RPC, sales_reps and businesses lookups. " +
                 "401 when there is no active session.",
     )
     @GetMapping("/me")
     suspend fun me(
-        @SessionAttribute(name = SecurityConstants.USER_EMAIL_SESSION_ATTRIBUTE, required = false) email: String?,
+        @SessionAttribute(
+            name = SecurityConstants.USER_IDENTITY_SESSION_ATTRIBUTE,
+            required = false,
+        ) identity: UserIdentity?,
     ): ResponseEntity<ApiResponse<SessionInfoResponse>> {
-        if (email == null) {
+        if (identity == null) {
             throw UnauthorizedException("Not authenticated")
         }
-        return ResponseEntity.ok(ApiResponse.success(data = SessionInfoResponse(email = email)))
+        val response =
+            SessionInfoResponse(
+                id = identity.userId,
+                email = identity.email,
+                displayName = identity.displayName,
+                role = identity.role,
+                orgId = identity.orgId,
+                locationId = identity.locationId,
+                isVerified = identity.isVerified,
+                isAdmin = identity.isAdmin,
+                isSalesRep = identity.isSalesRep,
+                businesses =
+                    identity.businesses.map { business ->
+                        SessionBusinessResponse(
+                            businessId = business.businessId,
+                            businessName = business.businessName,
+                            role = business.role,
+                            locationId = business.locationId,
+                        )
+                    },
+            )
+        return ResponseEntity.ok(ApiResponse.success(data = response))
     }
 
     @Operation(

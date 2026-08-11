@@ -58,7 +58,7 @@ class SupabaseAuthServiceImpl(
         log.info("Signup successful for {}", request.email)
     }
 
-    override suspend fun login(request: LoginRequest): String {
+    override suspend fun login(request: LoginRequest): SupabaseSession {
         val url = "$supabaseUrl/auth/v1/token?grant_type=password"
         log.info("Attempting login for {}", request.email)
 
@@ -89,7 +89,7 @@ class SupabaseAuthServiceImpl(
         }
 
         val responseBody = response.bodyAsText()
-        val json = jsonMapper.readValue<Map<String, Any>>(responseBody)
-        return json["access_token"] as String
+        val tokenResponse = jsonMapper.readValue<SupabaseTokenResponse>(responseBody)
+        return SupabaseSession(accessToken = tokenResponse.accessToken, user = tokenResponse.user)
     }
 }

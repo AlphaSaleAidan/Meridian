@@ -98,7 +98,7 @@ class SupabaseAuthServiceImplTest {
     // ---- login tests ----
 
     @Test
-    fun `login returns access token on success`() =
+    fun `login returns access token and typed user on success`() =
         runTest {
             val engine =
                 MockEngine { request ->
@@ -109,15 +109,20 @@ class SupabaseAuthServiceImplTest {
                     assertEquals("test-anon-key", request.headers["apikey"])
 
                     respond(
-                        content = """{"access_token": "jwt-token-abc", "token_type": "bearer"}""",
+                        content =
+                            """{"access_token": "jwt-token-abc", "token_type": "bearer",
+                               "user": {"id": "uuid-1", "email": "user@test.com", "user_metadata": {"display_name": "U"}}}""",
                         status = HttpStatusCode.OK,
                         headers = headersOf(HttpHeaders.ContentType, "application/json"),
                     )
                 }
 
             val service = createService(engine)
-            val token = service.login(LoginRequest("user@test.com", "password123"))
-            assertEquals("jwt-token-abc", token)
+            val session = service.login(LoginRequest("user@test.com", "password123"))
+            assertEquals("jwt-token-abc", session.accessToken)
+            assertEquals("uuid-1", session.user.id)
+            assertEquals("user@test.com", session.user.email)
+            assertEquals("U", session.user.userMetadata?.displayName)
         }
 
     @Test
@@ -151,7 +156,9 @@ class SupabaseAuthServiceImplTest {
                     assertEquals("secret123", parsed["password"])
 
                     respond(
-                        content = """{"access_token": "tok", "token_type": "bearer"}""",
+                        content =
+                            """{"access_token": "tok", "token_type": "bearer",
+                               "user": {"id": "uuid-1", "email": "user@test.com", "user_metadata": {"display_name": "U"}}}""",
                         status = HttpStatusCode.OK,
                         headers = headersOf(HttpHeaders.ContentType, "application/json"),
                     )
