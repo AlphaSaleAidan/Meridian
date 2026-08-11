@@ -34,6 +34,18 @@ The `PASSWORD_RECOVERY` branch of `onAuthStateChange` becomes URL-fragment parsi
 on the reset landing page (Supabase puts `access_token` + `type=recovery` in the
 fragment; the backend never sees fragments, so the SPA must forward it).
 
+**Cutover-time hardening — token-hash recovery flow.** Today's fragment style puts
+a live session token in the URL (fragment-only, so never server-visible, but it
+sits in browser history and is XSS-readable, and stays valid ~1h; the backend now
+revokes it after a successful reset). The stronger pattern: customize the Supabase
+recovery email template to carry `{{ .TokenHash }}` instead of a session, land on
+the reset page with only that hash, and have the backend exchange it server-side
+(`POST /auth/v1/verify`, `type=recovery`) before updating the password. No session
+token ever appears in a URL and the emailed credential is single-use. Needs: email
+template change (dashboard in prod, `config.toml` locally) + a `tokenHash` variant
+of `POST /api/auth/reset-password`. Do this when the reset page moves off
+supabase-js at cutover.
+
 ### `src/lib/sales-auth.tsx` (rep auth)
 
 Same mapping: `signInWithPassword` → login, `signOut` → logout,
