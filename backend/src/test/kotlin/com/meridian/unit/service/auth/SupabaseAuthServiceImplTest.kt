@@ -247,16 +247,19 @@ class SupabaseAuthServiceImplTest {
     // ---- reset/change password tests ----
 
     @Test
-    fun `resetPassword puts new password with recovery token`() =
+    fun `resetPassword puts new password then revokes the recovery session`() =
         runTest {
+            val requests = mutableListOf<String>()
             val engine =
                 MockEngine { request ->
-                    assertEquals("$supabaseUrl/auth/v1/user", request.url.toString())
+                    requests += "${request.method.value} ${request.url}"
                     assertEquals("Bearer recovery-token", request.headers["Authorization"])
                     assertEquals("test-anon-key", request.headers["apikey"])
-                    val body = request.body.toByteArray().decodeToString()
-                    val parsed = jsonMapper.readValue(body, Map::class.java)
-                    assertEquals("new-secret-123", parsed["password"])
+                    if (request.url.encodedPath.endsWith("/auth/v1/user")) {
+                        val body = request.body.toByteArray().decodeToString()
+                        val parsed = jsonMapper.readValue(body, Map::class.java)
+                        assertEquals("new-secret-123", parsed["password"])
+                    }
                     respond(
                         content = """{"id": "uuid-1"}""",
                         status = HttpStatusCode.OK,
@@ -265,6 +268,58 @@ class SupabaseAuthServiceImplTest {
                 }
 
             createService(engine).resetPassword("recovery-token", "new-secret-123")
+
+            assertEquals(
+                listOf(
+                    "PUT $supabaseUrl/auth/v1/user",
+                    "POST $supabaseUrl/auth/v1/logout?scope=local",
+                ),
+                requests,
+            )
+        }
+
+    @Test
+    fun `resetPassword still succeeds when the session revoke fails`() =
+        runTest {
+            val engine =
+                MockEngine { request ->
+                    if (request.url.encodedPath.endsWith("/auth/v1/user")) {
+                        respond(
+                            content = """{"id": "uuid-1"}""",
+                            status = HttpStatusCode.OK,
+                            headers = headersOf(HttpHeaders.ContentType, "application/json"),
+                        )
+                    } else {
+                        respond(
+                            content = """{"msg": "boom"}""",
+                            status = HttpStatusCode.InternalServerError,
+                            headers = headersOf(HttpHeaders.ContentType, "application/json"),
+                        )
+                    }
+                }
+
+            // Best-effort revoke: must not throw — the password DID change
+            createService(engine).resetPassword("recovery-token", "new-secret-123")
+        }
+
+    @Test
+    fun `changePassword does not revoke the fresh session`() =
+        runTest {
+            val requests = mutableListOf<String>()
+            val engine =
+                MockEngine { request ->
+                    requests += "${request.method.value} ${request.url.encodedPath}"
+                    respond(
+                        content = """{"id": "uuid-1"}""",
+                        status = HttpStatusCode.OK,
+                        headers = headersOf(HttpHeaders.ContentType, "application/json"),
+                    )
+                }
+
+            createService(engine).changePassword("session-token", "new-secret-123")
+
+            // The fresh token becomes the HTTP session's stored token — revoking it would break later proxied calls
+            assertEquals(listOf("PUT /auth/v1/user"), requests)
         }
 
     @Test

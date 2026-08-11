@@ -135,12 +135,38 @@ class SupabaseAuthServiceImpl(
     override suspend fun resetPassword(
         accessToken: String,
         newPassword: String,
-    ) = updatePassword(accessToken, newPassword, "reset-password")
+    ) {
+        updatePassword(accessToken, newPassword, "reset-password")
+        // The recovery session outlives the reset (the JWT is stateless and valid until
+        // exp, and its refresh token could mint more). Revoke it so the emailed token
+        // dies the moment it has done its job. Best-effort: the password DID change,
+        // so a failed revoke must not fail the reset.
+        revokeSession(accessToken, "reset-password")
+    }
 
     override suspend fun changePassword(
         accessToken: String,
         newPassword: String,
     ) = updatePassword(accessToken, newPassword, "change-password")
+
+    /** GoTrue logout, scope=local: revokes only the session behind this token (refresh token + session row). */
+    private suspend fun revokeSession(
+        accessToken: String,
+        operation: String,
+    ) {
+        try {
+            val response =
+                httpClient.post("$supabaseUrl/auth/v1/logout?scope=local") {
+                    header("apikey", supabaseKey)
+                    header("Authorization", "Bearer $accessToken")
+                }
+            if (!response.status.isSuccess()) {
+                log.warn("{}: session revoke returned {}", operation, response.status.value)
+            }
+        } catch (e: Exception) {
+            log.warn("{}: session revoke failed", operation, e)
+        }
+    }
 
     /** PUT /auth/v1/user with the given user token — shared by reset (recovery token) and change (session token). */
     private suspend fun updatePassword(
