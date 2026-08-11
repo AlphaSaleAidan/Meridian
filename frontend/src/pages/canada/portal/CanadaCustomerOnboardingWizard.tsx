@@ -10,6 +10,7 @@ import PasswordInput from '@/components/ui/PasswordInput'
 import { useAuth } from '@/lib/auth'
 import { supabase, getAuthHeaders } from '@/lib/supabase'
 import POSSystemPicker from '@/components/POSSystemPicker'
+import POSLogo from '@/components/POSLogo'
 import { getPlan as getCanadaPlan, closestMonthlyPlanCad } from '@/lib/canada-proposal-plans'
 
 // ── Canada Theme ──
@@ -103,6 +104,9 @@ export default function CanadaCustomerOnboardingWizard() {
   // Whether Clover 1-click OAuth is configured server-side. Default false so we
   // never surface a button that 503s; flipped on once /api/clover/status confirms.
   const [cloverOAuthAvailable, setCloverOAuthAvailable] = useState(false)
+  // Same contract for Stripe (the read-only Stripe App connector) — the status
+  // endpoint reports oauth_available only when the app creds are configured.
+  const [stripeOAuthAvailable, setStripeOAuthAvailable] = useState(false)
 
   // SLA (Service Agreement)
   const [slaSignature, setSlaSignature] = useState('')
@@ -191,6 +195,10 @@ export default function CanadaCustomerOnboardingWizard() {
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (!cancelled && d) setCloverOAuthAvailable(!!d.oauth_available) })
       .catch(() => { /* leave false — manual path still available downstream */ })
+    fetch(`${API_BASE}/api/pos/stripe/status?org_id=${encodeURIComponent(org.org_id)}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (!cancelled && d) setStripeOAuthAvailable(!!d.oauth_available) })
+      .catch(() => { /* leave false */ })
     return () => { cancelled = true }
   }, [org?.org_id])
 
@@ -854,6 +862,16 @@ export default function CanadaCustomerOnboardingWizard() {
                 rel="noopener noreferrer"
               >
                 Connect with Clover (OAuth)
+              </a>
+            )}
+            {posProvider === 'stripe' && org?.org_id && stripeOAuthAvailable && (
+              <a
+                href={`${import.meta.env.VITE_API_URL || ''}/api/pos/stripe/authorize?org_id=${encodeURIComponent(org.org_id)}&return_to=${encodeURIComponent('/canada/dashboard')}${searchParams.get('rep') ? `&rep_id=${encodeURIComponent(searchParams.get('rep') || '')}` : ''}`}
+                className={btnPrimary + ' justify-center w-full'}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <POSLogo system="stripe" size="sm" /> Connect with Stripe (OAuth)
               </a>
             )}
             {posProvider === 'clover' && org?.org_id && !cloverOAuthAvailable && (

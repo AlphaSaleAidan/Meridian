@@ -302,7 +302,7 @@ export const posSystems: POSSystem[] = [
     // below, which is the manual/CSV contingency entry for Terminal hardware.
     key: 'stripe',
     name: 'Stripe',
-    logo: '',
+    logo: '/src/assets/pos-logos/stripe.svg',
     brandColor: '#635BFF',
     logoInitials: 'ST',
     website: 'https://stripe.com',
