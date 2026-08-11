@@ -17,3 +17,15 @@ spring:
 supabase:
   url: ${SUPABASE_URL}
   key: ${SUPABASE_KEY}
+
+meridian:
+  auth:
+    # Default = where the SPA already lands recovery links today (auth.tsx uses
+    # origin + '/customer/login'; the login page handles PASSWORD_RECOVERY).
+    # MUST be in the Supabase project's redirect allow-list or it is silently
+    # ignored — see docs/runbooks/email-recovery-hardening.md apply steps.
+    # TODO before relying on this in prod: (1) verify the allow-list entry exists
+    # in the Supabase dashboard; (2) at FE cutover, decide whether to derive the
+    # redirect from the request origin instead (canada.meridian.tips users and
+    # rep portals land on different hosts/routes than this single default).
+    password-reset-redirect-url: ${PASSWORD_RESET_REDIRECT_URL:https://meridian.tips/customer/login}

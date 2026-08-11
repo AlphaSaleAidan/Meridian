@@ -12,6 +12,8 @@ supabase:
 meridian:
   portal:
     base-url: http://localhost:8080
+  auth:
+    password-reset-redirect-url: ""
 
 security:
   csrf:

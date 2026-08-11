@@ -1,12 +1,20 @@
 package com.meridian.controller
 
 import com.meridian.dto.ApiResponse
+import com.meridian.dto.ChangePasswordRequest
+import com.meridian.dto.ForgotPasswordRequest
 import com.meridian.dto.LoginRequest
+import com.meridian.dto.ResetPasswordRequest
+import com.meridian.dto.SessionBusinessResponse
 import com.meridian.dto.SessionInfoResponse
 import com.meridian.dto.SignupRequest
+import com.meridian.dto.SignupResponse
 import com.meridian.exception.UnauthorizedException
 import com.meridian.security.SecurityConstants
 import com.meridian.service.auth.AuthService
+import com.meridian.service.onboarding.OnboardingService
+import com.meridian.service.user.UserIdentity
+import com.meridian.service.user.UserIdentityService
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.servlet.http.HttpSession
@@ -21,6 +29,7 @@ import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.bind.annotation.SessionAttribute
+import java.util.UUID
 
 @RestController
 @RequestMapping("/api/auth")
@@ -33,19 +42,58 @@ import org.springframework.web.bind.annotation.SessionAttribute
 )
 class AuthController(
     private val authService: AuthService,
+    private val userIdentityService: UserIdentityService,
+    private val onboardingService: OnboardingService,
 ) {
     private val log = LoggerFactory.getLogger(AuthController::class.java)
 
     @Operation(
         summary = "Create a merchant account",
-        description = "Registers the email/password with Supabase Auth. The user logs in separately once confirmed.",
+        description =
+            "Unified signup covering both real flows. Self-serve: businessName present -> the auth user AND " +
+                "an active owned business are created together. Invite: accessToken present -> the token is " +
+                "validated up front (fail fast, before the auth user exists), then redeemed — binding " +
+                "owner_user_id to the rep's pre-created business in one transaction. Replaces the SPA's " +
+                "non-atomic signUp + create_business_for_user / redeem_access_token RPC pairs. " +
+                "The user logs in separately once confirmed.",
     )
     @PostMapping("/signup")
     suspend fun signup(
         @RequestBody request: SignupRequest,
-    ): ResponseEntity<ApiResponse<Any>> {
-        authService.signup(request)
-        return ResponseEntity.ok(ApiResponse.success(message = "Signup successful"))
+    ): ResponseEntity<ApiResponse<SignupResponse>> {
+        // Blank strings read as absent — "" must not create an empty-named business.
+        val accessToken = request.accessToken?.trim()?.takeIf { it.isNotEmpty() }
+        val businessName = request.businessName?.trim()?.takeIf { it.isNotEmpty() }
+        val displayName = request.displayName?.trim()?.takeIf { it.isNotEmpty() }
+
+        // Fail fast on a bad invite BEFORE creating the auth user.
+        if (accessToken != null) {
+            onboardingService.validateToken(accessToken)
+        }
+
+        val supabaseUser = authService.signup(request)
+        val userId = UUID.fromString(supabaseUser.id)
+
+        // Auth-user creation is an external call and cannot join this transaction:
+        // if binding fails here, the auth user exists without a business (surfaced
+        // as an error — strictly better than the SPA's silent console.warn path).
+        val businessId =
+            when {
+                accessToken != null ->
+                    onboardingService.redeemForUser(accessToken, userId)
+                businessName != null ->
+                    onboardingService.createBusinessForOwner(
+                        userId = userId,
+                        businessName = businessName,
+                        ownerName = displayName,
+                        email = supabaseUser.email ?: request.email,
+                    )
+                else -> null
+            }
+
+        return ResponseEntity.ok(
+            ApiResponse.success(data = SignupResponse(businessId = businessId), message = "Signup successful"),
+        )
     }
 
     @Operation(
@@ -59,44 +107,147 @@ class AuthController(
         @RequestBody request: LoginRequest,
         session: HttpSession,
     ): ResponseEntity<ApiResponse<Any>> {
-        val supabaseToken = authService.login(request)
+        val supabaseSession = authService.login(request)
+        val supabaseUser = supabaseSession.user
+        val email = supabaseUser.email ?: request.email
+        // Boundary parse: Supabase ids are uuids; a malformed one means a broken upstream, not a bad login.
+        val userId = UUID.fromString(supabaseUser.id)
+        val identity =
+            userIdentityService.resolveIdentity(
+                userId = userId,
+                email = email,
+                displayName = supabaseUser.userMetadata?.displayName ?: supabaseUser.userMetadata?.fullName,
+                isVerified = supabaseUser.emailConfirmedAt != null,
+            )
+        userIdentityService.recordLogin(identity.userId)
 
         // Inform Spring Security that the user is authenticated
-        val auth = UsernamePasswordAuthenticationToken(request.email, null, emptyList())
+        val auth = UsernamePasswordAuthenticationToken(email, null, emptyList())
         val securityContext = SecurityContextHolder.createEmptyContext()
         securityContext.authentication = auth
         SecurityContextHolder.setContext(securityContext)
 
         // Save the context to the session so it persists across requests
         session.setAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY, securityContext)
-        session.setAttribute(SecurityConstants.USER_EMAIL_SESSION_ATTRIBUTE, request.email)
-        session.setAttribute(SecurityConstants.SUPABASE_TOKEN_SESSION_ATTRIBUTE, supabaseToken)
+        session.setAttribute(SecurityConstants.USER_EMAIL_SESSION_ATTRIBUTE, email)
+        session.setAttribute(SecurityConstants.SUPABASE_TOKEN_SESSION_ATTRIBUTE, supabaseSession.accessToken)
+        session.setAttribute(SecurityConstants.USER_ID_SESSION_ATTRIBUTE, identity.userId.toString())
+        session.setAttribute(
+            SecurityConstants.BUSINESS_IDS_SESSION_ATTRIBUTE,
+            ArrayList(identity.businesses.map { it.businessId }),
+        )
+        session.setAttribute(SecurityConstants.USER_IDENTITY_SESSION_ATTRIBUTE, identity)
 
-        // TODO: Populate USER_ID and BUSINESS_IDS from user_profiles / business_access tables upon login
-        // Temporary placeholder dummy identity until user management / business mapping tables are created
-        session.setAttribute(SecurityConstants.USER_ID_SESSION_ATTRIBUTE, "dummy_user_id_${request.email}")
-        session.setAttribute(SecurityConstants.BUSINESS_IDS_SESSION_ATTRIBUTE, emptyList<String>())
-
-        log.info("Created backend JDBC session for: {}", request.email)
+        log.info("Created backend JDBC session for: {} ({} businesses)", email, identity.businesses.size)
 
         return ResponseEntity.ok(ApiResponse.success(message = "Login successful"))
     }
 
     @Operation(
+        summary = "Request a password-reset email",
+        description =
+            "Triggers Supabase's recovery email. Always answers with the same generic success whether or " +
+                "not the email exists (anti-enumeration); infrastructure failures (Supabase SMTP rate cap, " +
+                "5xx) are logged for ops but never exposed to the caller.",
+    )
+    @PostMapping("/forgot-password")
+    suspend fun forgotPassword(
+        @RequestBody request: ForgotPasswordRequest,
+    ): ResponseEntity<ApiResponse<Any>> {
+        authService.forgotPassword(request.email)
+        return ResponseEntity.ok(ApiResponse.success(message = "If the email exists, a reset link has been sent"))
+    }
+
+    @Operation(
+        summary = "Reset password from an email link",
+        description =
+            "Completes the recovery flow: the SPA reads the recovery access token from the reset link's " +
+                "URL fragment and posts it here with the new password. This is the one flow where the SPA " +
+                "handles a raw Supabase token — the fragment never reaches the backend otherwise. " +
+                "No session is created; the user logs in afterwards.",
+    )
+    @PostMapping("/reset-password")
+    suspend fun resetPassword(
+        @RequestBody request: ResetPasswordRequest,
+    ): ResponseEntity<ApiResponse<Any>> {
+        authService.resetPassword(request.accessToken, request.newPassword)
+        return ResponseEntity.ok(ApiResponse.success(message = "Password updated"))
+    }
+
+    @Operation(
+        summary = "Change password while logged in",
+        description =
+            "Session-authenticated password change (settings page). Requires the current password, which is " +
+                "verified via a fresh Supabase password grant — the session's stored access token may have " +
+                "expired (sessions outlive Supabase tokens and no refresh token is kept), and requiring the " +
+                "current password also stops a hijacked session from silently changing it. Distinct from " +
+                "reset-password, which uses a recovery token. 401 when there is no active session.",
+    )
+    @PostMapping("/change-password")
+    suspend fun changePassword(
+        @RequestBody request: ChangePasswordRequest,
+        @SessionAttribute(
+            name = SecurityConstants.USER_EMAIL_SESSION_ATTRIBUTE,
+            required = false,
+        ) email: String?,
+        session: HttpSession,
+    ): ResponseEntity<ApiResponse<Any>> {
+        if (email == null) {
+            throw UnauthorizedException("Not authenticated")
+        }
+        val freshSession =
+            try {
+                authService.login(LoginRequest(email = email, password = request.currentPassword))
+            } catch (e: UnauthorizedException) {
+                throw UnauthorizedException("Current password is incorrect")
+            }
+        authService.changePassword(freshSession.accessToken, request.newPassword)
+        // Keep the session's stored token current for any later Supabase-proxied calls
+        session.setAttribute(SecurityConstants.SUPABASE_TOKEN_SESSION_ATTRIBUTE, freshSession.accessToken)
+        return ResponseEntity.ok(ApiResponse.success(message = "Password updated"))
+    }
+
+    @Operation(
         summary = "Who is logged in",
         description =
-            "Returns the current session's user identity. The SPA calls this on load to decide between " +
-                "the logged-in dashboard and the login screen — with cookie sessions it has no JWT to decode. " +
+            "Returns the current session's resolved identity: profile, table-derived role, admin/sales-rep " +
+                "flags and business memberships. The SPA calls this on load to decide between the logged-in " +
+                "dashboard and the login screen — with cookie sessions it has no JWT to decode. It also " +
+                "replaces the SPA's direct is_admin RPC, sales_reps and businesses lookups. " +
                 "401 when there is no active session.",
     )
     @GetMapping("/me")
     suspend fun me(
-        @SessionAttribute(name = SecurityConstants.USER_EMAIL_SESSION_ATTRIBUTE, required = false) email: String?,
+        @SessionAttribute(
+            name = SecurityConstants.USER_IDENTITY_SESSION_ATTRIBUTE,
+            required = false,
+        ) identity: UserIdentity?,
     ): ResponseEntity<ApiResponse<SessionInfoResponse>> {
-        if (email == null) {
+        if (identity == null) {
             throw UnauthorizedException("Not authenticated")
         }
-        return ResponseEntity.ok(ApiResponse.success(data = SessionInfoResponse(email = email)))
+        val response =
+            SessionInfoResponse(
+                id = identity.userId.toString(),
+                email = identity.email,
+                displayName = identity.displayName,
+                role = identity.role,
+                orgId = identity.orgId,
+                locationId = identity.locationId,
+                isVerified = identity.isVerified,
+                isAdmin = identity.isAdmin,
+                isSalesRep = identity.isSalesRep,
+                businesses =
+                    identity.businesses.map { business ->
+                        SessionBusinessResponse(
+                            businessId = business.businessId,
+                            businessName = business.businessName,
+                            role = business.role,
+                            locationId = business.locationId,
+                        )
+                    },
+            )
+        return ResponseEntity.ok(ApiResponse.success(data = response))
     }
 
     @Operation(

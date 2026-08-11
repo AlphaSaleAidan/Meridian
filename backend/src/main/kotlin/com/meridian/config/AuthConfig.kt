@@ -21,6 +21,7 @@ class AuthConfig {
     fun authService(
         @Value("\${supabase.url}") supabaseUrl: String,
         @Value("\${supabase.key}") supabaseKey: String,
+        @Value("\${meridian.auth.password-reset-redirect-url:}") passwordResetRedirectUrl: String,
         ktorHttpClient: HttpClient,
         jsonMapper: JsonMapper,
     ): AuthService =
@@ -29,5 +30,6 @@ class AuthConfig {
             supabaseKey = supabaseKey,
             httpClient = ktorHttpClient,
             jsonMapper = jsonMapper,
+            passwordResetRedirectUrl = passwordResetRedirectUrl,
         )
 }
