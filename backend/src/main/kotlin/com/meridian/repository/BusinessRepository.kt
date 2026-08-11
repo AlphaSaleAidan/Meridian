@@ -1,6 +1,7 @@
 package com.meridian.repository
 
 import com.meridian.entity.Business
+import java.util.UUID
 
 interface BusinessRepository {
     suspend fun findById(id: String): Business?
@@ -11,7 +12,7 @@ interface BusinessRepository {
     ): Business?
 
     /** Businesses owned by this Supabase auth user (`businesses.owner_user_id`). */
-    suspend fun findByOwnerUserId(ownerUserId: String): List<Business>
+    suspend fun findByOwnerUserId(ownerUserId: UUID): List<Business>
 
     suspend fun save(business: Business): Business
 }

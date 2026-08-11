@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import java.util.UUID
 
 class UserIdentityServiceImplTest {
     private val businessRepository = mockk<BusinessRepository>()
@@ -47,7 +48,13 @@ class UserIdentityServiceImplTest {
         runBlocking {
             stubDefaults(owned = listOf(Business(id = "biz_1", name = "Joe's Pizza")))
 
-            val identity = service.resolveIdentity("uuid-1", "joe@test.com", "Joe", isVerified = true)
+            val identity =
+                service.resolveIdentity(
+                    UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                    "joe@test.com",
+                    "Joe",
+                    isVerified = true,
+                )
 
             assertEquals("owner", identity.role)
             assertEquals("biz_1", identity.orgId)
@@ -71,7 +78,13 @@ class UserIdentityServiceImplTest {
                     ),
             )
 
-            val identity = service.resolveIdentity("uuid-2", "staff@test.com", null, isVerified = false)
+            val identity =
+                service.resolveIdentity(
+                    UUID.fromString("00000000-0000-0000-0000-000000000002"),
+                    "staff@test.com",
+                    null,
+                    isVerified = false,
+                )
 
             assertEquals("manager", identity.role)
             assertEquals("biz_2", identity.orgId)
@@ -91,7 +104,13 @@ class UserIdentityServiceImplTest {
                     ),
             )
 
-            val identity = service.resolveIdentity("uuid-1", "joe@test.com", "Joe", isVerified = true)
+            val identity =
+                service.resolveIdentity(
+                    UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                    "joe@test.com",
+                    "Joe",
+                    isVerified = true,
+                )
 
             assertEquals(2, identity.businesses.size)
             assertEquals("owner", identity.businesses.first { it.businessId == "biz_1" }.role)
@@ -104,7 +123,13 @@ class UserIdentityServiceImplTest {
         runBlocking {
             stubDefaults(isSalesRep = true)
 
-            val identity = service.resolveIdentity("uuid-3", "rep@test.com", "Rep", isVerified = true)
+            val identity =
+                service.resolveIdentity(
+                    UUID.fromString("00000000-0000-0000-0000-000000000003"),
+                    "rep@test.com",
+                    "Rep",
+                    isVerified = true,
+                )
 
             assertEquals("staff", identity.role)
             assertNull(identity.orgId)
@@ -117,20 +142,26 @@ class UserIdentityServiceImplTest {
         runBlocking {
             stubDefaults(isAdmin = true)
 
-            val identity = service.resolveIdentity("uuid-4", "admin@test.com", null, isVerified = true)
+            val identity =
+                service.resolveIdentity(
+                    UUID.fromString("00000000-0000-0000-0000-000000000004"),
+                    "admin@test.com",
+                    null,
+                    isVerified = true,
+                )
 
             assertTrue(identity.isAdmin)
-            coVerify { adminUserRepository.existsByUserId("uuid-4") }
+            coVerify { adminUserRepository.existsByUserId(UUID.fromString("00000000-0000-0000-0000-000000000004")) }
             coVerify { salesRepRepository.existsActiveByEmail("admin@test.com") }
         }
 
     @Test
     fun `recordLogin delegates to business user repository`() =
         runBlocking {
-            coEvery { businessUserRepository.recordLogin("uuid-5") } returns 2L
+            coEvery { businessUserRepository.recordLogin(UUID.fromString("00000000-0000-0000-0000-000000000005")) } returns 2L
 
-            service.recordLogin("uuid-5")
+            service.recordLogin(UUID.fromString("00000000-0000-0000-0000-000000000005"))
 
-            coVerify { businessUserRepository.recordLogin("uuid-5") }
+            coVerify { businessUserRepository.recordLogin(UUID.fromString("00000000-0000-0000-0000-000000000005")) }
         }
 }

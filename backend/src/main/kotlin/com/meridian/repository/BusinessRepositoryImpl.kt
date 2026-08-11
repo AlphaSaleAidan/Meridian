@@ -8,6 +8,7 @@ import org.springframework.r2dbc.core.await
 import org.springframework.r2dbc.core.awaitOneOrNull
 import org.springframework.r2dbc.core.flow
 import org.springframework.stereotype.Repository
+import java.util.UUID
 
 @Repository
 class BusinessRepositoryImpl(
@@ -47,12 +48,12 @@ class BusinessRepositoryImpl(
             .awaitOneOrNull()
     }
 
-    override suspend fun findByOwnerUserId(ownerUserId: String): List<Business> {
+    override suspend fun findByOwnerUserId(ownerUserId: UUID): List<Business> {
         val sql =
             """
             SELECT id, name, plan_tier, access_token, token_status, status, pos_provider, onboarded
             FROM businesses
-            WHERE owner_user_id = CAST(:ownerUserId AS uuid)
+            WHERE owner_user_id = :ownerUserId
             """.trimIndent()
 
         return databaseClient

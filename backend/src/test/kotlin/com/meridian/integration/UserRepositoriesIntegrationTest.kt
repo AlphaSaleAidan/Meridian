@@ -17,6 +17,7 @@ import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.r2dbc.core.DatabaseClient
 import org.springframework.r2dbc.core.await
 import org.springframework.r2dbc.core.awaitSingle
+import java.util.UUID
 
 /**
  * Exercises the identity repositories against real Postgres with the subset of
@@ -41,9 +42,9 @@ class UserRepositoriesIntegrationTest : PostgresIntegrationTest() {
     @Autowired
     private lateinit var salesRepRepository: SalesRepRepository
 
-    private val ownerId = "11111111-1111-1111-1111-111111111111"
-    private val staffId = "22222222-2222-2222-2222-222222222222"
-    private val strangerId = "33333333-3333-3333-3333-333333333333"
+    private val ownerId = UUID.fromString("11111111-1111-1111-1111-111111111111")
+    private val staffId = UUID.fromString("22222222-2222-2222-2222-222222222222")
+    private val strangerId = UUID.fromString("33333333-3333-3333-3333-333333333333")
 
     @BeforeEach
     fun setUpSchema() =
@@ -105,7 +106,7 @@ class UserRepositoriesIntegrationTest : PostgresIntegrationTest() {
                 .sql(
                     """
                     INSERT INTO businesses (id, name, status, onboarded, owner_user_id)
-                    VALUES ('biz_owned', 'Owned Bistro', 'active', true, CAST(:ownerId AS uuid)),
+                    VALUES ('biz_owned', 'Owned Bistro', 'active', true, :ownerId),
                            ('biz_staffed', 'Staffed Diner', 'active', true, NULL)
                     """.trimIndent(),
                 ).bind("ownerId", ownerId)
@@ -114,15 +115,15 @@ class UserRepositoriesIntegrationTest : PostgresIntegrationTest() {
                 .sql(
                     """
                     INSERT INTO business_users (business_id, user_id, email, role, location_id, is_active, login_count)
-                    VALUES ('biz_staffed', CAST(:staffId AS uuid), 'staff@test.com', 'manager', 'loc_1', true, 0),
-                           ('biz_staffed', CAST(:strangerId AS uuid), 'inactive@test.com', 'staff', NULL, false, 0),
+                    VALUES ('biz_staffed', :staffId, 'staff@test.com', 'manager', 'loc_1', true, 0),
+                           ('biz_staffed', :strangerId, 'inactive@test.com', 'staff', NULL, false, 0),
                            ('biz_staffed', NULL, 'roster.only@placeholder.local', 'staff', NULL, true, 0)
                     """.trimIndent(),
                 ).bind("staffId", staffId)
                 .bind("strangerId", strangerId)
                 .await()
             databaseClient
-                .sql("INSERT INTO admin_users (user_id, email) VALUES (CAST(:id AS uuid), 'admin@test.com')")
+                .sql("INSERT INTO admin_users (user_id, email) VALUES (:id, 'admin@test.com')")
                 .bind("id", ownerId)
                 .await()
             databaseClient
@@ -172,7 +173,7 @@ class UserRepositoriesIntegrationTest : PostgresIntegrationTest() {
                 databaseClient
                     .sql(
                         "SELECT login_count, last_login_at IS NOT NULL AS stamped FROM business_users " +
-                            "WHERE user_id = CAST(:id AS uuid)",
+                            "WHERE user_id = :id",
                     ).bind("id", staffId)
                     .map { r, _ ->
                         Pair(

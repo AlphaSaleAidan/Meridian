@@ -24,6 +24,7 @@ import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.bind.annotation.SessionAttribute
+import java.util.UUID
 
 @RestController
 @RequestMapping("/api/auth")
@@ -66,9 +67,11 @@ class AuthController(
         val supabaseSession = authService.login(request)
         val supabaseUser = supabaseSession.user
         val email = supabaseUser.email ?: request.email
+        // Boundary parse: Supabase ids are uuids; a malformed one means a broken upstream, not a bad login.
+        val userId = UUID.fromString(supabaseUser.id)
         val identity =
             userIdentityService.resolveIdentity(
-                userId = supabaseUser.id,
+                userId = userId,
                 email = email,
                 displayName = supabaseUser.userMetadata?.displayName ?: supabaseUser.userMetadata?.fullName,
                 isVerified = supabaseUser.emailConfirmedAt != null,
@@ -85,7 +88,7 @@ class AuthController(
         session.setAttribute(HttpSessionSecurityContextRepository.SPRING_SECURITY_CONTEXT_KEY, securityContext)
         session.setAttribute(SecurityConstants.USER_EMAIL_SESSION_ATTRIBUTE, email)
         session.setAttribute(SecurityConstants.SUPABASE_TOKEN_SESSION_ATTRIBUTE, supabaseSession.accessToken)
-        session.setAttribute(SecurityConstants.USER_ID_SESSION_ATTRIBUTE, identity.userId)
+        session.setAttribute(SecurityConstants.USER_ID_SESSION_ATTRIBUTE, identity.userId.toString())
         session.setAttribute(
             SecurityConstants.BUSINESS_IDS_SESSION_ATTRIBUTE,
             ArrayList(identity.businesses.map { it.businessId }),
@@ -118,7 +121,7 @@ class AuthController(
         }
         val response =
             SessionInfoResponse(
-                id = identity.userId,
+                id = identity.userId.toString(),
                 email = identity.email,
                 displayName = identity.displayName,
                 role = identity.role,

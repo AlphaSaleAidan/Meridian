@@ -7,18 +7,19 @@ import org.springframework.r2dbc.core.DatabaseClient
 import org.springframework.r2dbc.core.awaitRowsUpdated
 import org.springframework.r2dbc.core.flow
 import org.springframework.stereotype.Repository
+import java.util.UUID
 
 @Repository
 class BusinessUserRepositoryImpl(
     private val databaseClient: DatabaseClient,
 ) : BusinessUserRepository {
-    override suspend fun findActiveMembershipsByUserId(userId: String): List<BusinessMembership> {
+    override suspend fun findActiveMembershipsByUserId(userId: UUID): List<BusinessMembership> {
         val sql =
             """
             SELECT bu.business_id, b.name AS business_name, bu.role, bu.location_id
             FROM business_users bu
             LEFT JOIN businesses b ON b.id = bu.business_id
-            WHERE bu.user_id = CAST(:userId AS uuid) AND bu.is_active
+            WHERE bu.user_id = :userId AND bu.is_active
             """.trimIndent()
 
         return databaseClient
@@ -29,12 +30,12 @@ class BusinessUserRepositoryImpl(
             .toList()
     }
 
-    override suspend fun recordLogin(userId: String): Long {
+    override suspend fun recordLogin(userId: UUID): Long {
         val sql =
             """
             UPDATE business_users
             SET last_login_at = now(), login_count = login_count + 1
-            WHERE user_id = CAST(:userId AS uuid) AND is_active
+            WHERE user_id = :userId AND is_active
             """.trimIndent()
 
         return databaseClient

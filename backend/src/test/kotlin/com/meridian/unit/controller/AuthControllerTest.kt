@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.springframework.http.HttpStatus
+import java.util.UUID
 
 class AuthControllerTest {
     private val authService = mockk<AuthService>()
@@ -30,7 +31,7 @@ class AuthControllerTest {
 
     private val supabaseUser =
         SupabaseUser(
-            id = "uuid-1",
+            id = "00000000-0000-0000-0000-000000000001",
             email = "test@test.com",
             emailConfirmedAt = "2026-08-11T00:00:00Z",
             userMetadata = SupabaseUserMetadata(displayName = "Test Owner"),
@@ -38,7 +39,7 @@ class AuthControllerTest {
 
     private val identity =
         UserIdentity(
-            userId = "uuid-1",
+            userId = UUID.fromString("00000000-0000-0000-0000-000000000001"),
             email = "test@test.com",
             displayName = "Test Owner",
             role = "owner",
@@ -85,13 +86,13 @@ class AuthControllerTest {
             coEvery { authService.login(any()) } returns SupabaseSession(accessToken = "fake-jwt", user = supabaseUser)
             coEvery {
                 userIdentityService.resolveIdentity(
-                    userId = "uuid-1",
+                    userId = UUID.fromString("00000000-0000-0000-0000-000000000001"),
                     email = "test@test.com",
                     displayName = "Test Owner",
                     isVerified = true,
                 )
             } returns identity
-            coEvery { userIdentityService.recordLogin("uuid-1") } returns Unit
+            coEvery { userIdentityService.recordLogin(UUID.fromString("00000000-0000-0000-0000-000000000001")) } returns Unit
 
             val response = authController.login(request, httpSession)
 
@@ -99,10 +100,10 @@ class AuthControllerTest {
             assertEquals("success", response.body?.status)
 
             coVerify { authService.login(request) }
-            coVerify { userIdentityService.recordLogin("uuid-1") }
+            coVerify { userIdentityService.recordLogin(UUID.fromString("00000000-0000-0000-0000-000000000001")) }
             verify { httpSession.setAttribute(SecurityConstants.USER_EMAIL_SESSION_ATTRIBUTE, "test@test.com") }
             verify { httpSession.setAttribute(SecurityConstants.SUPABASE_TOKEN_SESSION_ATTRIBUTE, "fake-jwt") }
-            verify { httpSession.setAttribute(SecurityConstants.USER_ID_SESSION_ATTRIBUTE, "uuid-1") }
+            verify { httpSession.setAttribute(SecurityConstants.USER_ID_SESSION_ATTRIBUTE, "00000000-0000-0000-0000-000000000001") }
             verify { httpSession.setAttribute(SecurityConstants.BUSINESS_IDS_SESSION_ATTRIBUTE, arrayListOf("biz_1")) }
             verify { httpSession.setAttribute(SecurityConstants.USER_IDENTITY_SESSION_ATTRIBUTE, identity) }
         }
@@ -117,13 +118,13 @@ class AuthControllerTest {
             coEvery { authService.login(any()) } returns SupabaseSession(accessToken = "fake-jwt", user = userWithoutEmail)
             coEvery {
                 userIdentityService.resolveIdentity(
-                    userId = "uuid-1",
+                    userId = UUID.fromString("00000000-0000-0000-0000-000000000001"),
                     email = "fallback@test.com",
                     displayName = null,
                     isVerified = true,
                 )
             } returns identity.copy(email = "fallback@test.com")
-            coEvery { userIdentityService.recordLogin("uuid-1") } returns Unit
+            coEvery { userIdentityService.recordLogin(UUID.fromString("00000000-0000-0000-0000-000000000001")) } returns Unit
 
             val response = authController.login(request, httpSession)
 
@@ -155,7 +156,7 @@ class AuthControllerTest {
             assertEquals(HttpStatus.OK, response.statusCode)
             assertEquals("success", response.body?.status)
             val data = response.body?.data
-            assertEquals("uuid-1", data?.id)
+            assertEquals("00000000-0000-0000-0000-000000000001", data?.id)
             assertEquals("test@test.com", data?.email)
             assertEquals("Test Owner", data?.displayName)
             assertEquals("owner", data?.role)

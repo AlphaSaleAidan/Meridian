@@ -1,6 +1,7 @@
 package com.meridian.service.user
 
 import java.io.Serializable
+import java.util.UUID
 
 /**
  * Fully resolved identity for a logged-in user, stored in the JDBC session at
@@ -14,7 +15,7 @@ import java.io.Serializable
  * `user_metadata`, which end users can edit themselves.
  */
 data class UserIdentity(
-    val userId: String,
+    val userId: UUID,
     val email: String,
     val displayName: String? = null,
     /** Role in the primary business ("owner"/"manager"/"staff"); "staff" when the user has no business. */

@@ -5,6 +5,7 @@ import com.meridian.repository.BusinessRepository
 import com.meridian.repository.BusinessUserRepository
 import com.meridian.repository.SalesRepRepository
 import org.springframework.stereotype.Service
+import java.util.UUID
 
 @Service
 class UserIdentityServiceImpl(
@@ -14,7 +15,7 @@ class UserIdentityServiceImpl(
     private val salesRepRepository: SalesRepRepository,
 ) : UserIdentityService {
     override suspend fun resolveIdentity(
-        userId: String,
+        userId: UUID,
         email: String,
         displayName: String?,
         isVerified: Boolean,
@@ -55,7 +56,7 @@ class UserIdentityServiceImpl(
         )
     }
 
-    override suspend fun recordLogin(userId: String) {
+    override suspend fun recordLogin(userId: UUID) {
         businessUserRepository.recordLogin(userId)
     }
 
