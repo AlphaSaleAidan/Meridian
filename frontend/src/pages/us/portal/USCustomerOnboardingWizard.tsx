@@ -11,6 +11,7 @@ import { useAuth } from '@/lib/auth'
 import { supabase, getAuthHeaders } from '@/lib/supabase'
 import { parseCsv } from '@/lib/csv-parse'
 import POSSystemPicker from '@/components/POSSystemPicker'
+import POSLogo from '@/components/POSLogo'
 import { getPlan, closestMonthlyPlan } from '@/lib/proposal-plans'
 // US portal — prices are already in USD, no conversion needed
 
@@ -849,8 +850,18 @@ export default function USCustomerOnboardingWizard() {
             {/* Additional 1-click POS providers (generic framework). Renders a
                 button per provider that is verified + credential-configured on
                 the server; empty otherwise — see src/pos_connect/. */}
+            {posProvider === 'stripe' && org?.org_id && (
+              <a
+                href={`${import.meta.env.VITE_API_URL || ''}/api/pos/stripe/authorize?org_id=${encodeURIComponent(org.org_id)}&return_to=${encodeURIComponent('/us/merchant')}${searchParams.get('rep') ? `&rep_id=${encodeURIComponent(searchParams.get('rep') || '')}` : ''}`}
+                className={btnPrimary + ' justify-center w-full'}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <POSLogo system="stripe" size="sm" /> Connect with Stripe (OAuth)
+              </a>
+            )}
             {org?.org_id && (
-              <ExtraPosConnectButtons orgId={org.org_id} repId={searchParams.get('rep')} />
+              <ExtraPosConnectButtons orgId={org.org_id} repId={searchParams.get('rep')} exclude={posProvider === 'stripe' ? [] : ['stripe']} />
             )}
             <div className="flex justify-between">
               <button onClick={() => setStep('sla')} className={btnBack}><ArrowLeft size={14} /> Back</button>
@@ -1249,7 +1260,7 @@ export default function USCustomerOnboardingWizard() {
  *  Only providers that are verified AND credential-configured server-side are
  *  returned, so this renders nothing until a provider is switched on — no
  *  demo-ware. Mirrors the Square/Clover authorize-link pattern above. */
-function ExtraPosConnectButtons({ orgId, repId }: { orgId: string; repId: string | null }) {
+function ExtraPosConnectButtons({ orgId, repId, exclude = [] }: { orgId: string; repId: string | null; exclude?: string[] }) {
   const [providers, setProviders] = useState<Array<{ key: string; label: string; authorize_path: string }>>([])
   useEffect(() => {
     let alive = true
@@ -1259,11 +1270,12 @@ function ExtraPosConnectButtons({ orgId, repId }: { orgId: string; repId: string
       .catch(() => { if (alive) setProviders([]) })
     return () => { alive = false }
   }, [])
-  if (providers.length === 0) return null
+  const shown = providers.filter(p => !exclude.includes(p.key))
+  if (shown.length === 0) return null
   const rep = repId ? `&rep_id=${encodeURIComponent(repId)}` : ''
   return (
     <>
-      {providers.map(p => (
+      {shown.map(p => (
         <a
           key={p.key}
           href={`${import.meta.env.VITE_API_URL || ''}${p.authorize_path}?org_id=${encodeURIComponent(orgId)}&return_to=${encodeURIComponent('/us/merchant')}${rep}`}
@@ -1271,7 +1283,7 @@ function ExtraPosConnectButtons({ orgId, repId }: { orgId: string; repId: string
           target="_blank"
           rel="noopener noreferrer"
         >
-          Connect with {p.label} (OAuth)
+          <POSLogo system={p.key} size="sm" /> Connect with {p.label} (OAuth)
         </a>
       ))}
     </>
