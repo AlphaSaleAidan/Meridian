@@ -17,3 +17,9 @@ spring:
 supabase:
   url: ${SUPABASE_URL}
   key: ${SUPABASE_KEY}
+
+meridian:
+  auth:
+    # HELD empty on purpose (staging host/allow-list not settled) — set the env
+    # var to temp a value; empty falls back to the Supabase project's site_url.
+    password-reset-redirect-url: ${PASSWORD_RESET_REDIRECT_URL:}
