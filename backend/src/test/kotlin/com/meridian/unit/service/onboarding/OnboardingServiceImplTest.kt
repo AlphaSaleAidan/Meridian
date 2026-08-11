@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import org.springframework.dao.DuplicateKeyException
 import java.util.UUID
 
 class OnboardingServiceImplTest {
@@ -80,6 +81,46 @@ class OnboardingServiceImplTest {
                 service.redeemForUser("mtk_gone", userId)
             }
             coVerify(exactly = 0) { accessTokenRepository.markRedeemed(any(), any()) }
+        }
+
+    @Test
+    fun `redeemForUser throws when a concurrent redeem wins the markRedeemed race`(): Unit =
+        runBlocking {
+            coEvery { accessTokenRepository.findRedeemableToken("mtk_race") } returns
+                RedeemableToken(id = tokenId, businessId = "biz_pre")
+            // Another request flipped redeemed=true between find and update
+            coEvery { accessTokenRepository.markRedeemed(tokenId, userId) } returns 0L
+
+            assertThrows<BadRequestException> {
+                service.redeemForUser("mtk_race", userId)
+            }
+            coVerify(exactly = 0) { businessRepository.activateForOwner(any(), any()) }
+        }
+
+    @Test
+    fun `createBusinessForOwner falls back to the business name when ownerName is absent`() =
+        runBlocking {
+            coEvery {
+                businessRepository.insertOwnedBusiness(any(), any(), ownerName = "Solo Cafe", any(), any())
+            } answers { firstArg() }
+            coEvery { onboardingProgressRepository.recordStep(any(), any(), any()) } returns 1L
+
+            service.createBusinessForOwner(userId, "Solo Cafe", null, "solo@test.com")
+
+            coVerify { businessRepository.insertOwnedBusiness(any(), "Solo Cafe", "Solo Cafe", "solo@test.com", userId) }
+        }
+
+    @Test
+    fun `createBusinessForOwner maps a duplicate email to BadRequestException`(): Unit =
+        runBlocking {
+            coEvery {
+                businessRepository.insertOwnedBusiness(any(), any(), any(), any(), any())
+            } throws DuplicateKeyException("duplicate key value violates unique constraint")
+
+            assertThrows<BadRequestException> {
+                service.createBusinessForOwner(userId, "Dupe Cafe", "Jane", "taken@test.com")
+            }
+            coVerify(exactly = 0) { onboardingProgressRepository.recordStep(any(), any(), any()) }
         }
 
     @Test

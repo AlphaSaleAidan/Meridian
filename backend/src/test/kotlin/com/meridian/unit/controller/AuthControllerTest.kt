@@ -75,6 +75,20 @@ class AuthControllerTest {
         }
 
     @Test
+    fun `blank businessName and accessToken are treated as absent`() =
+        runBlocking {
+            val request = SignupRequest("test@test.com", "password", businessName = "   ", accessToken = "")
+
+            coEvery { authService.signup(any()) } returns supabaseUser
+
+            val response = authController.signup(request)
+
+            assertEquals(null, response.body?.data?.businessId)
+            coVerify(exactly = 0) { onboardingService.validateToken(any()) }
+            coVerify(exactly = 0) { onboardingService.createBusinessForOwner(any(), any(), any(), any()) }
+        }
+
+    @Test
     fun `self-serve signup creates the owned business transactionally`() =
         runBlocking {
             val request =

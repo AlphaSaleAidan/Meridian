@@ -61,9 +61,14 @@ class AuthController(
     suspend fun signup(
         @RequestBody request: SignupRequest,
     ): ResponseEntity<ApiResponse<SignupResponse>> {
+        // Blank strings read as absent — "" must not create an empty-named business.
+        val accessToken = request.accessToken?.trim()?.takeIf { it.isNotEmpty() }
+        val businessName = request.businessName?.trim()?.takeIf { it.isNotEmpty() }
+        val displayName = request.displayName?.trim()?.takeIf { it.isNotEmpty() }
+
         // Fail fast on a bad invite BEFORE creating the auth user.
-        if (request.accessToken != null) {
-            onboardingService.validateToken(request.accessToken)
+        if (accessToken != null) {
+            onboardingService.validateToken(accessToken)
         }
 
         val supabaseUser = authService.signup(request)
@@ -74,13 +79,13 @@ class AuthController(
         // as an error — strictly better than the SPA's silent console.warn path).
         val businessId =
             when {
-                request.accessToken != null ->
-                    onboardingService.redeemForUser(request.accessToken, userId)
-                request.businessName != null ->
+                accessToken != null ->
+                    onboardingService.redeemForUser(accessToken, userId)
+                businessName != null ->
                     onboardingService.createBusinessForOwner(
                         userId = userId,
-                        businessName = request.businessName,
-                        ownerName = request.displayName,
+                        businessName = businessName,
+                        ownerName = displayName,
                         email = supabaseUser.email ?: request.email,
                     )
                 else -> null

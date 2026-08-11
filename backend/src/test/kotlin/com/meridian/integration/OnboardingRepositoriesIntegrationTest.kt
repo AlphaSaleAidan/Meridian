@@ -1,8 +1,10 @@
 package com.meridian.integration
 
+import com.meridian.exception.BadRequestException
 import com.meridian.repository.AccessTokenRepository
 import com.meridian.repository.BusinessRepository
 import com.meridian.repository.OnboardingProgressRepository
+import com.meridian.service.onboarding.OnboardingService
 import com.meridian.support.PostgresIntegrationTest
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -12,6 +14,7 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 import org.springframework.beans.factory.annotation.Autowired
@@ -39,6 +42,9 @@ class OnboardingRepositoriesIntegrationTest : PostgresIntegrationTest() {
 
     @Autowired
     private lateinit var onboardingProgressRepository: OnboardingProgressRepository
+
+    @Autowired
+    private lateinit var onboardingService: OnboardingService
 
     private val ownerId = UUID.fromString("44444444-4444-4444-4444-444444444444")
 
@@ -92,6 +98,8 @@ class OnboardingRepositoriesIntegrationTest : PostgresIntegrationTest() {
                 "ALTER TABLE businesses ADD COLUMN IF NOT EXISTS email text",
                 "ALTER TABLE businesses ADD COLUMN IF NOT EXISTS business_type text",
                 "ALTER TABLE businesses ADD COLUMN IF NOT EXISTS activated_at timestamptz",
+                // AFTER the email column exists (order matters on a fresh container)
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_businesses_email_uniq ON businesses(email)",
             ).forEach { databaseClient.sql(it).await() }
             listOf("access_tokens", "onboarding_progress", "businesses").forEach {
                 databaseClient.sql("DELETE FROM $it").await()
@@ -193,5 +201,58 @@ class OnboardingRepositoriesIntegrationTest : PostgresIntegrationTest() {
         runTest {
             assertEquals(1L, onboardingProgressRepository.recordStep("biz_pre", "token_redeemed", ownerId.toString()))
             assertEquals(0L, onboardingProgressRepository.recordStep("biz_pre", "token_redeemed", ownerId.toString()))
+        }
+
+    // ── Flow-level (service through real Postgres, @Transactional engaged) ──
+
+    @Test
+    fun `redeem flow end-to-end - token flipped, business activated and owned, step recorded`() =
+        runTest {
+            val businessId = onboardingService.redeemForUser("mtk_valid", ownerId)
+
+            assertEquals("biz_pre", businessId)
+            assertNull(accessTokenRepository.findRedeemableToken("mtk_valid"))
+            val owned = businessRepository.findByOwnerUserId(ownerId)
+            assertTrue(owned.any { it.id == "biz_pre" && it.status == "active" && it.tokenStatus == "redeemed" })
+            // Step row is there and idempotent
+            assertEquals(0L, onboardingProgressRepository.recordStep("biz_pre", "token_redeemed", ownerId.toString()))
+        }
+
+    @Test
+    fun `second redeem of the same token fails and does NOT steal ownership`() =
+        runTest {
+            val secondUser = UUID.fromString("55555555-5555-5555-5555-555555555555")
+            onboardingService.redeemForUser("mtk_valid", ownerId)
+
+            assertThrows<BadRequestException> {
+                onboardingService.redeemForUser("mtk_valid", secondUser)
+            }
+            // First redeemer keeps the business
+            assertTrue(businessRepository.findByOwnerUserId(ownerId).any { it.id == "biz_pre" })
+            assertTrue(businessRepository.findByOwnerUserId(secondUser).isEmpty())
+        }
+
+    @Test
+    fun `self-serve flow end-to-end - business created, owned and step recorded`() =
+        runTest {
+            val secondUser = UUID.fromString("66666666-6666-6666-6666-666666666666")
+            val businessId =
+                onboardingService.createBusinessForOwner(secondUser, "Flow Diner", null, "flow@diner.com")
+
+            assertTrue(businessId.startsWith("biz_"))
+            val owned = businessRepository.findByOwnerUserId(secondUser)
+            assertTrue(owned.any { it.id == businessId && it.status == "active" })
+            assertEquals(0L, onboardingProgressRepository.recordStep(businessId, "account_created", null))
+        }
+
+    @Test
+    fun `self-serve flow rejects an email that already has a business`(): Unit =
+        runTest {
+            val secondUser = UUID.fromString("77777777-7777-7777-7777-777777777777")
+            // jane@cafe.com is seeded on biz_pre
+            assertThrows<BadRequestException> {
+                onboardingService.createBusinessForOwner(secondUser, "Dupe Cafe", "Jane", "jane@cafe.com")
+            }
+            assertTrue(businessRepository.findByOwnerUserId(secondUser).isEmpty())
         }
 }

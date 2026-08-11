@@ -127,6 +127,41 @@ class SupabaseAuthServiceImplTest {
             assertEquals("Password too short", exception.message)
         }
 
+    @Test
+    fun `signup rejects an already-registered email disguised as a fabricated user`() =
+        runTest {
+            // GoTrue anti-enumeration: 200 + fake user with EMPTY identities
+            val engine =
+                MockEngine {
+                    respond(
+                        content = """{"id": "uuid-fake", "email": "taken@test.com", "identities": []}""",
+                        status = HttpStatusCode.OK,
+                        headers = headersOf(HttpHeaders.ContentType, "application/json"),
+                    )
+                }
+
+            assertThrows<BadRequestException> {
+                createService(engine).signup(SignupRequest("taken@test.com", "password123"))
+            }
+        }
+
+    @Test
+    fun `signup accepts a genuinely new user with identities present`() =
+        runTest {
+            val engine =
+                MockEngine {
+                    respond(
+                        content =
+                            """{"id": "uuid-123", "email": "new@test.com",
+                               "identities": [{"id": "uuid-123"}]}""",
+                        status = HttpStatusCode.OK,
+                        headers = headersOf(HttpHeaders.ContentType, "application/json"),
+                    )
+                }
+
+            assertEquals("uuid-123", createService(engine).signup(SignupRequest("new@test.com", "password123")).id)
+        }
+
     // ---- login tests ----
 
     @Test

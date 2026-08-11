@@ -7,6 +7,7 @@ import com.meridian.repository.AccessTokenRepository
 import com.meridian.repository.BusinessRepository
 import com.meridian.repository.OnboardingProgressRepository
 import org.slf4j.LoggerFactory
+import org.springframework.dao.DuplicateKeyException
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.util.UUID
@@ -34,7 +35,12 @@ class OnboardingServiceImpl(
             accessTokenRepository.findRedeemableToken(token)
                 ?: throw BadRequestException("Invalid or expired access token")
 
-        accessTokenRepository.markRedeemed(redeemable.id, userId)
+        // Concurrent-redeem guard: two requests can both pass findRedeemableToken;
+        // only the one whose UPDATE actually flips redeemed=false may proceed —
+        // otherwise the loser would overwrite the winner's owner_user_id.
+        if (accessTokenRepository.markRedeemed(redeemable.id, userId) == 0L) {
+            throw BadRequestException("Invalid or expired access token")
+        }
         businessRepository.activateForOwner(redeemable.businessId, userId)
         onboardingProgressRepository.recordStep(redeemable.businessId, STEP_TOKEN_REDEEMED, userId.toString())
 
@@ -52,13 +58,20 @@ class OnboardingServiceImpl(
         // Id generated here (matching the DB default's biz_<hex> shape) so the
         // insert never depends on a column default being present.
         val businessId = "biz_" + UUID.randomUUID().toString().replace("-", "")
-        businessRepository.insertOwnedBusiness(
-            id = businessId,
-            name = businessName,
-            ownerName = ownerName,
-            email = email,
-            ownerUserId = userId,
-        )
+        try {
+            businessRepository.insertOwnedBusiness(
+                id = businessId,
+                name = businessName,
+                // businesses.owner_name is NOT NULL — fall back to the business name
+                ownerName = ownerName ?: businessName,
+                email = email,
+                ownerUserId = userId,
+            )
+        } catch (e: DuplicateKeyException) {
+            // businesses.email is UNIQUE — e.g. a rep already pre-created a business
+            // for this email; the customer should use their invite link instead.
+            throw BadRequestException("A business already exists for this email — use your invite link or contact support.")
+        }
         onboardingProgressRepository.recordStep(businessId, STEP_ACCOUNT_CREATED, userId.toString())
 
         log.info("Self-serve business {} created", businessId)

@@ -4,6 +4,7 @@ import com.meridian.repository.AdminUserRepository
 import com.meridian.repository.BusinessRepository
 import com.meridian.repository.BusinessUserRepository
 import com.meridian.repository.SalesRepRepository
+import com.meridian.service.user.UserIdentityService
 import com.meridian.support.PostgresIntegrationTest
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -41,6 +42,9 @@ class UserRepositoriesIntegrationTest : PostgresIntegrationTest() {
 
     @Autowired
     private lateinit var salesRepRepository: SalesRepRepository
+
+    @Autowired
+    private lateinit var userIdentityService: UserIdentityService
 
     private val ownerId = UUID.fromString("11111111-1111-1111-1111-111111111111")
     private val staffId = UUID.fromString("22222222-2222-2222-2222-222222222222")
@@ -201,5 +205,43 @@ class UserRepositoriesIntegrationTest : PostgresIntegrationTest() {
             assertTrue(salesRepRepository.existsActiveByEmail("rep@test.com"))
             assertFalse(salesRepRepository.existsActiveByEmail("former@test.com"))
             assertFalse(salesRepRepository.existsActiveByEmail("nobody@test.com"))
+        }
+
+    // ── Flow-level (identity service through real Postgres) ──
+
+    @Test
+    fun `resolveIdentity flow - owner with admin grant gets owner role, org and flags`() =
+        runTest {
+            val identity = userIdentityService.resolveIdentity(ownerId, "admin@test.com", "Owner", isVerified = true)
+
+            assertEquals("owner", identity.role)
+            assertEquals("biz_owned", identity.orgId)
+            assertTrue(identity.isAdmin)
+            assertFalse(identity.isSalesRep)
+            assertEquals(listOf("biz_owned"), identity.businesses.map { it.businessId })
+        }
+
+    @Test
+    fun `resolveIdentity flow - staff member gets membership role, location and rep flag from email`() =
+        runTest {
+            val identity = userIdentityService.resolveIdentity(staffId, "rep@test.com", null, isVerified = false)
+
+            assertEquals("manager", identity.role)
+            assertEquals("biz_staffed", identity.orgId)
+            assertEquals("loc_1", identity.locationId)
+            assertFalse(identity.isAdmin)
+            assertTrue(identity.isSalesRep)
+        }
+
+    @Test
+    fun `resolveIdentity flow - unknown user resolves to staff with nothing`() =
+        runTest {
+            val nobody = UUID.fromString("99999999-9999-9999-9999-999999999999")
+            val identity = userIdentityService.resolveIdentity(nobody, "nobody@test.com", null, isVerified = false)
+
+            assertEquals("staff", identity.role)
+            assertTrue(identity.businesses.isEmpty())
+            assertFalse(identity.isAdmin)
+            assertFalse(identity.isSalesRep)
         }
 }

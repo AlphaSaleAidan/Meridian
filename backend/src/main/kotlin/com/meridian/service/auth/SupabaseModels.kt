@@ -19,6 +19,17 @@ data class SupabaseUser(
     val email: String? = null,
     @param:JsonProperty("email_confirmed_at") val emailConfirmedAt: String? = null,
     @param:JsonProperty("user_metadata") val userMetadata: SupabaseUserMetadata? = null,
+    /**
+     * Anti-enumeration marker: with email confirmations ON, GoTrue answers a
+     * signup for an ALREADY-REGISTERED email with 200 and a fabricated user
+     * whose identities list is EMPTY. Absent on login responses.
+     */
+    val identities: List<SupabaseIdentity>? = null,
+)
+
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class SupabaseIdentity(
+    val id: String? = null,
 )
 
 /**
@@ -47,7 +58,8 @@ data class SupabaseSession(
 data class SupabaseSignupResponse(
     val id: String? = null,
     val email: String? = null,
+    val identities: List<SupabaseIdentity>? = null,
     val user: SupabaseUser? = null,
 ) {
-    fun toUser(): SupabaseUser? = user ?: id?.let { SupabaseUser(id = it, email = email) }
+    fun toUser(): SupabaseUser? = user ?: id?.let { SupabaseUser(id = it, email = email, identities = identities) }
 }

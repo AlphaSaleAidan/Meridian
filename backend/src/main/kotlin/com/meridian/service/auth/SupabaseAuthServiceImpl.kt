@@ -18,6 +18,7 @@ import tools.jackson.databind.json.JsonMapper
 import tools.jackson.module.kotlin.readValue
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
+import kotlin.coroutines.cancellation.CancellationException
 
 class SupabaseAuthServiceImpl(
     private val supabaseUrl: String,
@@ -71,8 +72,16 @@ class SupabaseAuthServiceImpl(
         log.info("Signup successful for {}", request.email)
 
         val signupResponse = jsonMapper.readValue<SupabaseSignupResponse>(response.bodyAsText())
-        return signupResponse.toUser()
-            ?: throw IllegalStateException("Supabase signup succeeded but returned no user")
+        val user =
+            signupResponse.toUser()
+                ?: throw IllegalStateException("Supabase signup succeeded but returned no user")
+        // GoTrue anti-enumeration: an already-registered email gets 200 + a FABRICATED
+        // user with an empty identities list. Binding a business (or worse, an invite
+        // token) to that fake id would strand it — reject instead.
+        if (user.identities?.isEmpty() == true) {
+            throw BadRequestException("This email is already registered — try logging in instead.")
+        }
+        return user
     }
 
     override suspend fun login(request: LoginRequest): SupabaseSession {
@@ -123,6 +132,8 @@ class SupabaseAuthServiceImpl(
                     contentType(ContentType.Application.Json)
                     setBody(jsonMapper.writeValueAsString(mapOf("email" to email)))
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 log.error("forgot-password: transport error reaching Supabase recover", e)
                 return
@@ -175,6 +186,8 @@ class SupabaseAuthServiceImpl(
             if (!response.status.isSuccess()) {
                 log.warn("{}: session revoke returned {}", operation, response.status.value)
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             log.warn("{}: session revoke failed", operation, e)
         }
