@@ -28,15 +28,23 @@ class SupabaseAuthServiceImpl(
 ) : AuthService {
     private val log = LoggerFactory.getLogger(SupabaseAuthServiceImpl::class.java)
 
-    override suspend fun signup(request: SignupRequest) {
+    override suspend fun signup(request: SignupRequest): SupabaseUser {
         val url = "$supabaseUrl/auth/v1/signup"
         log.info("Attempting signup for {}", request.email)
 
+        // display_name/business_name ride along as user_metadata for parity with
+        // the SPA's signUp options.data — cosmetic only, never used for authz.
+        val metadata =
+            buildMap {
+                request.displayName?.let { put("display_name", it) }
+                request.businessName?.let { put("business_name", it) }
+            }
         val payload =
-            mapOf(
-                "email" to request.email,
-                "password" to request.password,
-            )
+            buildMap<String, Any> {
+                put("email", request.email)
+                put("password", request.password)
+                if (metadata.isNotEmpty()) put("data", metadata)
+            }
 
         val response =
             httpClient.post(url) {
@@ -61,6 +69,10 @@ class SupabaseAuthServiceImpl(
             throw UnauthorizedException(errorMessage)
         }
         log.info("Signup successful for {}", request.email)
+
+        val signupResponse = jsonMapper.readValue<SupabaseSignupResponse>(response.bodyAsText())
+        return signupResponse.toUser()
+            ?: throw IllegalStateException("Supabase signup succeeded but returned no user")
     }
 
     override suspend fun login(request: LoginRequest): SupabaseSession {

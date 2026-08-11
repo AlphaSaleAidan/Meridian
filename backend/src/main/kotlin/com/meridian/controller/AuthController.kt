@@ -8,9 +8,11 @@ import com.meridian.dto.ResetPasswordRequest
 import com.meridian.dto.SessionBusinessResponse
 import com.meridian.dto.SessionInfoResponse
 import com.meridian.dto.SignupRequest
+import com.meridian.dto.SignupResponse
 import com.meridian.exception.UnauthorizedException
 import com.meridian.security.SecurityConstants
 import com.meridian.service.auth.AuthService
+import com.meridian.service.onboarding.OnboardingService
 import com.meridian.service.user.UserIdentity
 import com.meridian.service.user.UserIdentityService
 import io.swagger.v3.oas.annotations.Operation
@@ -41,19 +43,52 @@ import java.util.UUID
 class AuthController(
     private val authService: AuthService,
     private val userIdentityService: UserIdentityService,
+    private val onboardingService: OnboardingService,
 ) {
     private val log = LoggerFactory.getLogger(AuthController::class.java)
 
     @Operation(
         summary = "Create a merchant account",
-        description = "Registers the email/password with Supabase Auth. The user logs in separately once confirmed.",
+        description =
+            "Unified signup covering both real flows. Self-serve: businessName present -> the auth user AND " +
+                "an active owned business are created together. Invite: accessToken present -> the token is " +
+                "validated up front (fail fast, before the auth user exists), then redeemed — binding " +
+                "owner_user_id to the rep's pre-created business in one transaction. Replaces the SPA's " +
+                "non-atomic signUp + create_business_for_user / redeem_access_token RPC pairs. " +
+                "The user logs in separately once confirmed.",
     )
     @PostMapping("/signup")
     suspend fun signup(
         @RequestBody request: SignupRequest,
-    ): ResponseEntity<ApiResponse<Any>> {
-        authService.signup(request)
-        return ResponseEntity.ok(ApiResponse.success(message = "Signup successful"))
+    ): ResponseEntity<ApiResponse<SignupResponse>> {
+        // Fail fast on a bad invite BEFORE creating the auth user.
+        if (request.accessToken != null) {
+            onboardingService.validateToken(request.accessToken)
+        }
+
+        val supabaseUser = authService.signup(request)
+        val userId = UUID.fromString(supabaseUser.id)
+
+        // Auth-user creation is an external call and cannot join this transaction:
+        // if binding fails here, the auth user exists without a business (surfaced
+        // as an error — strictly better than the SPA's silent console.warn path).
+        val businessId =
+            when {
+                request.accessToken != null ->
+                    onboardingService.redeemForUser(request.accessToken, userId)
+                request.businessName != null ->
+                    onboardingService.createBusinessForOwner(
+                        userId = userId,
+                        businessName = request.businessName,
+                        ownerName = request.displayName,
+                        email = supabaseUser.email ?: request.email,
+                    )
+                else -> null
+            }
+
+        return ResponseEntity.ok(
+            ApiResponse.success(data = SignupResponse(businessId = businessId), message = "Signup successful"),
+        )
     }
 
     @Operation(

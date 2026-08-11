@@ -4,7 +4,8 @@ import com.meridian.dto.LoginRequest
 import com.meridian.dto.SignupRequest
 
 interface AuthService {
-    suspend fun signup(request: SignupRequest)
+    /** Registers the credentials with Supabase and returns the created (or pending-confirmation) user. */
+    suspend fun signup(request: SignupRequest): SupabaseUser
 
     /** Verifies credentials with Supabase and returns the token plus the authenticated user. */
     suspend fun login(request: LoginRequest): SupabaseSession

@@ -46,6 +46,34 @@ CREATE TABLE IF NOT EXISTS public.sales_reps (
     is_active BOOLEAN NOT NULL DEFAULT FALSE
 );
 
+-- Unified signup (invite redemption + self-serve business creation)
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS email TEXT;
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS owner_name TEXT;
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS business_type TEXT;
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS activated_at TIMESTAMPTZ;
+
+CREATE TABLE IF NOT EXISTS public.access_tokens (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    business_id TEXT NOT NULL,
+    token TEXT NOT NULL UNIQUE DEFAULT ('mtk_' || encode(gen_random_bytes(16), 'hex')),
+    created_by TEXT,
+    redeemed BOOLEAN NOT NULL DEFAULT FALSE,
+    redeemed_at TIMESTAMPTZ,
+    redeemed_by UUID,
+    expires_at TIMESTAMPTZ NOT NULL DEFAULT (now() + INTERVAL '30 days'),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.onboarding_progress (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    business_id TEXT NOT NULL,
+    step_name TEXT NOT NULL,
+    completed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    completed_by TEXT,
+    notes TEXT
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_onboarding_step ON public.onboarding_progress(business_id, step_name);
+
 -- Seed default local test record
 INSERT INTO public.businesses (id, name, plan_tier, access_token, token_status, status, pos_provider, onboarded)
 VALUES ('demo-org-123', 'Maple Bakery', 'starter', 'demo-portal-token-999', 'active', 'active', 'square', true)

@@ -38,3 +38,16 @@ data class SupabaseSession(
     val accessToken: String,
     val user: SupabaseUser,
 )
+
+/**
+ * GoTrue's /signup response varies: with email confirmation ON the user object
+ * is the top level (id/email inline); with autoconfirm it nests under `user`.
+ */
+@JsonIgnoreProperties(ignoreUnknown = true)
+data class SupabaseSignupResponse(
+    val id: String? = null,
+    val email: String? = null,
+    val user: SupabaseUser? = null,
+) {
+    fun toUser(): SupabaseUser? = user ?: id?.let { SupabaseUser(id = it, email = email) }
+}

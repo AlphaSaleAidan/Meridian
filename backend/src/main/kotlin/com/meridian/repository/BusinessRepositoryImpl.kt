@@ -6,6 +6,8 @@ import kotlinx.coroutines.flow.toList
 import org.springframework.r2dbc.core.DatabaseClient
 import org.springframework.r2dbc.core.await
 import org.springframework.r2dbc.core.awaitOneOrNull
+import org.springframework.r2dbc.core.awaitRowsUpdated
+import org.springframework.r2dbc.core.awaitSingle
 import org.springframework.r2dbc.core.flow
 import org.springframework.stereotype.Repository
 import java.util.UUID
@@ -62,6 +64,54 @@ class BusinessRepositoryImpl(
             .map { row, _ -> mapRow(row) }
             .flow()
             .toList()
+    }
+
+    override suspend fun insertOwnedBusiness(
+        id: String,
+        name: String,
+        ownerName: String?,
+        email: String,
+        ownerUserId: UUID,
+    ): String {
+        val sql =
+            """
+            INSERT INTO businesses (id, name, owner_name, email, owner_user_id, status)
+            VALUES (:id, :name, :ownerName, :email, :ownerUserId, 'active')
+            RETURNING id
+            """.trimIndent()
+
+        var spec =
+            databaseClient
+                .sql(sql)
+                .bind("id", id)
+                .bind("name", name)
+                .bind("email", email)
+                .bind("ownerUserId", ownerUserId)
+        spec = ownerName?.let { spec.bind("ownerName", it) } ?: spec.bindNull("ownerName", String::class.java)
+        return spec
+            .map { row, _ ->
+                row.get("id", String::class.java)
+                    ?: throw IllegalStateException("INSERT ... RETURNING produced no id")
+            }.awaitSingle()
+    }
+
+    override suspend fun activateForOwner(
+        businessId: String,
+        ownerUserId: UUID,
+    ): Long {
+        val sql =
+            """
+            UPDATE businesses
+            SET token_status = 'redeemed', status = 'active', activated_at = now(), owner_user_id = :ownerUserId
+            WHERE id = :businessId
+            """.trimIndent()
+
+        return databaseClient
+            .sql(sql)
+            .bind("businessId", businessId)
+            .bind("ownerUserId", ownerUserId)
+            .fetch()
+            .awaitRowsUpdated()
     }
 
     override suspend fun save(business: Business): Business {

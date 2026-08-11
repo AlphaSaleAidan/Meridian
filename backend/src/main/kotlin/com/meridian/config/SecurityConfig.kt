@@ -42,6 +42,8 @@ class SecurityConfig {
                 auth.requestMatchers("/api/auth/**", "/v3/api-docs/**", "/swagger-ui/**").permitAll()
                 // Portal resolve is public by design — the unguessable token IS the auth
                 auth.requestMatchers("/api/portal/resolve/**").permitAll()
+                // Invite-token validate is pre-signup by design — same unguessable-token model
+                auth.requestMatchers("/api/onboarding/token/**").permitAll()
                 auth.anyRequest().authenticated()
             }.sessionManagement { session ->
                 session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)

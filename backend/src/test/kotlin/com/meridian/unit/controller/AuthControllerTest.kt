@@ -6,12 +6,15 @@ import com.meridian.dto.ForgotPasswordRequest
 import com.meridian.dto.LoginRequest
 import com.meridian.dto.ResetPasswordRequest
 import com.meridian.dto.SignupRequest
+import com.meridian.entity.PendingBusiness
+import com.meridian.exception.NotFoundException
 import com.meridian.exception.UnauthorizedException
 import com.meridian.security.SecurityConstants
 import com.meridian.service.auth.AuthService
 import com.meridian.service.auth.SupabaseSession
 import com.meridian.service.auth.SupabaseUser
 import com.meridian.service.auth.SupabaseUserMetadata
+import com.meridian.service.onboarding.OnboardingService
 import com.meridian.service.user.UserBusiness
 import com.meridian.service.user.UserIdentity
 import com.meridian.service.user.UserIdentityService
@@ -30,7 +33,8 @@ import java.util.UUID
 class AuthControllerTest {
     private val authService = mockk<AuthService>()
     private val userIdentityService = mockk<UserIdentityService>()
-    private val authController = AuthController(authService, userIdentityService)
+    private val onboardingService = mockk<OnboardingService>()
+    private val authController = AuthController(authService, userIdentityService, onboardingService)
 
     private val supabaseUser =
         SupabaseUser(
@@ -54,18 +58,87 @@ class AuthControllerTest {
         )
 
     @Test
-    fun `signup returns 200 OK`() =
+    fun `plain signup creates no business`() =
         runBlocking {
             val request = SignupRequest("test@test.com", "password")
 
-            coEvery { authService.signup(any()) } returns Unit
+            coEvery { authService.signup(any()) } returns supabaseUser
 
             val response = authController.signup(request)
 
             assertEquals(HttpStatus.OK, response.statusCode)
             assertEquals("success", response.body?.status)
+            assertEquals(null, response.body?.data?.businessId)
 
             coVerify { authService.signup(request) }
+            coVerify(exactly = 0) { onboardingService.createBusinessForOwner(any(), any(), any(), any()) }
+        }
+
+    @Test
+    fun `self-serve signup creates the owned business transactionally`() =
+        runBlocking {
+            val request =
+                SignupRequest(
+                    "test@test.com",
+                    "password",
+                    displayName = "Test Owner",
+                    businessName = "Joe's Pizza",
+                )
+
+            coEvery { authService.signup(any()) } returns supabaseUser
+            coEvery {
+                onboardingService.createBusinessForOwner(
+                    userId = UUID.fromString("00000000-0000-0000-0000-000000000001"),
+                    businessName = "Joe's Pizza",
+                    ownerName = "Test Owner",
+                    email = "test@test.com",
+                )
+            } returns "biz_new"
+
+            val response = authController.signup(request)
+
+            assertEquals(HttpStatus.OK, response.statusCode)
+            assertEquals("biz_new", response.body?.data?.businessId)
+        }
+
+    @Test
+    fun `invite signup validates the token BEFORE creating the auth user, then redeems`() =
+        runBlocking {
+            val request = SignupRequest("test@test.com", "password", accessToken = "mtk_abc")
+            val callOrder = mutableListOf<String>()
+
+            coEvery { onboardingService.validateToken("mtk_abc") } answers {
+                callOrder += "validate"
+                PendingBusiness(businessId = "biz_pre", businessName = "Pre Created")
+            }
+            coEvery { authService.signup(any()) } answers {
+                callOrder += "signup"
+                supabaseUser
+            }
+            coEvery {
+                onboardingService.redeemForUser("mtk_abc", UUID.fromString("00000000-0000-0000-0000-000000000001"))
+            } answers {
+                callOrder += "redeem"
+                "biz_pre"
+            }
+
+            val response = authController.signup(request)
+
+            assertEquals("biz_pre", response.body?.data?.businessId)
+            assertEquals(listOf("validate", "signup", "redeem"), callOrder)
+        }
+
+    @Test
+    fun `invite signup with a bad token fails fast — no auth user is created`(): Unit =
+        runBlocking {
+            val request = SignupRequest("test@test.com", "password", accessToken = "mtk_bad")
+
+            coEvery { onboardingService.validateToken("mtk_bad") } throws NotFoundException("Invalid or expired access token")
+
+            assertThrows<NotFoundException> {
+                authController.signup(request)
+            }
+            coVerify(exactly = 0) { authService.signup(any()) }
         }
 
     @Test

@@ -17,6 +17,8 @@ import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import tools.jackson.databind.json.JsonMapper
 import tools.jackson.module.kotlin.KotlinModule
 
@@ -55,8 +57,34 @@ class SupabaseAuthServiceImplTest {
                 }
 
             val service = createService(engine)
-            // Should not throw
-            service.signup(SignupRequest("new@test.com", "password123"))
+            val user = service.signup(SignupRequest("new@test.com", "password123"))
+            assertEquals("uuid-123", user.id)
+            assertEquals("new@test.com", user.email)
+        }
+
+    @Test
+    fun `signup sends display and business name as user_metadata and parses a nested user`() =
+        runTest {
+            val engine =
+                MockEngine { request ->
+                    val body = request.body.toByteArray().decodeToString()
+                    val parsed = jsonMapper.readValue(body, Map::class.java)
+                    val data = parsed["data"] as Map<*, *>
+                    assertEquals("Joe", data["display_name"])
+                    assertEquals("Joe's Pizza", data["business_name"])
+                    respond(
+                        content =
+                            """{"access_token": "tok", "user": {"id": "uuid-9", "email": "joe@test.com"}}""",
+                        status = HttpStatusCode.OK,
+                        headers = headersOf(HttpHeaders.ContentType, "application/json"),
+                    )
+                }
+
+            val user =
+                createService(engine).signup(
+                    SignupRequest("joe@test.com", "password123", displayName = "Joe", businessName = "Joe's Pizza"),
+                )
+            assertEquals("uuid-9", user.id)
         }
 
     @Test
@@ -227,21 +255,20 @@ class SupabaseAuthServiceImplTest {
             createService(engine).forgotPassword("user@test.com")
         }
 
-    @Test
-    fun `forgotPassword swallows 500 and unknown-email 4xx`() =
+    @ParameterizedTest(name = "swallows {0}")
+    @ValueSource(ints = [422, 500, 503])
+    fun `forgotPassword swallows non-2xx statuses (anti-enumeration)`(status: Int) =
         runTest {
-            for (status in listOf(HttpStatusCode.InternalServerError, HttpStatusCode.UnprocessableEntity)) {
-                val engine =
-                    MockEngine {
-                        respond(
-                            content = """{"msg": "boom"}""",
-                            status = status,
-                            headers = headersOf(HttpHeaders.ContentType, "application/json"),
-                        )
-                    }
-                // Must not throw for either status
-                createService(engine).forgotPassword("user@test.com")
-            }
+            val engine =
+                MockEngine {
+                    respond(
+                        content = """{"msg": "boom"}""",
+                        status = HttpStatusCode.fromValue(status),
+                        headers = headersOf(HttpHeaders.ContentType, "application/json"),
+                    )
+                }
+            // Must not throw regardless of status
+            createService(engine).forgotPassword("user@test.com")
         }
 
     // ---- reset/change password tests ----
@@ -322,14 +349,15 @@ class SupabaseAuthServiceImplTest {
             assertEquals(listOf("PUT /auth/v1/user"), requests)
         }
 
-    @Test
-    fun `resetPassword throws UnauthorizedException on expired token`() =
+    @ParameterizedTest(name = "throws UnauthorizedException on {0}")
+    @ValueSource(ints = [401, 403])
+    fun `resetPassword throws UnauthorizedException on an expired or forbidden token`(status: Int) =
         runTest {
             val engine =
                 MockEngine {
                     respond(
                         content = """{"msg": "token is expired"}""",
-                        status = HttpStatusCode.Unauthorized,
+                        status = HttpStatusCode.fromValue(status),
                         headers = headersOf(HttpHeaders.ContentType, "application/json"),
                     )
                 }
