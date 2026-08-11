@@ -101,8 +101,25 @@ class UserRepositoriesIntegrationTest : PostgresIntegrationTest() {
                 )
             ddl.forEach { databaseClient.sql(it).await() }
             // Other test classes may have created `businesses` from init-local-db.sql,
-            // which predates the owner linkage — the ALTER converges both shapes.
-            databaseClient.sql("ALTER TABLE businesses ADD COLUMN IF NOT EXISTS owner_user_id uuid").await()
+            // which predates the owner linkage — the ALTERs converge both shapes.
+            listOf(
+                "ALTER TABLE businesses ADD COLUMN IF NOT EXISTS owner_user_id uuid",
+                // Audit metadata (mirrors 20260811_audit_metadata.sql)
+                "ALTER TABLE businesses ADD COLUMN IF NOT EXISTS created_by text NOT NULL DEFAULT '00000000-0000-0000-0000-000000000037'",
+                "ALTER TABLE businesses ADD COLUMN IF NOT EXISTS modified_at timestamptz",
+                "ALTER TABLE businesses ADD COLUMN IF NOT EXISTS modified_by text",
+                "ALTER TABLE business_users ADD COLUMN IF NOT EXISTS created_by text NOT NULL DEFAULT '00000000-0000-0000-0000-000000000037'",
+                "ALTER TABLE business_users ADD COLUMN IF NOT EXISTS modified_at timestamptz",
+                "ALTER TABLE business_users ADD COLUMN IF NOT EXISTS modified_by text",
+                "ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now()",
+                "ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS created_by text NOT NULL DEFAULT '00000000-0000-0000-0000-000000000037'",
+                "ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS modified_at timestamptz",
+                "ALTER TABLE admin_users ADD COLUMN IF NOT EXISTS modified_by text",
+                "ALTER TABLE sales_reps ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now()",
+                "ALTER TABLE sales_reps ADD COLUMN IF NOT EXISTS created_by text NOT NULL DEFAULT '00000000-0000-0000-0000-000000000037'",
+                "ALTER TABLE sales_reps ADD COLUMN IF NOT EXISTS modified_at timestamptz",
+                "ALTER TABLE sales_reps ADD COLUMN IF NOT EXISTS modified_by text",
+            ).forEach { databaseClient.sql(it).await() }
             // Each test seeds from a clean slate; tables are shared across test classes.
             listOf("business_users", "businesses", "admin_users", "sales_reps").forEach {
                 databaseClient.sql("DELETE FROM $it").await()

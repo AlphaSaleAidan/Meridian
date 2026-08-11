@@ -76,8 +76,8 @@ class BusinessRepositoryImpl(
     ): String {
         val sql =
             """
-            INSERT INTO businesses (id, name, owner_name, email, owner_user_id, status)
-            VALUES (:id, :name, :ownerName, :email, :ownerUserId, 'active')
+            INSERT INTO businesses (id, name, owner_name, email, owner_user_id, status, created_by)
+            VALUES (:id, :name, :ownerName, :email, :ownerUserId, 'active', :createdBy)
             RETURNING id
             """.trimIndent()
 
@@ -88,6 +88,7 @@ class BusinessRepositoryImpl(
                 .bind("name", name)
                 .bind("email", email)
                 .bind("ownerUserId", ownerUserId)
+                .bind("createdBy", ownerUserId.toString())
         spec = ownerName?.let { spec.bind("ownerName", it) } ?: spec.bindNull("ownerName", String::class.java)
         return spec
             .map { row, _ ->
@@ -103,7 +104,8 @@ class BusinessRepositoryImpl(
         val sql =
             """
             UPDATE businesses
-            SET token_status = 'redeemed', status = 'active', activated_at = now(), owner_user_id = :ownerUserId
+            SET token_status = 'redeemed', status = 'active', activated_at = now(), owner_user_id = :ownerUserId,
+                modified_at = now(), modified_by = :modifiedBy
             WHERE id = :businessId
             """.trimIndent()
 
@@ -111,6 +113,7 @@ class BusinessRepositoryImpl(
             .sql(sql)
             .bind("businessId", businessId)
             .bind("ownerUserId", ownerUserId)
+            .bind("modifiedBy", ownerUserId.toString())
             .fetch()
             .awaitRowsUpdated()
     }
@@ -127,7 +130,9 @@ class BusinessRepositoryImpl(
                 token_status = EXCLUDED.token_status,
                 status = EXCLUDED.status,
                 pos_provider = EXCLUDED.pos_provider,
-                onboarded = EXCLUDED.onboarded
+                onboarded = EXCLUDED.onboarded,
+                modified_at = now(),
+                modified_by = '${AuditActor.SYSTEM}'
             """.trimIndent()
 
         databaseClient

@@ -59,7 +59,8 @@ class AccessTokenRepositoryImpl(
         val sql =
             """
             UPDATE access_tokens
-            SET redeemed = true, redeemed_at = now(), redeemed_by = :userId
+            SET redeemed = true, redeemed_at = now(), redeemed_by = :userId,
+                modified_at = now(), modified_by = :modifiedBy
             WHERE id = :tokenId AND redeemed = false
             """.trimIndent()
 
@@ -67,6 +68,7 @@ class AccessTokenRepositoryImpl(
             .sql(sql)
             .bind("tokenId", tokenId)
             .bind("userId", userId)
+            .bind("modifiedBy", userId.toString())
             .fetch()
             .awaitRowsUpdated()
     }

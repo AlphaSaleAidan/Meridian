@@ -99,6 +99,16 @@ class OnboardingRepositoriesIntegrationTest : PostgresIntegrationTest() {
                 "ALTER TABLE businesses ADD COLUMN IF NOT EXISTS email text",
                 "ALTER TABLE businesses ADD COLUMN IF NOT EXISTS business_type text",
                 "ALTER TABLE businesses ADD COLUMN IF NOT EXISTS activated_at timestamptz",
+                // Audit metadata (mirrors 20260811_audit_metadata.sql)
+                "ALTER TABLE businesses ADD COLUMN IF NOT EXISTS created_by text NOT NULL DEFAULT '00000000-0000-0000-0000-000000000037'",
+                "ALTER TABLE businesses ADD COLUMN IF NOT EXISTS modified_at timestamptz",
+                "ALTER TABLE businesses ADD COLUMN IF NOT EXISTS modified_by text",
+                "ALTER TABLE access_tokens ADD COLUMN IF NOT EXISTS modified_at timestamptz",
+                "ALTER TABLE access_tokens ADD COLUMN IF NOT EXISTS modified_by text",
+                "ALTER TABLE onboarding_progress ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now()",
+                "ALTER TABLE onboarding_progress ADD COLUMN IF NOT EXISTS created_by text NOT NULL DEFAULT '00000000-0000-0000-0000-000000000037'",
+                "ALTER TABLE onboarding_progress ADD COLUMN IF NOT EXISTS modified_at timestamptz",
+                "ALTER TABLE onboarding_progress ADD COLUMN IF NOT EXISTS modified_by text",
                 // AFTER the email column exists (order matters on a fresh container)
                 "CREATE UNIQUE INDEX IF NOT EXISTS idx_businesses_email_uniq ON businesses(email)",
             ).forEach { databaseClient.sql(it).await() }
@@ -256,4 +266,51 @@ class OnboardingRepositoriesIntegrationTest : PostgresIntegrationTest() {
             }
             assertTrue(businessRepository.findByOwnerUserId(secondUser).isEmpty())
         }
+
+    // ── Audit metadata (created_by / modified_at / modified_by stamping) ──
+
+    @Test
+    fun `redeem stamps modified metadata on the token and business with the acting user`() =
+        runTest {
+            onboardingService.redeemForUser("mtk_valid", ownerId)
+
+            val tokenAudit = auditRow("SELECT modified_by, modified_at IS NOT NULL AS touched FROM access_tokens WHERE token = 'mtk_valid'")
+            assertEquals(ownerId.toString(), tokenAudit.first)
+            assertTrue(tokenAudit.second)
+            val bizAudit = auditRow("SELECT modified_by, modified_at IS NOT NULL AS touched FROM businesses WHERE id = 'biz_pre'")
+            assertEquals(ownerId.toString(), bizAudit.first)
+            assertTrue(bizAudit.second)
+        }
+
+    @Test
+    fun `self-serve create stamps created_by with the owner and recordStep falls back to the system actor`() =
+        runTest {
+            val user = UUID.fromString("88888888-8888-8888-8888-888888888888")
+            val businessId = onboardingService.createBusinessForOwner(user, "Audit Cafe", null, "audit@cafe.com")
+
+            val bizCreatedBy =
+                databaseClient
+                    .sql("SELECT created_by FROM businesses WHERE id = :id")
+                    .bind("id", businessId)
+                    .map { row, _ -> row.get("created_by", String::class.java) ?: "«missing»" }
+                    .awaitSingle()
+            assertEquals(user.toString(), bizCreatedBy)
+
+            // Null completed_by → created_by falls back to AuditActor.SYSTEM
+            onboardingProgressRepository.recordStep(businessId, "token_sent", null)
+            val stepCreatedBy =
+                databaseClient
+                    .sql("SELECT created_by FROM onboarding_progress WHERE business_id = :id AND step_name = 'token_sent'")
+                    .bind("id", businessId)
+                    .map { row, _ -> row.get("created_by", String::class.java) ?: "«missing»" }
+                    .awaitSingle()
+            assertEquals("00000000-0000-0000-0000-000000000037", stepCreatedBy)
+        }
+
+    private suspend fun auditRow(sql: String): Pair<String?, Boolean> =
+        databaseClient
+            .sql(sql)
+            .map { row, _ ->
+                row.get("modified_by", String::class.java) to (row.get("touched", Boolean::class.javaObjectType) ?: false)
+            }.awaitSingle()
 }

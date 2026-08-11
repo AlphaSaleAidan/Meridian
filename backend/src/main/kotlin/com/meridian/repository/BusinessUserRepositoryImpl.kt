@@ -35,13 +35,15 @@ class BusinessUserRepositoryImpl(
         val sql =
             """
             UPDATE business_users
-            SET last_login_at = now(), login_count = login_count + 1
+            SET last_login_at = now(), login_count = login_count + 1,
+                modified_at = now(), modified_by = :modifiedBy
             WHERE user_id = :userId AND is_active
             """.trimIndent()
 
         return databaseClient
             .sql(sql)
             .bind("userId", userId)
+            .bind("modifiedBy", userId.toString())
             .fetch()
             .awaitRowsUpdated()
     }

@@ -15,8 +15,8 @@ class OnboardingProgressRepositoryImpl(
     ): Long {
         val sql =
             """
-            INSERT INTO onboarding_progress (business_id, step_name, completed_by)
-            VALUES (:businessId, :stepName, :completedBy)
+            INSERT INTO onboarding_progress (business_id, step_name, completed_by, created_by)
+            VALUES (:businessId, :stepName, :completedBy, COALESCE(:completedBy, '${AuditActor.SYSTEM}'))
             ON CONFLICT (business_id, step_name) DO NOTHING
             """.trimIndent()
 

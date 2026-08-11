@@ -56,6 +56,28 @@ ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS activated_at TIMESTAMPTZ;
 ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now();
 ALTER TABLE public.business_users ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now();
 
+-- Audit metadata (mirrors supabase/migrations/20260811_audit_metadata.sql).
+-- created_by defaults to the system actor sentinel (AuditActor.SYSTEM).
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS created_by TEXT NOT NULL DEFAULT '00000000-0000-0000-0000-000000000037';
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS modified_at TIMESTAMPTZ;
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS modified_by TEXT;
+ALTER TABLE public.business_users ADD COLUMN IF NOT EXISTS created_by TEXT NOT NULL DEFAULT '00000000-0000-0000-0000-000000000037';
+ALTER TABLE public.business_users ADD COLUMN IF NOT EXISTS modified_at TIMESTAMPTZ;
+ALTER TABLE public.business_users ADD COLUMN IF NOT EXISTS modified_by TEXT;
+ALTER TABLE public.admin_users ADD COLUMN IF NOT EXISTS created_by TEXT NOT NULL DEFAULT '00000000-0000-0000-0000-000000000037';
+ALTER TABLE public.admin_users ADD COLUMN IF NOT EXISTS modified_at TIMESTAMPTZ;
+ALTER TABLE public.admin_users ADD COLUMN IF NOT EXISTS modified_by TEXT;
+ALTER TABLE public.sales_reps ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now();
+ALTER TABLE public.sales_reps ADD COLUMN IF NOT EXISTS created_by TEXT NOT NULL DEFAULT '00000000-0000-0000-0000-000000000037';
+ALTER TABLE public.sales_reps ADD COLUMN IF NOT EXISTS modified_at TIMESTAMPTZ;
+ALTER TABLE public.sales_reps ADD COLUMN IF NOT EXISTS modified_by TEXT;
+ALTER TABLE public.access_tokens ADD COLUMN IF NOT EXISTS modified_at TIMESTAMPTZ;
+ALTER TABLE public.access_tokens ADD COLUMN IF NOT EXISTS modified_by TEXT;
+ALTER TABLE public.onboarding_progress ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now();
+ALTER TABLE public.onboarding_progress ADD COLUMN IF NOT EXISTS created_by TEXT NOT NULL DEFAULT '00000000-0000-0000-0000-000000000037';
+ALTER TABLE public.onboarding_progress ADD COLUMN IF NOT EXISTS modified_at TIMESTAMPTZ;
+ALTER TABLE public.onboarding_progress ADD COLUMN IF NOT EXISTS modified_by TEXT;
+
 CREATE TABLE IF NOT EXISTS public.access_tokens (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     business_id TEXT NOT NULL,
