@@ -62,7 +62,8 @@ class OnboardingRepositoriesIntegrationTest : PostgresIntegrationTest() {
                         token_status text,
                         status text,
                         pos_provider text,
-                        onboarded boolean NOT NULL DEFAULT false
+                        onboarded boolean NOT NULL DEFAULT false,
+                        created_at timestamptz NOT NULL DEFAULT now()
                     )
                     """.trimIndent(),
                     """

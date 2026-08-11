@@ -20,7 +20,7 @@ class BusinessUserRepositoryImpl(
             FROM business_users bu
             LEFT JOIN businesses b ON b.id = bu.business_id
             WHERE bu.user_id = :userId AND bu.is_active
-            ORDER BY CASE WHEN bu.role = 'manager' THEN 0 ELSE 1 END, bu.business_id
+            ORDER BY bu.created_at, bu.business_id
             """.trimIndent()
 
         return databaseClient

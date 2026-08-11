@@ -65,7 +65,8 @@ class UserRepositoriesIntegrationTest : PostgresIntegrationTest() {
                         status text,
                         pos_provider text,
                         onboarded boolean NOT NULL DEFAULT false,
-                        owner_user_id uuid
+                        owner_user_id uuid,
+                        created_at timestamptz NOT NULL DEFAULT now()
                     )
                     """.trimIndent(),
                     """
@@ -79,7 +80,8 @@ class UserRepositoriesIntegrationTest : PostgresIntegrationTest() {
                         location_id text,
                         is_active boolean NOT NULL DEFAULT true,
                         last_login_at timestamptz,
-                        login_count integer NOT NULL DEFAULT 0
+                        login_count integer NOT NULL DEFAULT 0,
+                        created_at timestamptz NOT NULL DEFAULT now()
                     )
                     """.trimIndent(),
                     """

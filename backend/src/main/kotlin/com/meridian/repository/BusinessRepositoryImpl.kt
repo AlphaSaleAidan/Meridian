@@ -56,7 +56,7 @@ class BusinessRepositoryImpl(
             SELECT id, name, plan_tier, access_token, token_status, status, pos_provider, onboarded
             FROM businesses
             WHERE owner_user_id = :ownerUserId
-            ORDER BY id
+            ORDER BY created_at, id
             """.trimIndent()
 
         return databaseClient

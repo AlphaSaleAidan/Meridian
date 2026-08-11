@@ -52,6 +52,10 @@ ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS owner_name TEXT;
 ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS business_type TEXT;
 ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS activated_at TIMESTAMPTZ;
 
+-- Primary-business resolution orders by insertion date (oldest first).
+ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now();
+ALTER TABLE public.business_users ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now();
+
 CREATE TABLE IF NOT EXISTS public.access_tokens (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     business_id TEXT NOT NULL,
