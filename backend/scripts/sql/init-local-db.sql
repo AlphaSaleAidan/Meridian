@@ -56,7 +56,7 @@ ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS activated_at TIMESTAMPTZ;
 ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now();
 ALTER TABLE public.business_users ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now();
 
--- Audit metadata (mirrors supabase/migrations/20260811_audit_metadata.sql).
+-- Audit metadata (mirrors backend/supabase/migrations/20260811_audit_metadata.sql).
 -- created_by defaults to the system actor sentinel (AuditActor.SYSTEM).
 ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS created_by TEXT NOT NULL DEFAULT '00000000-0000-0000-0000-000000000037';
 ALTER TABLE public.businesses ADD COLUMN IF NOT EXISTS modified_at TIMESTAMPTZ;
