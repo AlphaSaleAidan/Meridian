@@ -22,6 +22,8 @@ meridian:
   auth:
     # Local SPA dev server (vite). Must also be in backend/supabase/config.toml
     # additional_redirect_urls or local Supabase silently falls back to site_url.
+    # TODO: update if the SPA dev port/route changes (and keep config.toml's
+    # additional_redirect_urls in sync — both must change together).
     password-reset-redirect-url: ${PASSWORD_RESET_REDIRECT_URL:http://localhost:5173/customer/login}
 
 security:
