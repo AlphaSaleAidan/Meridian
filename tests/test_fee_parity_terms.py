@@ -50,13 +50,15 @@ class MockDB:
 # ── Canonical table mirrors proposal-plans.ts / canada-proposal-plans.ts ────
 
 @pytest.mark.parametrize("market,tier,monthly,order_fee,floor", [
+    # Post-#461 the slider is retired: order_fee is FIXED at the tier redline,
+    # so fee == floor everywhere. CAD floors = USD × 1.4 rounded down to 5¢
+    # (45→60) EXCEPT ca/premium, pinned at 75 by ORDER_FEE_FLOOR_CENTS_CAD_OVERRIDE.
     ("us", "standard", 25000, 0, 0),
-    ("us", "premium", 35000, 149, 65),
-    ("us", "command", 50000, 100, 45),
+    ("us", "premium", 35000, 65, 65),
+    ("us", "command", 50000, 45, 45),
     ("ca", "standard", 35000, 0, 0),
-    # CAD floors = USD floors × 1.4, rounded down to 5¢ (Aidan 2026-07-19): 65→90, 45→60.
-    ("ca", "premium", 50000, 199, 90),
-    ("ca", "command", 70000, 139, 60),
+    ("ca", "premium", 50000, 75, 75),
+    ("ca", "command", 70000, 60, 60),
 ])
 def test_canonical_table_matches_frontend_plans(market, tier, monthly, order_fee, floor):
     base = ft.CANONICAL_FEE_TERMS[market][tier]
@@ -89,9 +91,12 @@ def test_resolve_defaults_everything_from_tier():
     assert terms == {
         "plan_tier": "premium",
         "monthly_fee_cents": 50000,
-        "order_fee_cents": 199,
-        "call_overage_cents_per_min": 45,
+        "order_fee_cents": 75,               # fixed at the CA premium redline
+        "call_overage_cents_per_min": 0,     # overage retired (#464)
         "included_call_min": 3,
+        "pricing_model": None,
+        "included_monthly_min": None,
+        "monthly_overage_cents_per_min": None,
     }
 
 
@@ -106,7 +111,7 @@ def test_resolve_unknown_tier_falls_back_to_closest_by_monthly():
     # 'weekly' isn't a canonical tier; CA$700/mo → command.
     terms = ft.resolve_fee_terms("ca", plan_tier="weekly", monthly_fee_cents=70000)
     assert terms["plan_tier"] == "command"
-    assert terms["order_fee_cents"] == 139
+    assert terms["order_fee_cents"] == 60
 
 
 def test_resolve_keeps_rep_price_bump_within_headroom():
@@ -121,10 +126,10 @@ def test_resolve_clamps_order_fee_to_tier_redline_and_ceiling():
     # crafted low fee → clamped up to the floor
     assert ft.resolve_fee_terms("us", "premium", order_fee_cents=1)["order_fee_cents"] == 65
     assert ft.resolve_fee_terms("ca", "command", order_fee_cents=1)["order_fee_cents"] == 60
-    # above the tier standard rate → clamped down
-    assert ft.resolve_fee_terms("us", "command", order_fee_cents=9999)["order_fee_cents"] == 100
-    # in-range negotiated fee passes through
-    assert ft.resolve_fee_terms("ca", "premium", order_fee_cents=120)["order_fee_cents"] == 120
+    # above the redline → clamped down to it (fees are FIXED post-#461;
+    # there is no negotiated in-between band anymore)
+    assert ft.resolve_fee_terms("us", "command", order_fee_cents=9999)["order_fee_cents"] == 45
+    assert ft.resolve_fee_terms("ca", "premium", order_fee_cents=120)["order_fee_cents"] == 75
 
 
 def test_terms_from_lead_row_locked_columns_win():
@@ -136,14 +141,16 @@ def test_terms_from_lead_row_locked_columns_win():
     }
     terms = ft.terms_from_lead_row("ca", lead)
     assert terms["monthly_fee_cents"] == 52500
-    assert terms["order_fee_cents"] == 150
+    # locked columns still win for monthly (headroom rules), but the per-order
+    # fee is FIXED at the redline post-#461 — the lead's 150 collapses to 75
+    assert terms["order_fee_cents"] == 75
 
 
 def test_terms_from_lead_row_pre_migration_lead_infers_from_monthly_value():
     terms = ft.terms_from_lead_row("ca", {"monthly_value": 700})
     assert terms["plan_tier"] == "command"
     assert terms["monthly_fee_cents"] == 70000
-    assert terms["order_fee_cents"] == 139
+    assert terms["order_fee_cents"] == 60
 
 
 # ── merchant_billing_terms: provision copies lead → terms ────────────────────
@@ -166,7 +173,7 @@ async def test_set_terms_supersedes_then_inserts_never_updates_in_place():
     assert inserted["source_lead_id"] == "lead-1"
     assert inserted["source_market"] == "ca"
     assert inserted["monthly_fee_cents"] == 50000
-    assert inserted["order_fee_cents"] == 150
+    assert inserted["order_fee_cents"] == 75  # fixed redline, not the lead's 150
     assert inserted["override_reason"] is None  # lead-sourced = automatic
 
 

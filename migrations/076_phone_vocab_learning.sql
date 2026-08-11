@@ -63,3 +63,10 @@ CREATE INDEX IF NOT EXISTS idx_phone_vocab_terms_approved
 -- defence-in-depth pattern established in 075.
 REVOKE ALL ON public.phone_call_transcripts FROM anon, authenticated;
 REVOKE ALL ON public.phone_vocab_terms FROM anon, authenticated;
+
+-- RLS: service-role-only tables (transcripts hold customer conversation
+-- content). REVOKE above already strips anon/authenticated grants; RLS is the
+-- defense-in-depth layer the CC6.1 control requires. Prod already has
+-- relrowsecurity=true on both (verified 2026-08-11) — these are idempotent.
+ALTER TABLE public.phone_call_transcripts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.phone_vocab_terms ENABLE ROW LEVEL SECURITY;
