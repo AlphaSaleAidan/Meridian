@@ -1,7 +1,10 @@
 package com.meridian.controller
 
 import com.meridian.dto.ApiResponse
+import com.meridian.dto.ChangePasswordRequest
+import com.meridian.dto.ForgotPasswordRequest
 import com.meridian.dto.LoginRequest
+import com.meridian.dto.ResetPasswordRequest
 import com.meridian.dto.SessionBusinessResponse
 import com.meridian.dto.SessionInfoResponse
 import com.meridian.dto.SignupRequest
@@ -98,6 +101,70 @@ class AuthController(
         log.info("Created backend JDBC session for: {} ({} businesses)", email, identity.businesses.size)
 
         return ResponseEntity.ok(ApiResponse.success(message = "Login successful"))
+    }
+
+    @Operation(
+        summary = "Request a password-reset email",
+        description =
+            "Triggers Supabase's recovery email. Always answers with the same generic success whether or " +
+                "not the email exists (anti-enumeration); infrastructure failures (Supabase SMTP rate cap, " +
+                "5xx) are logged for ops but never exposed to the caller.",
+    )
+    @PostMapping("/forgot-password")
+    suspend fun forgotPassword(
+        @RequestBody request: ForgotPasswordRequest,
+    ): ResponseEntity<ApiResponse<Any>> {
+        authService.forgotPassword(request.email)
+        return ResponseEntity.ok(ApiResponse.success(message = "If the email exists, a reset link has been sent"))
+    }
+
+    @Operation(
+        summary = "Reset password from an email link",
+        description =
+            "Completes the recovery flow: the SPA reads the recovery access token from the reset link's " +
+                "URL fragment and posts it here with the new password. This is the one flow where the SPA " +
+                "handles a raw Supabase token — the fragment never reaches the backend otherwise. " +
+                "No session is created; the user logs in afterwards.",
+    )
+    @PostMapping("/reset-password")
+    suspend fun resetPassword(
+        @RequestBody request: ResetPasswordRequest,
+    ): ResponseEntity<ApiResponse<Any>> {
+        authService.resetPassword(request.accessToken, request.newPassword)
+        return ResponseEntity.ok(ApiResponse.success(message = "Password updated"))
+    }
+
+    @Operation(
+        summary = "Change password while logged in",
+        description =
+            "Session-authenticated password change (settings page). Requires the current password, which is " +
+                "verified via a fresh Supabase password grant — the session's stored access token may have " +
+                "expired (sessions outlive Supabase tokens and no refresh token is kept), and requiring the " +
+                "current password also stops a hijacked session from silently changing it. Distinct from " +
+                "reset-password, which uses a recovery token. 401 when there is no active session.",
+    )
+    @PostMapping("/change-password")
+    suspend fun changePassword(
+        @RequestBody request: ChangePasswordRequest,
+        @SessionAttribute(
+            name = SecurityConstants.USER_EMAIL_SESSION_ATTRIBUTE,
+            required = false,
+        ) email: String?,
+        session: HttpSession,
+    ): ResponseEntity<ApiResponse<Any>> {
+        if (email == null) {
+            throw UnauthorizedException("Not authenticated")
+        }
+        val freshSession =
+            try {
+                authService.login(LoginRequest(email = email, password = request.currentPassword))
+            } catch (e: UnauthorizedException) {
+                throw UnauthorizedException("Current password is incorrect")
+            }
+        authService.changePassword(freshSession.accessToken, request.newPassword)
+        // Keep the session's stored token current for any later Supabase-proxied calls
+        session.setAttribute(SecurityConstants.SUPABASE_TOKEN_SESSION_ATTRIBUTE, freshSession.accessToken)
+        return ResponseEntity.ok(ApiResponse.success(message = "Password updated"))
     }
 
     @Operation(

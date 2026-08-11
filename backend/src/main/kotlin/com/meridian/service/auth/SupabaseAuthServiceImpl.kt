@@ -2,10 +2,12 @@ package com.meridian.service.auth
 
 import com.meridian.dto.LoginRequest
 import com.meridian.dto.SignupRequest
+import com.meridian.exception.BadRequestException
 import com.meridian.exception.UnauthorizedException
 import io.ktor.client.HttpClient
 import io.ktor.client.request.header
 import io.ktor.client.request.post
+import io.ktor.client.request.put
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
@@ -14,12 +16,15 @@ import io.ktor.http.isSuccess
 import org.slf4j.LoggerFactory
 import tools.jackson.databind.json.JsonMapper
 import tools.jackson.module.kotlin.readValue
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 
 class SupabaseAuthServiceImpl(
     private val supabaseUrl: String,
     private val supabaseKey: String,
     private val httpClient: HttpClient,
     private val jsonMapper: JsonMapper,
+    private val passwordResetRedirectUrl: String = "",
 ) : AuthService {
     private val log = LoggerFactory.getLogger(SupabaseAuthServiceImpl::class.java)
 
@@ -91,5 +96,81 @@ class SupabaseAuthServiceImpl(
         val responseBody = response.bodyAsText()
         val tokenResponse = jsonMapper.readValue<SupabaseTokenResponse>(responseBody)
         return SupabaseSession(accessToken = tokenResponse.accessToken, user = tokenResponse.user)
+    }
+
+    override suspend fun forgotPassword(email: String) {
+        var url = "$supabaseUrl/auth/v1/recover"
+        if (passwordResetRedirectUrl.isNotEmpty()) {
+            url += "?redirect_to=" + URLEncoder.encode(passwordResetRedirectUrl, StandardCharsets.UTF_8)
+        }
+
+        val response =
+            try {
+                httpClient.post(url) {
+                    header("apikey", supabaseKey)
+                    contentType(ContentType.Application.Json)
+                    setBody(jsonMapper.writeValueAsString(mapOf("email" to email)))
+                }
+            } catch (e: Exception) {
+                log.error("forgot-password: transport error reaching Supabase recover", e)
+                return
+            }
+
+        when {
+            response.status.value == 429 ->
+                log.error(
+                    "forgot-password: Supabase recover rate-limited (429) — built-in SMTP 2/hr cap " +
+                        "likely hit; configure custom SMTP. resp={}",
+                    response.bodyAsText().take(200),
+                )
+            response.status.value >= 500 ->
+                log.error("forgot-password: Supabase recover {}: {}", response.status.value, response.bodyAsText().take(200))
+            !response.status.isSuccess() ->
+                // Typically an unknown email — expected; keep it out of warn-level
+                // logs so they don't become an enumeration oracle.
+                log.debug("forgot-password: Supabase recover {}: {}", response.status.value, response.bodyAsText().take(200))
+        }
+    }
+
+    override suspend fun resetPassword(
+        accessToken: String,
+        newPassword: String,
+    ) = updatePassword(accessToken, newPassword, "reset-password")
+
+    override suspend fun changePassword(
+        accessToken: String,
+        newPassword: String,
+    ) = updatePassword(accessToken, newPassword, "change-password")
+
+    /** PUT /auth/v1/user with the given user token — shared by reset (recovery token) and change (session token). */
+    private suspend fun updatePassword(
+        accessToken: String,
+        newPassword: String,
+        operation: String,
+    ) {
+        val response =
+            httpClient.put("$supabaseUrl/auth/v1/user") {
+                header("apikey", supabaseKey)
+                header("Authorization", "Bearer $accessToken")
+                contentType(ContentType.Application.Json)
+                setBody(jsonMapper.writeValueAsString(mapOf("password" to newPassword)))
+            }
+
+        if (!response.status.isSuccess()) {
+            val errorBody = response.bodyAsText()
+            log.error("{} failed: {} {}", operation, response.status.value, errorBody.take(200))
+            if (response.status.value == 401 || response.status.value == 403) {
+                throw UnauthorizedException("Invalid or expired token")
+            }
+            val errorMessage =
+                try {
+                    val errorJson = jsonMapper.readValue<Map<String, Any>>(errorBody)
+                    (errorJson["msg"] ?: errorJson["error_description"] ?: errorJson["error"] ?: "Password update failed.").toString()
+                } catch (e: Exception) {
+                    "Password update failed."
+                }
+            throw BadRequestException(errorMessage)
+        }
+        log.info("{} succeeded", operation)
     }
 }

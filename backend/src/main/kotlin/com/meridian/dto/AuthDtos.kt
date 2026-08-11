@@ -10,6 +10,22 @@ data class LoginRequest(
     val password: String,
 )
 
+data class ForgotPasswordRequest(
+    val email: String,
+)
+
+data class ResetPasswordRequest(
+    /** Recovery access token from the Supabase email link's URL fragment. */
+    val accessToken: String,
+    val newPassword: String,
+)
+
+data class ChangePasswordRequest(
+    /** Verified via a fresh Supabase password grant — also sidesteps stored-token expiry. */
+    val currentPassword: String,
+    val newPassword: String,
+)
+
 data class SessionInfoResponse(
     val id: String,
     val email: String,

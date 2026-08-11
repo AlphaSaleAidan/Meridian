@@ -2,6 +2,7 @@ package com.meridian.unit.service.auth
 
 import com.meridian.dto.LoginRequest
 import com.meridian.dto.SignupRequest
+import com.meridian.exception.BadRequestException
 import com.meridian.exception.UnauthorizedException
 import com.meridian.service.auth.SupabaseAuthServiceImpl
 import io.ktor.client.HttpClient
@@ -24,12 +25,15 @@ class SupabaseAuthServiceImplTest {
     private val supabaseUrl = "http://localhost:54321"
     private val supabaseKey = "test-anon-key"
 
-    private fun createService(mockEngine: MockEngine): SupabaseAuthServiceImpl {
+    private fun createService(
+        mockEngine: MockEngine,
+        passwordResetRedirectUrl: String = "",
+    ): SupabaseAuthServiceImpl {
         val httpClient =
             HttpClient(mockEngine) {
                 expectSuccess = false
             }
-        return SupabaseAuthServiceImpl(supabaseUrl, supabaseKey, httpClient, jsonMapper)
+        return SupabaseAuthServiceImpl(supabaseUrl, supabaseKey, httpClient, jsonMapper, passwordResetRedirectUrl)
     }
 
     // ---- signup tests ----
@@ -166,5 +170,136 @@ class SupabaseAuthServiceImplTest {
 
             val service = createService(engine)
             service.login(LoginRequest("user@test.com", "secret123"))
+        }
+
+    // ---- forgot-password tests ----
+
+    @Test
+    fun `forgotPassword posts to recover without redirect when unconfigured`() =
+        runTest {
+            val engine =
+                MockEngine { request ->
+                    assertEquals("$supabaseUrl/auth/v1/recover", request.url.toString())
+                    assertEquals("test-anon-key", request.headers["apikey"])
+                    respond(
+                        content = """{}""",
+                        status = HttpStatusCode.OK,
+                        headers = headersOf(HttpHeaders.ContentType, "application/json"),
+                    )
+                }
+
+            createService(engine).forgotPassword("user@test.com")
+        }
+
+    @Test
+    fun `forgotPassword appends url-encoded redirect_to when configured`() =
+        runTest {
+            val engine =
+                MockEngine { request ->
+                    assertEquals(
+                        "$supabaseUrl/auth/v1/recover?redirect_to=https%3A%2F%2Fmeridian.tips%2Freset",
+                        request.url.toString(),
+                    )
+                    respond(
+                        content = """{}""",
+                        status = HttpStatusCode.OK,
+                        headers = headersOf(HttpHeaders.ContentType, "application/json"),
+                    )
+                }
+
+            createService(engine, passwordResetRedirectUrl = "https://meridian.tips/reset")
+                .forgotPassword("user@test.com")
+        }
+
+    @Test
+    fun `forgotPassword swallows 429 rate limit (anti-enumeration, ops-log only)`() =
+        runTest {
+            val engine =
+                MockEngine {
+                    respond(
+                        content = """{"msg": "over_email_send_rate_limit"}""",
+                        status = HttpStatusCode.TooManyRequests,
+                        headers = headersOf(HttpHeaders.ContentType, "application/json"),
+                    )
+                }
+
+            // Must not throw
+            createService(engine).forgotPassword("user@test.com")
+        }
+
+    @Test
+    fun `forgotPassword swallows 500 and unknown-email 4xx`() =
+        runTest {
+            for (status in listOf(HttpStatusCode.InternalServerError, HttpStatusCode.UnprocessableEntity)) {
+                val engine =
+                    MockEngine {
+                        respond(
+                            content = """{"msg": "boom"}""",
+                            status = status,
+                            headers = headersOf(HttpHeaders.ContentType, "application/json"),
+                        )
+                    }
+                // Must not throw for either status
+                createService(engine).forgotPassword("user@test.com")
+            }
+        }
+
+    // ---- reset/change password tests ----
+
+    @Test
+    fun `resetPassword puts new password with recovery token`() =
+        runTest {
+            val engine =
+                MockEngine { request ->
+                    assertEquals("$supabaseUrl/auth/v1/user", request.url.toString())
+                    assertEquals("Bearer recovery-token", request.headers["Authorization"])
+                    assertEquals("test-anon-key", request.headers["apikey"])
+                    val body = request.body.toByteArray().decodeToString()
+                    val parsed = jsonMapper.readValue(body, Map::class.java)
+                    assertEquals("new-secret-123", parsed["password"])
+                    respond(
+                        content = """{"id": "uuid-1"}""",
+                        status = HttpStatusCode.OK,
+                        headers = headersOf(HttpHeaders.ContentType, "application/json"),
+                    )
+                }
+
+            createService(engine).resetPassword("recovery-token", "new-secret-123")
+        }
+
+    @Test
+    fun `resetPassword throws UnauthorizedException on expired token`() =
+        runTest {
+            val engine =
+                MockEngine {
+                    respond(
+                        content = """{"msg": "token is expired"}""",
+                        status = HttpStatusCode.Unauthorized,
+                        headers = headersOf(HttpHeaders.ContentType, "application/json"),
+                    )
+                }
+
+            assertThrows<UnauthorizedException> {
+                createService(engine).resetPassword("stale-token", "new-secret-123")
+            }
+        }
+
+    @Test
+    fun `changePassword surfaces Supabase validation message as BadRequestException`() =
+        runTest {
+            val engine =
+                MockEngine {
+                    respond(
+                        content = """{"msg": "Password should be at least 6 characters."}""",
+                        status = HttpStatusCode.UnprocessableEntity,
+                        headers = headersOf(HttpHeaders.ContentType, "application/json"),
+                    )
+                }
+
+            val exception =
+                assertThrows<BadRequestException> {
+                    createService(engine).changePassword("session-token", "short")
+                }
+            assertEquals("Password should be at least 6 characters.", exception.message)
         }
 }

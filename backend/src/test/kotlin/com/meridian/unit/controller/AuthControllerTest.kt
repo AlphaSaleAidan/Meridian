@@ -1,7 +1,10 @@
 package com.meridian.unit.controller
 
 import com.meridian.controller.AuthController
+import com.meridian.dto.ChangePasswordRequest
+import com.meridian.dto.ForgotPasswordRequest
 import com.meridian.dto.LoginRequest
+import com.meridian.dto.ResetPasswordRequest
 import com.meridian.dto.SignupRequest
 import com.meridian.exception.UnauthorizedException
 import com.meridian.security.SecurityConstants
@@ -197,4 +200,80 @@ class AuthControllerTest {
         assertEquals("success", response.body?.status)
         assertEquals("Logout successful", response.body?.message)
     }
+
+    @Test
+    fun `forgot-password always returns the generic success message`() =
+        runBlocking {
+            coEvery { authService.forgotPassword("someone@test.com") } returns Unit
+
+            val response = authController.forgotPassword(ForgotPasswordRequest("someone@test.com"))
+
+            assertEquals(HttpStatus.OK, response.statusCode)
+            assertEquals("If the email exists, a reset link has been sent", response.body?.message)
+            coVerify { authService.forgotPassword("someone@test.com") }
+        }
+
+    @Test
+    fun `reset-password delegates recovery token and new password`() =
+        runBlocking {
+            coEvery { authService.resetPassword("recovery-tok", "new-pass-123") } returns Unit
+
+            val response = authController.resetPassword(ResetPasswordRequest("recovery-tok", "new-pass-123"))
+
+            assertEquals(HttpStatus.OK, response.statusCode)
+            assertEquals("Password updated", response.body?.message)
+            coVerify { authService.resetPassword("recovery-tok", "new-pass-123") }
+        }
+
+    @Test
+    fun `change-password verifies the current password and uses the fresh token`() =
+        runBlocking {
+            val httpSession = mockk<HttpSession>(relaxed = true)
+            coEvery {
+                authService.login(LoginRequest("test@test.com", "current-pass"))
+            } returns SupabaseSession(accessToken = "fresh-jwt", user = supabaseUser)
+            coEvery { authService.changePassword("fresh-jwt", "new-pass-123") } returns Unit
+
+            val response =
+                authController.changePassword(
+                    ChangePasswordRequest("current-pass", "new-pass-123"),
+                    "test@test.com",
+                    httpSession,
+                )
+
+            assertEquals(HttpStatus.OK, response.statusCode)
+            assertEquals("Password updated", response.body?.message)
+            coVerify { authService.changePassword("fresh-jwt", "new-pass-123") }
+            verify { httpSession.setAttribute(SecurityConstants.SUPABASE_TOKEN_SESSION_ATTRIBUTE, "fresh-jwt") }
+        }
+
+    @Test
+    fun `change-password rejects a wrong current password`(): Unit =
+        runBlocking {
+            val httpSession = mockk<HttpSession>(relaxed = true)
+            coEvery { authService.login(any()) } throws UnauthorizedException("Invalid email or password.")
+
+            val exception =
+                assertThrows<UnauthorizedException> {
+                    authController.changePassword(
+                        ChangePasswordRequest("wrong-pass", "new-pass-123"),
+                        "test@test.com",
+                        httpSession,
+                    )
+                }
+            assertEquals("Current password is incorrect", exception.message)
+        }
+
+    @Test
+    fun `change-password throws UnauthorizedException without a session`(): Unit =
+        runBlocking {
+            val httpSession = mockk<HttpSession>(relaxed = true)
+            assertThrows<UnauthorizedException> {
+                authController.changePassword(
+                    ChangePasswordRequest("current-pass", "new-pass-123"),
+                    null,
+                    httpSession,
+                )
+            }
+        }
 }
