@@ -115,6 +115,25 @@ Supabase RPCs stay in place untouched so the current SPA keeps working until cut
   after PR 3. Starter credits stay a separate endpoint pattern (credits slice ports
   later); no stub needed inside signup.
 
+## Deferred backlog (agreed 2026-08-11 — "fix at a later time")
+
+- **Login rate limiting** — Python schema has `login_attempts` +
+  `check_login_rate_limit()`; Kotlin login has nothing. Bread-and-butter CC6
+  control; own slice.
+- **Audit logging / observability slice** — Micrometer/Prometheus + structured
+  auth-event trail (promised 07-30, not started).
+- **Narrow the CSRF ignore-list** — `/api/auth/**` is fully CSRF-exempt but now
+  contains session-authenticated state-changing POSTs (change-password);
+  SameSite=Lax is the only guard.
+- **Token-hash recovery flow** — see FE guide (cutover-time).
+- **Staff/team-admin slice** — port `team_admin.py` members CRUD; reconcile
+  wizard placeholder-email roster rows.
+- **`user_profiles` consolidation** — docs/proposals/user-profiles-consolidation-2026-08.md
+  (needs migration + backfill + drift reconciliation).
+- **`POST /verify` resend** — deferred convenience endpoint.
+- **SOC 2 framing** — ~52% ready, never say "certified"; this backend improves
+  CC6 posture but certification is org-level machinery.
+
 ## Prereqs / standing notes
 
 - `SPRING_SESSION` DDL (`backend/scripts/sql/init-local-db.sql`) must reach
