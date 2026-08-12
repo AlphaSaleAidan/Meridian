@@ -119,7 +119,7 @@ export default function CanadaPortalDashboardPage() {
   return (
     <div className="space-y-6">
       {/* Odyssey hero — region members only */}
-      {region && <RegionHero region={region} videoSrc="/regions/odyssey/dashboard-hero.mp4" focus="50% 10%" />}
+      {region && <RegionHero region={region} videoSrc="/regions/odyssey/dashboard-hero.mp4" focus="50% 22%" />}
 
       {/* ── Greeting ── */}
       <div>
