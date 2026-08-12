@@ -304,3 +304,40 @@ def test_fetch_rep_by_email_none_when_no_exact(monkeypatch):
     monkeypatch.setattr(hierarchy, "_service_get", _svc)
     # ilike matched admin@ only (wildcard), but no exact match for the attacker.
     assert _run(hierarchy._fetch_rep_by_email("a_min@corp.com")) is None
+
+
+# ── Regions (20260812): partition_by_region walls rosters off both ways ──────
+
+def _scope(**kw):
+    base = dict(rep_id="r1", role="sales_rep", path=None, is_admin=False, region=None)
+    base.update(kw)
+    return hierarchy.RepScope(**base)
+
+
+_REGION_ROWS = [
+    {"id": "core-1", "name": "Core Rep"},                       # no region key
+    {"id": "core-2", "name": "Core Two", "region": None},       # explicit NULL
+    {"id": "ody-1", "name": "Odyssey Lead", "region": "odyssey"},
+    {"id": "ody-2", "name": "Odyssey Rep", "region": "odyssey"},
+    {"id": "other-1", "name": "Other Region", "region": "atlantis"},
+]
+
+
+def test_region_member_sees_only_their_region():
+    rows = hierarchy.partition_by_region(list(_REGION_ROWS), _scope(region="odyssey"))
+    assert {r["id"] for r in rows} == {"ody-1", "ody-2"}, (
+        "region member's roster must contain ONLY their own region — no core "
+        "reps, no other regions"
+    )
+
+
+def test_core_caller_never_sees_region_rows():
+    rows = hierarchy.partition_by_region(list(_REGION_ROWS), _scope(region=None))
+    assert {r["id"] for r in rows} == {"core-1", "core-2"}, (
+        "core roster leaked region members"
+    )
+
+
+def test_admin_keeps_full_visibility_across_regions():
+    rows = hierarchy.partition_by_region(list(_REGION_ROWS), _scope(is_admin=True))
+    assert len(rows) == len(_REGION_ROWS), "admin oversight must span regions"

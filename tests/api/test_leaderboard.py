@@ -43,6 +43,7 @@ REP2_ID = "ffffffff-0000-4000-8000-000000000006"
 PENDING_ID = "99999999-0000-4000-8000-000000000009"
 USREP_ID = "12121212-0000-4000-8000-000000000012"
 ADMIN_ID = "aaaaaaaa-0000-4000-8000-000000000001"
+ODYSSEY_ID = "0d15e500-0000-4000-8000-000000000015"
 
 SALES_REPS = [
     {"id": DM1_ID, "name": "DM One", "email": "dm1@meridian.test", "phone": "+1555000001",
@@ -57,6 +58,9 @@ SALES_REPS = [
      "role": "sales_rep", "portal_context": "us", "is_active": True},
     {"id": ADMIN_ID, "name": "Admin", "email": "admin@meridian.test", "phone": "",
      "role": "admin", "portal_context": "all", "is_active": True},
+    {"id": ODYSSEY_ID, "name": "Odyssey Lead", "email": "odyssey@meridian.test", "phone": "",
+     "role": "regional_manager", "portal_context": "all", "is_active": True,
+     "region": "odyssey"},
 ]
 
 CANADA_LEADS = [
@@ -212,3 +216,24 @@ def test_session_without_rep_profile_is_403(monkeypatch):
     with pytest.raises(HTTPException) as e:
         _run(lb.get_leaderboard({"email": "stranger@evil.test"}))
     assert e.value.status_code == 403, "unknown sessions must fail closed"
+
+
+# ── 5. Regions (20260812): walled off from the board in both directions ───────
+
+def test_region_caller_gets_disabled_empty_board(monkeypatch):
+    """A region member (Odyssey) has no leaderboard at all — not a board of
+    strangers, not a board of one. Explicit disabled flag, zero entries."""
+    _wire(monkeypatch)
+    out = _run(lb.get_leaderboard({"email": "odyssey@meridian.test"}))
+    assert out["disabled"] is True
+    assert out["leaderboard"] == []
+    assert out["viewer"]["region"] == "odyssey"
+
+
+def test_region_rep_never_appears_on_portal_boards(monkeypatch):
+    """Core reps' boards must not contain region members, either portal."""
+    _wire(monkeypatch)
+    for caller in ("rep1@meridian.test", "usrep@meridian.test"):
+        out = _run(lb.get_leaderboard({"email": caller}))
+        ids = {r["id"] for r in out["leaderboard"]}
+        assert ODYSSEY_ID not in ids, f"region rep leaked onto {caller}'s board"

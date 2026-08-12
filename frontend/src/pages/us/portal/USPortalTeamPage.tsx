@@ -2,12 +2,14 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { Users, DollarSign, Target, CreditCard, Search, MoreVertical, X, Save, UserPlus, Clock, CheckCircle2, XCircle, Trophy, Crown, Medal, Award, Trash2 } from 'lucide-react'
 import { clsx } from 'clsx'
-import { useSalesAuth } from '@/lib/sales-auth'
-import { getAuthHeaders } from '@/lib/supabase'
+import { useSalesAuth, repTier } from '@/lib/sales-auth'
+import { getAuthHeaders, supabase } from '@/lib/supabase'
 import { deriveCommissionsFromLeads, type Commission, type Deal } from '@/lib/canada-sales-demo-data'
 import { usLeadsService } from '@/lib/us-leads-service'
 import { fetchLeaderboard, type LeaderboardEntry } from '@/lib/leaderboard'
 import { isUsAdmin } from '@/lib/us-admins'
+import { getRegion } from '@/lib/regions'
+import { RegionBanner } from '@/components/RegionBanner'
 import { getOrgRoleBadge, isOrgRole } from '@/lib/role-colors'
 import { useToast } from '@/components/Toast'
 
@@ -27,6 +29,8 @@ interface TeamMember {
   role: 'admin' | 'active' | 'inactive' | 'onboarding'
   /** 7-level org role from the hierarchy migration (absent pre-migration). */
   org_role?: string
+  /** Isolated territory slug (20260812); null/absent = core team. */
+  region?: string | null
   location: string
 }
 
@@ -116,13 +120,19 @@ export default function USPortalTeamPage() {
   const { rep } = useSalesAuth()
   const { toast } = useToast()
   const admin = isAdmin(rep?.email)
+  // Region members (20260812) live in a walled-off territory: their own
+  // roster, no portal leaderboard (per-region opt-out — Odyssey's is off),
+  // Odyssey identity band in place of the core header treatment.
+  const region = getRegion(rep?.region)
+  const regionBoardHidden = !!region && !region.showLeaderboard
+  const regionLead = !!region && repTier(rep) !== 'rep'
   const [search, setSearch] = useState('')
   const [team, setTeam] = useState<TeamMember[]>([])
   const [deals, setDeals] = useState<Deal[]>([])
   const [commissions, setCommissions] = useState<Commission[]>([])
   const [applicants, setApplicants] = useState<Applicant[]>([])
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'reps' | 'leaderboard' | 'payouts' | 'applications'>(admin ? 'reps' : 'leaderboard')
+  const [activeTab, setActiveTab] = useState<'reps' | 'leaderboard' | 'payouts' | 'applications'>(admin || regionBoardHidden ? 'reps' : 'leaderboard')
   const [editingMember, setEditingMember] = useState<TeamMember | null>(null)
   const [editRate, setEditRate] = useState('')
   const [editName, setEditName] = useState('')
@@ -132,22 +142,38 @@ export default function USPortalTeamPage() {
   // one. /api/leaderboard returns ALL active portal reps with aggregate-only
   // fields. Admin Team Management keeps the scoped roster endpoints unchanged.
   const [board, setBoard] = useState<LeaderboardEntry[] | null>(null)
-  const [boardLoading, setBoardLoading] = useState(!admin)
+  const [boardLoading, setBoardLoading] = useState(!admin && !regionBoardHidden)
 
   useEffect(() => {
-    if (admin || !rep?.rep_id) { setBoardLoading(false); return }
+    if (admin || regionBoardHidden || !rep?.rep_id) { setBoardLoading(false); return }
     let cancelled = false
     fetchLeaderboard()
       .then(entries => { if (!cancelled) setBoard(entries) })
       .catch(() => { /* board stays null → fall back to the scoped roster */ })
       .finally(() => { if (!cancelled) setBoardLoading(false) })
     return () => { cancelled = true }
-  }, [admin, rep?.rep_id])
+  }, [admin, regionBoardHidden, rep?.rep_id])
 
   useEffect(() => {
     if (!rep?.rep_id) return
     async function fetchData() {
       const apiBase = import.meta.env.VITE_API_URL || ''
+
+      // Demo mode (no Supabase configured): there is no roster API. Seed the
+      // roster with the signed-in rep so the page — including the region
+      // treatment — is previewable, then skip the network entirely.
+      if (!supabase) {
+        setTeam([{
+          id: rep?.rep_id || '', name: rep?.name || '', email: rep?.email || '',
+          phone: rep?.phone || '', commission_rate: rep?.commission_rate || 70,
+          deals_open: 0, deals_won: 0, total_mrr: 0, total_earned: 0, total_paid: 0,
+          is_active: true, joined: (rep?.created_at || '').slice(0, 10),
+          role: admin ? 'admin' : 'active', org_role: rep?.role || 'sales_rep',
+          region: rep?.region || null, location: 'US',
+        }])
+        setLoading(false)
+        return
+      }
 
       // Fetch team + applicants from backend API (requires JWT)
       try {
@@ -174,6 +200,7 @@ export default function USPortalTeamPage() {
                 joined: (r.created_at as string || '').slice(0, 10),
                 role: adminRole ? 'admin' : 'active' as 'admin' | 'active',
                 org_role: (r.role as string) || (adminRole ? 'admin' : 'sales_rep'),
+                region: (r.region as string) || null,
                 location: 'US',
               }
             }))
@@ -210,8 +237,17 @@ export default function USPortalTeamPage() {
     fetchData()
   }, [rep?.rep_id])
 
+  // Region fence, client plane. The backend already partitions rosters by
+  // region; re-filter here so a stale cache or API regression can never show
+  // a region member the core roster (or vice versa). Admins keep everything.
+  const fencedTeam = admin
+    ? team
+    : region
+      ? team.filter(m => (m.region || null) === region.id)
+      : team.filter(m => !m.region)
+
   // Enrich team with computed deal stats
-  const enrichedTeam = computeTeamStats(team, deals)
+  const enrichedTeam = computeTeamStats(fencedTeam, deals)
 
   // Rows the Leaderboard tab renders: the aggregate board for non-admins,
   // the enriched scoped roster for admins (unchanged).
@@ -345,7 +381,7 @@ export default function USPortalTeamPage() {
       {/* Header */}
       <div>
         <div className="flex items-center justify-between">
-          <h1 className="text-xl font-bold text-white">{admin ? 'Team Management' : 'Leaderboard'}</h1>
+          <h1 className="text-xl font-bold text-white">{region && !admin ? region.name : admin ? 'Team Management' : 'Leaderboard'}</h1>
           {/* Recruiting is deliberately not a nav tab — reachable from here (mirrors Canada). */}
           {admin && (
             <Link to="/us/portal/recruiting" className="text-xs text-[#17C5B0] hover:underline">
@@ -353,8 +389,11 @@ export default function USPortalTeamPage() {
             </Link>
           )}
         </div>
-        <p className="text-sm text-[#A1A1A8] mt-0.5">{admin ? 'Manage your sales reps, commissions, and payouts.' : 'See how you stack up against the team.'}</p>
+        <p className="text-sm text-[#A1A1A8] mt-0.5">{region && !admin ? 'Your territory’s roster and pipeline.' : admin ? 'Manage your sales reps, commissions, and payouts.' : 'See how you stack up against the team.'}</p>
       </div>
+
+      {/* Region identity band — region members only */}
+      {region && !admin && <RegionBanner region={region} memberCount={enrichedTeam.length} />}
 
       {/* Stat Cards — admin only (non-admins go straight to the leaderboard) */}
       {admin && (
@@ -418,14 +457,16 @@ export default function USPortalTeamPage() {
           onClick={() => setActiveTab('reps')}
           className={clsx('px-4 py-1.5 rounded-lg text-xs font-medium transition-colors', activeTab === 'reps' ? 'bg-[#1F1F23] text-white' : 'text-[#A1A1A8] hover:text-white')}
         >
-          Sales Reps
+          {region && !admin ? 'My Region' : 'Sales Reps'}
         </button>
-        <button
-          onClick={() => setActiveTab('leaderboard')}
-          className={clsx('px-4 py-1.5 rounded-lg text-xs font-medium transition-colors', activeTab === 'leaderboard' ? 'bg-[#f59e0b]/20 text-[#f59e0b]' : 'text-[#A1A1A8] hover:text-white')}
-        >
-          Leaderboard
-        </button>
+        {!regionBoardHidden && (
+          <button
+            onClick={() => setActiveTab('leaderboard')}
+            className={clsx('px-4 py-1.5 rounded-lg text-xs font-medium transition-colors', activeTab === 'leaderboard' ? 'bg-[#f59e0b]/20 text-[#f59e0b]' : 'text-[#A1A1A8] hover:text-white')}
+          >
+            Leaderboard
+          </button>
+        )}
         {admin && (
           <button
             onClick={() => setActiveTab('payouts')}
@@ -464,11 +505,16 @@ export default function USPortalTeamPage() {
           <div className="space-y-3">
             {filtered.map(member => {
               const badge = getMemberBadge(member)
-              const avatarColor = getAvatarColor(member.name)
+              const memberRegion = getRegion(member.region)
+              const avatarColor = memberRegion?.theme.accent ?? getAvatarColor(member.name)
               const monthlyComm = Math.round((member.commission_rate / 100) * member.total_mrr)
 
               return (
-                <div key={member.id} className="bg-[#111113] border border-[#1F1F23] rounded-xl px-5 py-4">
+                <div
+                  key={member.id}
+                  className="bg-[#111113] border border-[#1F1F23] rounded-xl px-5 py-4"
+                  style={memberRegion ? { borderColor: memberRegion.theme.accent + '2b' } : undefined}
+                >
                   <div className="flex items-center gap-4">
                     <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ backgroundColor: avatarColor + '20' }}>
                       <span className="text-xs font-bold" style={{ color: avatarColor }}>{getInitials(member.name)}</span>
@@ -480,8 +526,16 @@ export default function USPortalTeamPage() {
                         <span className={clsx('inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border', badge.bg, badge.textColor, badge.border)}>
                           {badge.text}
                         </span>
+                        {memberRegion && (
+                          <span
+                            className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border"
+                            style={{ color: memberRegion.theme.accent, borderColor: memberRegion.theme.accent + '33', backgroundColor: memberRegion.theme.accent + '0f' }}
+                          >
+                            {memberRegion.name}
+                          </span>
+                        )}
                       </div>
-                      {admin && <p className="text-xs text-[#A1A1A8] mt-0.5">{member.email}</p>}
+                      {(admin || regionLead) && <p className="text-xs text-[#A1A1A8] mt-0.5">{member.email}</p>}
                       <p className="text-[10px] text-[#4a5550]">{member.location}</p>
                     </div>
 
@@ -528,7 +582,7 @@ export default function USPortalTeamPage() {
       )}
 
       {/* Leaderboard Tab */}
-      {activeTab === 'leaderboard' && (
+      {activeTab === 'leaderboard' && !regionBoardHidden && (
         <div className="space-y-4">
           {/* Apple Vision Pro Incentive Banner */}
           <div className="relative overflow-hidden bg-gradient-to-r from-[#1a1a2e] via-[#16213e] to-[#0f3460] border border-[#7c3aed]/30 rounded-xl p-5">
