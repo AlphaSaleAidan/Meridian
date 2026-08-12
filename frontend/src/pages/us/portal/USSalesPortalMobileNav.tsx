@@ -2,7 +2,7 @@ import { NavLink } from 'react-router-dom'
 import { clsx } from 'clsx'
 import {
   LayoutDashboard, Target, Building2, MoreHorizontal,
-  GraduationCap, Users, Settings, X, CreditCard,
+  GraduationCap, Users, Settings, X, CreditCard, PhoneCall,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
@@ -14,6 +14,7 @@ const PRIMARY_TABS = [
 ]
 
 const MORE_ITEMS = [
+  { path: '/us/portal/auto-dialer', icon: PhoneCall, label: 'Auto Dialer' },
   { path: '/us/portal/training', icon: GraduationCap, label: 'Training' },
   { path: '/us/portal/team', icon: Users, label: 'Team' },
   { path: '/us/portal/badge', icon: CreditCard, label: 'My Badge' },

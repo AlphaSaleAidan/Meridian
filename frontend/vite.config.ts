@@ -60,7 +60,9 @@ export default defineConfig({
     hmr: process.env.VITE_HMR_HOST ? { host: process.env.VITE_HMR_HOST } : undefined,
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',
+        // Overridable so a preview/dev server can point at a non-default
+        // backend port (the box's :8000 is the live pm2 API).
+        target: process.env.MERIDIAN_API_PROXY || 'http://localhost:8000',
         changeOrigin: true,
       },
     },

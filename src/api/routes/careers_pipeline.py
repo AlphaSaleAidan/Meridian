@@ -52,9 +52,13 @@ async def _load_application(db, application_id: str) -> dict:
 
 
 async def _authorize_app_access(scope: hierarchy.RepScope, app_row: dict) -> None:
-    """Admin passes; a manager/rep passes only when the application's recruiter
-    is inside their subtree. Independent of RLS (backend control plane)."""
+    """Admin passes; a region member passes on their own region's applications
+    (the region lead recruits for the region, even before a recruiter is
+    assigned); otherwise a manager/rep passes only when the application's
+    recruiter is inside their subtree. Independent of RLS (backend plane)."""
     if scope.is_admin:
+        return
+    if scope.region and (app_row.get("region") or "") == scope.region:
         return
     allowed = await hierarchy.visible_rep_ids(scope)
     recruiter_id = app_row.get("recruiter_id")
@@ -68,14 +72,23 @@ async def get_pipeline(user: dict = Depends(require_jwt)):
     scope = await hierarchy.resolve_scope(user)
     rows = await db.select("career_applications", order="created_at.desc")
 
+    # Region routing (20260812 regions): an applicant who picked a region lands
+    # in THAT region's pipeline. Region members see their region's applicants
+    # (incl. still-unassigned ones — they recruit for the region) and never core
+    # apps; core members never see region apps; admins see everything.
     if not scope.is_admin:
-        allowed = await hierarchy.visible_rep_ids(scope) or set()
-        rows = [r for r in rows if r.get("recruiter_id") in allowed]
+        if scope.region:
+            rows = [r for r in rows if (r.get("region") or "") == scope.region]
+        else:
+            allowed = await hierarchy.visible_rep_ids(scope) or set()
+            rows = [r for r in rows
+                    if not (r.get("region") or "") and r.get("recruiter_id") in allowed]
 
     return {
         "applications": rows,
         "stages": list(STAGES),
-        "viewer": {"role": scope.role, "rep_id": scope.rep_id, "is_admin": scope.is_admin},
+        "viewer": {"role": scope.role, "rep_id": scope.rep_id,
+                   "is_admin": scope.is_admin, "region": scope.region},
     }
 
 

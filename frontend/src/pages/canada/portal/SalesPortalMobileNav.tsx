@@ -3,6 +3,7 @@ import { clsx } from 'clsx'
 import {
   LayoutDashboard, Target, Building2, MoreHorizontal,
   GraduationCap, FileText, Users, Settings, X, Trophy, CreditCard,
+  PhoneCall, Headphones,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
@@ -35,9 +36,13 @@ function getMoreItems(tier: RepTier) {
         ? null
         : { path: '/canada/portal/team', icon: Trophy, label: 'Leaderboard' }
   return [
+    { path: '/canada/portal/auto-dialer', icon: PhoneCall, label: 'Auto Dialer' },
     { path: '/canada/portal/training', icon: GraduationCap, label: 'Training' },
     { path: '/canada/portal/proposals', icon: FileText, label: 'Proposals' },
     ...(teamItem ? [teamItem] : []),
+    ...(tier === 'admin'
+      ? [{ path: '/canada/portal/call-console', icon: Headphones, label: 'Call Console' }]
+      : []),
     { path: '/canada/portal/badge', icon: CreditCard, label: 'My Badge' },
     { path: '/canada/portal/settings', icon: Settings, label: 'Settings' },
   ]

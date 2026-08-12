@@ -106,6 +106,9 @@ const USInvoicePage = lazyRetry(() => import('@/pages/us/USInvoicePage'))
 const USLayout = lazyRetry(() => import('@/components/USLayout'))
 const USPortalBadgePage = lazyRetry(() => import('@/pages/us/portal/USPortalBadgePage'))
 const CanadaPortalBadgePage = lazyRetry(() => import('@/pages/canada/portal/CanadaPortalBadgePage'))
+const CanadaPortalAutoDialerPage = lazyRetry(() => import('@/pages/canada/portal/CanadaPortalAutoDialerPage'))
+const CanadaPortalCallConsolePage = lazyRetry(() => import('@/pages/canada/portal/CanadaPortalCallConsolePage'))
+const USPortalAutoDialerPage = lazyRetry(() => import('@/pages/us/portal/USPortalAutoDialerPage'))
 const RepPublicBadgePage = lazyRetry(() => import('@/pages/RepPublicBadgePage'))
 const WalletCardPage = lazyRetry(() => import('@/pages/WalletCardPage'))
 
@@ -549,6 +552,8 @@ export default function App() {
                 <Route path="recruiting" element={<Suspense fallback={<InlineFallback />}><CanadaPortalRecruitingPage /></Suspense>} />
                 <Route path="settings" element={<Suspense fallback={<InlineFallback />}><CanadaPortalSettingsPage /></Suspense>} />
                 <Route path="badge" element={<Suspense fallback={<InlineFallback />}><CanadaPortalBadgePage /></Suspense>} />
+                <Route path="auto-dialer" element={<Suspense fallback={<InlineFallback />}><CanadaPortalAutoDialerPage /></Suspense>} />
+                <Route path="call-console" element={<Suspense fallback={<InlineFallback />}><CanadaPortalCallConsolePage /></Suspense>} />
               </Route>
 
               {/* ══════════════════════════════════════════════
@@ -630,6 +635,7 @@ export default function App() {
                 <Route path="recruiting" element={<Suspense fallback={<InlineFallback />}><USPortalRecruitingPage /></Suspense>} />
                 <Route path="settings" element={<Suspense fallback={<InlineFallback />}><USPortalSettingsPage /></Suspense>} />
                 <Route path="badge" element={<Suspense fallback={<InlineFallback />}><USPortalBadgePage /></Suspense>} />
+                <Route path="auto-dialer" element={<Suspense fallback={<InlineFallback />}><USPortalAutoDialerPage /></Suspense>} />
               </Route>
 
               {/* Public rep badge + wallet card pages */}
