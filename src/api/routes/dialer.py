@@ -317,7 +317,11 @@ async def _advance_lead_stage(call: dict, rep_id: str, stage: str) -> bool:
            or os.environ.get("SUPABASE_SERVICE_KEY", ""))
     if not supabase_url or not key or not call.get("lead_id") or not call.get("lead_table"):
         return False
-    headers = {"Authorization": f"Bearer {key}", "apikey": key}
+    # Prefer=representation so a guard miss (0 rows matched — e.g. a crafted
+    # lead_id owned by another rep) reports False instead of a silent "success"
+    # (PostgREST returns 2xx for zero-row updates; caught in the 08-12 E2E run).
+    headers = {"Authorization": f"Bearer {key}", "apikey": key,
+               "Prefer": "return=representation"}
     try:
         async with httpx.AsyncClient(timeout=8.0) as client:
             resp = await client.patch(
@@ -326,7 +330,7 @@ async def _advance_lead_stage(call: dict, rep_id: str, stage: str) -> bool:
                 params={"id": f"eq.{call['lead_id']}", "rep_id": f"eq.{rep_id}"},
                 json={"stage": stage, "updated_at": datetime.now(timezone.utc).isoformat()},
             )
-        return resp.status_code in (200, 204)
+        return resp.status_code == 200 and bool(resp.json())
     except Exception as exc:  # noqa: BLE001
         logger.warning("dialer stage advance failed: %s", exc)
         return False

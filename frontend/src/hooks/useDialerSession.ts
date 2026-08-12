@@ -67,12 +67,21 @@ export function useDialerSession(market: DialerMarket) {
   const entryRef = useRef<QueueEntry | null>(null)
   const phaseRef = useRef<DialerPhase>('idle')
   const pausedRef = useRef(false)
+  const needsDispositionRef = useRef(false)
+  const wrapRemainingRef = useRef(0)
+  // True from softphone.dial() until its 'ended' event — the guard that makes
+  // dialNext idempotent (a stray double-fire must never skip ahead mid-call).
+  const inFlightRef = useRef(false)
   const dialStartedAt = useRef(0)
   const answeredAt = useRef(0)
   const tickTimer = useRef<ReturnType<typeof setInterval> | null>(null)
   const wrapTimer = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const setPhaseSafe = (p: DialerPhase) => { phaseRef.current = p; setPhase(p) }
+  const setNeedsDispositionSafe = (v: boolean) => {
+    needsDispositionRef.current = v
+    setNeedsDisposition(v)
+  }
 
   const clearTimers = () => {
     if (tickTimer.current) { clearInterval(tickTimer.current); tickTimer.current = null }
@@ -90,22 +99,24 @@ export function useDialerSession(market: DialerMarket) {
 
   // ── Advance / wrap-up ──────────────────────────────────────────────────────
 
+  // NOTE: countdown state lives in a ref and the interval callback owns all
+  // side effects — setState updaters stay pure (React may invoke updaters
+  // twice; a side-effectful updater double-fired dialNext and burned through
+  // the queue mid-call — caught in the 2026-08-12 E2E run).
   const beginWrapup = useCallback((seconds: number) => {
     setPhaseSafe('wrapup')
-    setNeedsDisposition(false)
+    setNeedsDispositionSafe(false)
+    wrapRemainingRef.current = seconds
     setWrapRemaining(seconds)
     clearTimers()
     wrapTimer.current = setInterval(() => {
-      setWrapRemaining(prev => {
-        if (pausedRef.current) return prev
-        if (prev <= 1) {
-          clearTimers()
-          // Defer to escape the setState updater.
-          setTimeout(() => dialNextRef.current(), 0)
-          return 0
-        }
-        return prev - 1
-      })
+      if (pausedRef.current) return
+      wrapRemainingRef.current -= 1
+      setWrapRemaining(Math.max(0, wrapRemainingRef.current))
+      if (wrapRemainingRef.current <= 0) {
+        clearTimers()
+        dialNextRef.current()
+      }
     }, 1000)
   }, [])
 
@@ -140,20 +151,23 @@ export function useDialerSession(market: DialerMarket) {
         return
       }
       setSession(s => s ? { ...s, dials: s.dials + 1 } : s)
+      inFlightRef.current = true
       await softphoneRef.current?.dial(entry.phone_e164)
       // Duration ticker (dial → end).
       tickTimer.current = setInterval(() => {
         setCallSeconds(Math.floor((Date.now() - dialStartedAt.current) / 1000))
       }, 1000)
     } catch (err) {
+      inFlightRef.current = false
       setError(err instanceof Error ? err.message : 'Dial failed')
       setPhaseSafe('wrapup')
-      setNeedsDisposition(false)
+      setNeedsDispositionSafe(false)
       setWrapRemaining(0)
     }
   }, [market])
 
   const dialNext = useCallback(() => {
+    if (inFlightRef.current) return
     clearTimers()
     if (pausedRef.current || !sessionRef.current) return
     const q = workingQueue.current
@@ -189,6 +203,7 @@ export function useDialerSession(market: DialerMarket) {
       setSession(s => s ? { ...s, connects: s.connects + 1 } : s)
       void dialerApi.patchCall(call.id, { status: 'connected' }).catch(() => undefined)
     } else if (ev.type === 'ended') {
+      inFlightRef.current = false
       clearTimers()
       const durationSeconds = Math.floor((Date.now() - dialStartedAt.current) / 1000)
       const talkSeconds = answeredAt.current
@@ -210,7 +225,7 @@ export function useDialerSession(market: DialerMarket) {
       } else {
         // A real conversation happened — hold for a manual disposition.
         setPhaseSafe('wrapup')
-        setNeedsDisposition(true)
+        setNeedsDispositionSafe(true)
         setWrapRemaining(0)
       }
     }
@@ -246,15 +261,15 @@ export function useDialerSession(market: DialerMarket) {
   }, [market, onSoftphoneEvent, queueQuery.data])
 
   const togglePause = useCallback(() => {
-    setPaused(prev => {
-      const next = !prev
-      pausedRef.current = next
-      if (!next && phaseRef.current === 'wrapup' && !needsDisposition && wrapRemaining <= 0) {
-        setTimeout(() => dialNextRef.current(), 0)
-      }
-      return next
-    })
-  }, [needsDisposition, wrapRemaining])
+    const next = !pausedRef.current
+    pausedRef.current = next
+    setPaused(next)
+    // Resuming after the countdown already hit zero while paused: advance now.
+    if (!next && phaseRef.current === 'wrapup'
+        && !needsDispositionRef.current && wrapRemainingRef.current <= 0) {
+      dialNextRef.current()
+    }
+  }, [])
 
   const hangup = useCallback(() => {
     softphoneRef.current?.hangup()
@@ -285,6 +300,7 @@ export function useDialerSession(market: DialerMarket) {
   const stop = useCallback(async () => {
     clearTimers()
     softphoneRef.current?.hangup()
+    inFlightRef.current = false
     const sess = sessionRef.current
     sessionRef.current = null
     setPhaseSafe('idle')
@@ -292,7 +308,7 @@ export function useDialerSession(market: DialerMarket) {
     pausedRef.current = false
     setCurrentEntry(null)
     setCurrentCall(null)
-    setNeedsDisposition(false)
+    setNeedsDispositionSafe(false)
     invalidateQueue()
     if (sess) {
       try { await dialerApi.patchSession(sess.id, 'ended') } catch { /* already gone */ }
