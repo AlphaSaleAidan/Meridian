@@ -24,6 +24,7 @@ interface Application {
   state_province?: string
   country?: string
   stage: string
+  region?: string | null
   recruiter_id?: string | null
   stage_history?: Array<{ stage: string; by: string; at: string }>
   created_at?: string
@@ -214,6 +215,11 @@ export default function USPortalRecruitingPage() {
                           <span className={clsx('inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border', posBadge.bg, posBadge.textColor, posBadge.border)}>
                             {positionLabel(app.position)}
                           </span>
+                          {app.region && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border border-[#C9A24B]/40 bg-[#C9A24B]/10 text-[#C9A24B] capitalize">
+                              {app.region} region
+                            </span>
+                          )}
                         </div>
                         <p className="text-xs text-[#A1A1A8] mt-0.5">{app.email}{app.city ? ` · ${app.city}` : ''}</p>
                         <p className="text-[10px] text-[#4a5550] flex items-center gap-1 mt-0.5">
