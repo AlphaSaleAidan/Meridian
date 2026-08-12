@@ -80,6 +80,8 @@ from .routes.phone import router as phone_router
 from .routes.phone_activation import router as phone_activation_router
 from .routes.phone_dashboard import router as phone_dashboard_router
 from .routes.phone_test_order import router as phone_test_order_router
+from .routes.dialer import router as dialer_router
+from .routes.dialer_admin import router as dialer_admin_router
 from .routes.menu import router as menu_router
 from .routes.menu_ingest import router as menu_ingest_router
 from .routes.stripe_connect import router as stripe_connect_router
@@ -385,6 +387,8 @@ app.include_router(phone_router)
 app.include_router(phone_activation_router)
 app.include_router(phone_dashboard_router)
 app.include_router(phone_test_order_router)
+app.include_router(dialer_router)
+app.include_router(dialer_admin_router)
 app.include_router(menu_router)
 app.include_router(menu_ingest_router)
 app.include_router(stripe_connect_router)

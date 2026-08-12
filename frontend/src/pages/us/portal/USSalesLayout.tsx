@@ -16,6 +16,7 @@ import {
   Plus,
   Settings,
   CreditCard,
+  PhoneCall,
 } from 'lucide-react'
 import { MeridianEmblem } from '@/components/MeridianLogo'
 import USSalesPortalMobileNav from './USSalesPortalMobileNav'
@@ -28,6 +29,7 @@ const salesNavItems = [
   { heading: 'Sales' },
   { path: '/us/portal/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { path: '/us/portal/leads', icon: Target, label: 'Leads' },
+  { path: '/us/portal/auto-dialer', icon: PhoneCall, label: 'Auto Dialer' },
   { path: '/us/portal/accounts', icon: Building2, label: 'Accounts' },
   { path: '/us/portal/training', icon: GraduationCap, label: 'Training' },
   { path: '/us/portal/proposals', icon: FileText, label: 'Proposals' },

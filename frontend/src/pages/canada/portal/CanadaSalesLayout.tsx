@@ -18,6 +18,8 @@ import {
   Settings,
   Trophy,
   CreditCard,
+  PhoneCall,
+  Headphones,
 } from 'lucide-react'
 import { MeridianEmblem } from '@/components/MeridianLogo'
 import SalesPortalMobileNav from './SalesPortalMobileNav'
@@ -30,6 +32,7 @@ const salesNavBase = [
   { heading: 'Sales' },
   { path: '/canada/portal/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { path: '/canada/portal/leads', icon: Target, label: 'Leads' },
+  { path: '/canada/portal/auto-dialer', icon: PhoneCall, label: 'Auto Dialer' },
   { path: '/canada/portal/accounts', icon: Building2, label: 'Accounts' },
   { path: '/canada/portal/training', icon: GraduationCap, label: 'Training' },
   { path: '/canada/portal/proposals', icon: FileText, label: 'Proposals' },
@@ -48,6 +51,7 @@ const salesNavTail = [
 
 const adminNavItems = [
   { heading: 'Admin' },
+  { path: '/canada/portal/call-console', icon: Headphones, label: 'Call Console' },
 ] as const
 
 const ADMIN_EMAILS = [

@@ -43,6 +43,9 @@ SENSITIVE_TABLES = {
     "email_send_log", "space_processing_jobs", "spaces", "space_zones",
     # Vision R1 config-drift (fixed by 20260719_vision_rls_backport_wideopen_drop.sql)
     "vision_cameras", "vision_traffic", "vision_visitors", "vision_visits",
+    # SR auto dialer (20260812_autodialer.sql) — rep/lead PII: scoped authenticated
+    # SELECT only (realtime), service_role writes; dialer_dnc backend-only.
+    "dialer_sessions", "dialer_calls", "dialer_callbacks", "dialer_dnc",
 }
 
 # The only sensitive tables where an `authenticated USING(true)` read policy is
