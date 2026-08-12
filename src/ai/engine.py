@@ -75,6 +75,8 @@ class AnalysisContext:
     # Merchant metadata
     business_vertical: str = "other"
     timezone: str = "America/Los_Angeles"
+    province: str | None = None
+    currency: str | None = None
     
     # Analysis period
     analysis_days: int = 30
@@ -110,6 +112,11 @@ class AnalysisResult:
     forecasts: list[dict] = field(default_factory=list)
     weekly_report: dict | None = None
 
+    # Canadian intelligence overlay (populated for Canadian merchants only;
+    # None for everyone else). Canada-specific insights are also merged into
+    # `insights` above so they surface through the normal path.
+    canada_overlay: dict | None = None
+
     # Metadata
     generated_at: datetime = field(
         default_factory=lambda: datetime.now(timezone.utc)
@@ -134,6 +141,7 @@ class AnalysisResult:
             ),
             "errors": len(self.errors),
             "duration_seconds": round(self.duration_seconds, 2),
+            "canada_overlay": self.canada_overlay is not None,
         }
 
 
@@ -294,6 +302,20 @@ class MeridianAI:
             logger.error(f"Insight generation failed: {e}", exc_info=True)
             result.errors.append(f"insights: {str(e)}")
 
+        # ── Phase 3c: Canada Intelligence Overlay ─────────────
+        # Self-guarding: non-Canadian merchants (detected by timezone/currency/
+        # province) pass through unchanged, so this is a no-op for the US market.
+        # For Canadian merchants it attaches result.canada_overlay and merges
+        # Canada-specific insights into result.insights before forecasts/report
+        # /alerts run. Works off industry_benchmarks, not the flat-metric contract
+        # that gated the industry templates — no fabricated-number hazard here.
+        try:
+            from .canada.engine_hook import apply_canada_intelligence
+            result = await apply_canada_intelligence(result, ctx)
+        except Exception as e:
+            logger.error(f"Canada intelligence failed: {e}", exc_info=True)
+            result.errors.append(f"canada_intelligence: {str(e)}")
+
         # ── Phase 3b: LLM Enhancement (optional) ────────────
         # Default OFF — deliberately, and NOT a typo for config.py's "1".
         # enhance_insights asks LiteLLM for response_format=json_object, which
@@ -452,19 +474,25 @@ class MeridianAI:
         """Load all data from DB for analysis."""
         ctx = AnalysisContext(org_id=org_id, analysis_days=days)
 
-        # Populate the merchant vertical so industry templates actually select a
-        # specific analyzer instead of always falling back to GenericAnalyzer.
-        # Best-effort + getattr-guarded: an older DB adapter or a failed lookup
-        # simply leaves the default "other" (today's behavior). get_industry_analyzer
-        # normalizes the raw value (deck slug / POS label) onto a template key.
-        get_vertical = getattr(self.db, "get_org_vertical", None)
-        if get_vertical is not None:
+        # Populate merchant metadata (vertical, timezone, province, currency).
+        # Vertical drives industry-template selection; timezone/province/currency
+        # drive Canadian-merchant detection for the Canada overlay. Best-effort +
+        # getattr-guarded: an older DB adapter or a failed lookup simply leaves
+        # the dataclass defaults (today's behavior).
+        get_meta = getattr(self.db, "get_org_metadata", None)
+        if get_meta is not None:
             try:
-                raw_vertical = await get_vertical(org_id)
-                if raw_vertical:
-                    ctx.business_vertical = raw_vertical
+                meta = await get_meta(org_id)
+                if meta.get("vertical"):
+                    ctx.business_vertical = meta["vertical"]
+                if meta.get("timezone"):
+                    ctx.timezone = meta["timezone"]
+                if meta.get("province"):
+                    ctx.province = meta["province"]
+                if meta.get("currency"):
+                    ctx.currency = meta["currency"]
             except Exception:
-                logger.debug("vertical load failed for %s", org_id, exc_info=True)
+                logger.debug("metadata load failed for %s", org_id, exc_info=True)
 
         # Load in parallel
         daily, hourly, products, transactions, inventory = await asyncio.gather(
