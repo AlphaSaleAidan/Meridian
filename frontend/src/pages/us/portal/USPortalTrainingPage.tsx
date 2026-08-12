@@ -6,6 +6,7 @@ import { RegionOrientationCard } from '@/components/training/RegionOrientationCa
 import DemoCallCard from '@/components/phone/DemoCallCard'
 import { useSalesAuth } from '@/lib/sales-auth'
 import { getRegion } from '@/lib/regions'
+import { RegionHero } from '@/components/RegionHero'
 
 export default function USPortalTrainingPage() {
   const { rep } = useSalesAuth()
@@ -16,6 +17,9 @@ export default function USPortalTrainingPage() {
 
   return (
     <div className="space-y-6">
+      {/* Odyssey hero — region members only */}
+      {region && <RegionHero region={region} videoSrc="/regions/odyssey/training-hero.mp4" />}
+
       <header className="flex items-center gap-3">
         <div
           className="w-10 h-10 rounded-xl border flex items-center justify-center"
