@@ -15,36 +15,36 @@ function Icon({ d, accent }: { d: string; accent: string }) {
   )
 }
 
-// Inline stroke paths (lucide-style): wall/fence, globe, trophy-off, compass.
+// Inline stroke paths (lucide-style): storefront, funnel/pipeline, coins, lifebuoy.
 const ICONS = {
-  fence: 'M4 4v16 M10 4v16 M16 4v16 M22 4v16 M2 9h22 M2 15h22',
-  globe: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18 M3 12h18 M12 3c2.5 2.6 3.8 5.7 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.7-3.8-9s1.3-6.4 3.8-9',
-  quiet: 'M8 21h8 M12 17v4 M17 4v5a5 5 0 0 1-10 0V4h10z M3 8l18 10',
-  compass: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20 M15.5 8.5l-2 5-5 2 2-5 5-2',
+  store: 'M3 9l1.5-5h15L21 9 M3 9h18 M5 9v11h14V9 M9 20v-6h6v6',
+  funnel: 'M3 4h18l-7 8v6l-4 2v-8L3 4',
+  coins: 'M12 8a7 3 0 1 0 0-6 7 3 0 0 0 0 6 M5 5v4c0 1.7 3.1 3 7 3s7-1.3 7-3V5 M5 13v4c0 1.7 3.1 3 7 3s7-1.3 7-3v-4',
+  buoy: 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20 M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8 M5 5l4 4 M19 5l-4 4 M5 19l4-4 M19 19l-4-4',
 }
 
 export function RegionOrientationCard({ region }: { region: SalesRegion }) {
   const { accent, deep, mid } = region.theme
   const points: Array<{ icon: keyof typeof ICONS; title: string; body: string }> = [
     {
-      icon: 'fence',
-      title: 'Your territory is walled off',
-      body: 'Only Odyssey members appear in your roster, and your leads are visible inside the region only. Core Meridian reps can’t see your pipeline, and you won’t see theirs.',
+      icon: 'store',
+      title: 'What you sell',
+      body: 'Meridian for independent merchants: the AI phone-ordering agent plus POS analytics on their existing system (one-click Square, Clover, or Stripe connect, 18-month backfill), anonymous camera counts, and real margin tracking.',
     },
     {
-      icon: 'globe',
-      title: 'One login, both portals',
-      body: 'The same credentials work on the US portal and the Canada portal. Your leads stay with whichever portal you created them in.',
+      icon: 'funnel',
+      title: 'How a deal moves',
+      body: 'Create the lead, show the proposal, walk the customer through checkout, connect their POS, then run the onboarding walkthrough. Every stage lives on your Leads page — deals only count once the POS is connected.',
     },
     {
-      icon: 'quiet',
-      title: 'No leaderboard',
-      body: 'Odyssey runs without a public board — your numbers are between you and your region lead. Rankings and incentive contests in the core portal don’t apply here.',
+      icon: 'coins',
+      title: 'How you get paid',
+      body: 'A milestone schedule per closed account: a lump sum when the merchant’s first payment clears, then retention milestones at months 4, 9, and 12 the account stays active. Full package table in Pricing & Commission — retention pays more than the close.',
     },
     {
-      icon: 'compass',
-      title: 'Same rules of the sea',
-      body: 'The training course, code of conduct, and published pricing apply exactly as in the core portal. Questions go to your region lead first.',
+      icon: 'buoy',
+      title: 'Where to get help',
+      body: 'The course below unlocks lead creation; the playbook answers POS, camera, and objection questions in seconds. Anything it doesn’t cover goes to your region lead.',
     },
   ]
 

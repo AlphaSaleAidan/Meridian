@@ -1,6 +1,6 @@
 # Welcome to Meridian
 
-You sell AI-powered POS analytics to independent business owners — restaurants, cafes, smoke shops, dispensaries, salons, retail. We plug into their existing POS, backfill 18 months of transaction history, and run 24+ AI agents on the data 24/7. The merchant gets actionable insights with dollar amounts attached. You get **70% of monthly subscription revenue for the lifetime of the account.**
+You sell AI-powered POS analytics to independent business owners — restaurants, cafes, smoke shops, dispensaries, salons, retail. We plug into their existing POS, backfill 18 months of transaction history, and run 24+ AI agents on the data 24/7. The merchant gets actionable insights with dollar amounts attached. You get paid on a **package-based milestone schedule** — a lump sum at close, then three retention milestones as the account stays active (see [Pricing & Commission](./03-pricing-commission.md)).
 
 ## Why this matters right now
 
@@ -10,23 +10,15 @@ The headline stat you'll lead with: **the average Meridian merchant discovers CA
 
 ## What you actually sell
 
-Meridian uses **custom per-deal pricing** — no published price points. You set the monthly price during the proposal in the portal. When a prospect asks "how much?", lead with value first: "Let me show you what we typically find in week one, then we'll talk numbers."
+Meridian sells on **three published plan tiers** (Standard / Premium / Command) with a fixed per-order fee per tier, or a $0/order minutes-bucket variant on Premium and Command. Quote from the tier table in [Pricing & Commission](./03-pricing-commission.md) — do not invent prices. When a prospect asks "how much?", lead with value first: "Let me show you what we typically find in week one, then we'll walk the plans."
 
 **One product, one feature set.** Every merchant gets all 30 POS analytics agents on a month-to-month basis with no setup fee and one-click cancel. Camera intelligence, multi-location rollups, and API access are **add-ons** — line items on the proposal, not a separate plan tier.
 
-Use "Schedule a Quote" framing — do NOT quote specific monthly prices before discovery.
-
 ## Your math
 
-You earn **70% of monthly subscription revenue, recurring for the lifetime of the account.** The exact amount depends on the custom deal price you set in the portal.
+You earn a **lump-sum milestone schedule per closed account**: M0 at close (once the merchant's first payment clears), then M1 at month 4, M2 at month 9, and M3 at month 12 of the account staying active. M1 is the biggest milestone — retention pays more than the close itself. The full package table, upsell/discount adjustments, and market status (Canada live; US pending ratification) are in [Pricing & Commission](./03-pricing-commission.md).
 
-| If deal price is… | Your monthly cut | 10 active clients = | After 12 months |
-|-------------------|-----------------|---------------------|-----------------|
-| CA$350/mo | CA$245 | CA$2,450/mo | CA$29,400 |
-| CA$600/mo | CA$420 | CA$4,200/mo | CA$50,400 |
-| CA$1,200/mo | CA$840 | CA$8,400/mo | CA$100,800 |
-
-These are illustrations — your actual earnings depend on the prices you negotiate. Recurring. Compounds with retention. Your job is to close *and* keep clients engaged so they don't churn.
+An account that stays past month 12 pays out its full schedule (CA$342–CA$1,140 depending on package). Churn before month 4 pays M0 only. Your job is to close *and* keep clients engaged so they don't churn.
 
 ## What's in this playbook
 

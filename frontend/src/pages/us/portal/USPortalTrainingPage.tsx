@@ -18,7 +18,7 @@ export default function USPortalTrainingPage() {
   return (
     <div className="space-y-6">
       {/* Odyssey hero — region members only */}
-      {region && <RegionHero region={region} videoSrc="/regions/odyssey/training-hero.mp4" />}
+      {region && <RegionHero region={region} videoSrc="/regions/odyssey/training-hero.mp4" focus="50% 16%" />}
 
       <header className="flex items-center gap-3">
         <div

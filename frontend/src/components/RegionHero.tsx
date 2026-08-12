@@ -13,9 +13,16 @@ interface RegionHeroProps {
   region: SalesRegion
   /** Path under /public, e.g. /regions/odyssey/leads-hero.mp4 */
   videoSrc: string
+  /**
+   * CSS object-position for the video crop. The band is much shorter than the
+   * 16:9 source, so this picks WHICH horizontal slice shows — tune it per
+   * clip so the subject's face lands inside the band (e.g. '50% 12%' when the
+   * head sits near the top of the frame). Defaults to center.
+   */
+  focus?: string
 }
 
-export function RegionHero({ region, videoSrc }: RegionHeroProps) {
+export function RegionHero({ region, videoSrc, focus = '50% 50%' }: RegionHeroProps) {
   const { accent, deep, mid } = region.theme
   const wordmark = region.name.split(' ')[0].toUpperCase()
   const reducedMotion =
@@ -24,7 +31,7 @@ export function RegionHero({ region, videoSrc }: RegionHeroProps) {
 
   return (
     <div
-      className="relative h-40 sm:h-48 overflow-hidden rounded-xl border"
+      className="relative h-44 sm:h-56 overflow-hidden rounded-xl border"
       style={{
         borderColor: accent + '33',
         background: `linear-gradient(120deg, ${deep} 0%, ${mid} 62%, ${deep} 100%)`,
@@ -34,12 +41,13 @@ export function RegionHero({ region, videoSrc }: RegionHeroProps) {
         <video
           aria-hidden
           className="absolute inset-0 h-full w-full object-cover"
+          style={{ objectPosition: focus }}
           src={videoSrc}
           autoPlay
           muted
           loop
           playsInline
-          preload="metadata"
+          preload="auto"
         />
       )}
       {/* Blue wash — keeps the gold wordmark legible over any frame. */}
