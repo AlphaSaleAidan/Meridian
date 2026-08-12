@@ -8,8 +8,8 @@ import { useDialerSession } from '@/hooks/useDialerSession'
 import { SessionHUD } from './SessionHUD'
 import { QueuePanel } from './QueuePanel'
 import { ContactCard } from './ContactCard'
-import { DispositionGrid } from './DispositionGrid'
 import { CallControls } from './CallControls'
+import { WrapUpModal } from './WrapUpModal'
 
 const WRAP_CHOICES = [5, 10, 15, 30, 60]
 
@@ -96,16 +96,28 @@ export function AutoDialerScreen({ market }: { market: DialerMarket }) {
             entry={d.currentEntry}
             notes={d.notes}
             onNotes={d.setNotes}
-            notesEnabled={d.phase === 'connected' || (d.phase === 'wrapup' && d.needsDisposition)}
+            notesEnabled={d.phase === 'connected'}
           />
           <CallControls phase={d.phase} onHangup={d.hangup} onMute={d.setMuted} />
-          <DispositionGrid
-            enabled={d.phase === 'wrapup' && d.needsDisposition}
-            onSubmit={d.submitDisposition}
-          />
           {d.log.length > 0 && <RecentActivity log={d.log} />}
         </div>
       </div>
+
+      <WrapUpModal
+        open={d.phase === 'wrapup'}
+        needsDisposition={d.needsDisposition}
+        entry={d.currentEntry}
+        callSeconds={d.callSeconds}
+        wrapRemaining={d.wrapRemaining}
+        wrapTotal={d.session?.wrap_up_seconds ?? 15}
+        paused={d.paused}
+        lastCompleted={d.log[0] ?? null}
+        notes={d.notes}
+        onNotes={d.setNotes}
+        onSubmit={d.submitDisposition}
+        onDialNow={d.dialNow}
+        onTogglePause={d.togglePause}
+      />
     </div>
   )
 }

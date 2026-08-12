@@ -275,6 +275,13 @@ export function useDialerSession(market: DialerMarket) {
     softphoneRef.current?.hangup()
   }, [])
 
+  /** Skip the remaining wrap-up countdown and dial the next lead now. */
+  const dialNow = useCallback(() => {
+    if (phaseRef.current !== 'wrapup' || needsDispositionRef.current) return
+    clearTimers()
+    dialNextRef.current()
+  }, [])
+
   const setMuted = useCallback((muted: boolean) => {
     softphoneRef.current?.setMuted(muted)
   }, [])
@@ -325,7 +332,7 @@ export function useDialerSession(market: DialerMarket) {
     queueLoading: queueQuery.isLoading,
     queueError: queueQuery.error,
     remaining: Math.max(0, remaining),
-    start, stop, togglePause, hangup, setMuted, submitDisposition,
+    start, stop, togglePause, hangup, setMuted, submitDisposition, dialNow,
     skip: hangup, // during dialing/ringing a hangup IS the skip
   }
 }
