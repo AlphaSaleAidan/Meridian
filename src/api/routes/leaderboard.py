@@ -48,7 +48,8 @@ _ALL_LEAD_TABLES = ("canada_leads", "us_leads")
 
 # Explicit field allowlist — serialization is the security boundary here, so
 # the response is built ONLY from these keys (tested: no email/phone ever).
-_REPS_COLS = "id,name,role,portal_context,is_active"
+_REPS_COLS = "id,name,role,portal_context,is_active,region"
+_REPS_COLS_NO_REGION = "id,name,role,portal_context,is_active"  # pre-20260812 (no region column)
 _REPS_COLS_LEGACY = "id,name,portal_context,is_active"  # pre-20260716 (no role column)
 _LEADS_COLS = "rep_id,stage,monthly_value"
 
@@ -62,16 +63,21 @@ def _service_env() -> tuple[str, str]:
     return url, key
 
 
-async def _resolve_portal(user: dict) -> tuple[str | None, str | None]:
-    """(portal_context, caller rep_id). 403 for sessions with no rep profile —
-    the board is for reps, and an unknown session must fail closed."""
+async def _resolve_portal(user: dict) -> tuple[str | None, str | None, str | None]:
+    """(portal_context, caller rep_id, caller region). 403 for sessions with no
+    rep profile — the board is for reps, and an unknown session must fail
+    closed."""
     email = (user.get("email") or "").lower()
     caller = await hierarchy._fetch_rep_by_email(email)
     if caller:
-        return (caller.get("portal_context") or "all"), caller.get("id")
+        return (
+            (caller.get("portal_context") or "all"),
+            caller.get("id"),
+            (caller.get("region") or None),
+        )
     if email in [e.lower() for e in ADMIN_EMAILS]:
         # Allowlisted admin without a rep row: cross-portal board.
-        return "all", None
+        return "all", None, None
     raise HTTPException(403, "No sales rep profile for this account")
 
 
@@ -80,7 +86,18 @@ async def get_leaderboard(user: dict = Depends(require_jwt)):
     """Aggregate board for the caller's portal. Requires a valid rep JWT."""
     import httpx
 
-    portal, caller_rep_id = await _resolve_portal(user)
+    portal, caller_rep_id, caller_region = await _resolve_portal(user)
+
+    # Region members (20260812) have no leaderboard — their territory opted
+    # out (Odyssey). Return an explicitly-disabled empty board rather than a
+    # board of strangers; the portal hides the tab, this is the backstop.
+    if caller_region:
+        return {
+            "leaderboard": [],
+            "disabled": True,
+            "portal": portal,
+            "viewer": {"rep_id": caller_rep_id, "region": caller_region},
+        }
 
     supabase_url, service_key = _service_env()
     if not supabase_url or not service_key:
@@ -97,6 +114,13 @@ async def get_leaderboard(user: dict = Depends(require_jwt)):
         resp = await client.get(
             f"{supabase_url}/rest/v1/sales_reps", headers=headers, params=reps_params
         )
+        if resp.status_code != 200:
+            # Pre-20260812 prod: region column unknown → drop it.
+            resp = await client.get(
+                f"{supabase_url}/rest/v1/sales_reps",
+                headers=headers,
+                params={**reps_params, "select": _REPS_COLS_NO_REGION},
+            )
         if resp.status_code != 200:
             # Pre-20260716 prod: role column unknown → legacy column set.
             resp = await client.get(
@@ -142,6 +166,10 @@ async def get_leaderboard(user: dict = Depends(require_jwt)):
     for rep in rep_rows:
         rep_id = rep.get("id")
         if not rep_id:
+            continue
+        # Region members never appear on the portal board (their territory is
+        # walled off; Odyssey additionally has boards disabled outright).
+        if rep.get("region"):
             continue
         agg = stats.get(rep_id, {"deals_won": 0, "deals_open": 0, "total_mrr": 0})
         # Allowlist serialization — never spread the DB row into the response.

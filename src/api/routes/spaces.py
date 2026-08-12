@@ -322,22 +322,23 @@ async def get_job_status(job_id: str):
 async def list_spaces(org_id: str):
     from ...db import _db_instance as db
     if not db:
-        return {"spaces": _demo_spaces(), "total": 1}
+        # No DB configured — honestly report no spaces, never fabricate one.
+        return {"spaces": [], "total": 0}
 
     try:
         rows = await db.select("spaces", "*", filters={"org_id": f"eq.{org_id}"}, order="created_at.desc")
         return {"spaces": rows, "total": len(rows)}
     except Exception as e:
-        logger.warning("Spaces query failed (table may not exist): %s", e)
-        return {"spaces": _demo_spaces(), "total": 1}
+        # Surface the failure instead of handing a real merchant fabricated data.
+        logger.warning("Spaces query failed for %s: %s", org_id, e)
+        raise HTTPException(status_code=503, detail="Spaces are temporarily unavailable")
 
 
 @router.get("/{org_id}/{space_id}")
 async def get_space(org_id: str, space_id: str):
     from ...db import _db_instance as db
     if not db:
-        demos = _demo_spaces()
-        return demos[0] if demos else {}
+        raise HTTPException(status_code=404, detail="Space not found")
 
     try:
         rows = await db.select("spaces", "*", filters={"id": f"eq.{space_id}", "org_id": f"eq.{org_id}"}, limit=1)
@@ -347,9 +348,9 @@ async def get_space(org_id: str, space_id: str):
     except HTTPException:
         raise
     except Exception as e:
-        logger.warning("Spaces query failed (table may not exist): %s", e)
-        demos = _demo_spaces()
-        return demos[0] if demos else {}
+        # Surface the failure instead of returning a fabricated space.
+        logger.warning("Space query failed for %s/%s: %s", org_id, space_id, e)
+        raise HTTPException(status_code=503, detail="Spaces are temporarily unavailable")
 
 
 @router.patch("/{space_id}/status")
@@ -402,20 +403,3 @@ async def store_zones(space_id: str, req: ZonesRequest, principal=Depends(requir
     return {"space_id": space_id, "zones_stored": len(rows)}
 
 
-def _demo_spaces():
-    return [{
-        "id": "demo-space-1",
-        "org_id": "demo",
-        "scan_type": "polycam",
-        "device_model": "iPhone 15 Pro",
-        "file_format": "usdz",
-        "source_url": "https://poly.cam/capture/D3C8EE9B-7EF3-44F2-A656-7E869018204F",
-        "status": "ready",
-        "created_at": "2026-05-04T00:00:00Z",
-        "zones": [
-            {"zone_id": "counter", "label": "POS Counter", "category": "counter"},
-            {"zone_id": "entrance", "label": "Entrance Zone", "category": "entrance"},
-            {"zone_id": "display", "label": "Feature Display", "category": "display"},
-            {"zone_id": "shelf-a", "label": "High-Value Shelf", "category": "shelf"},
-        ],
-    }]

@@ -1,102 +1,89 @@
 # Pricing & Commission
 
-## Pricing model — custom per-deal
+## Pricing model — three published tiers
 
-Meridian uses **custom per-deal pricing**. You set a monthly price for each merchant when generating a proposal in the portal. There are no published tiers or fixed price points. Do NOT quote specific monthly prices before discovery.
+Meridian sells on **three published plan tiers**. Quote from this table — do not invent prices, and do not discount below tier price without written approval. The per-order fee is **fixed per tier** (the old rep fee slider is retired).
 
-When a prospect asks "how much?" — lead with value:
-> "We do custom pricing based on what we find. Most merchants see CA$2,800+/mo in found revenue in week one — let me show you that first, then the price question answers itself."
+### US portal (USD)
 
-**One product, one feature set.** Every merchant gets the full POS analytics agent fleet. Cameras, multi-location, and API access are line-item add-ons — priced separately, not plan-gated.
+| Tier | Monthly | Per-order fee |
+|------|---------|---------------|
+| Standard | $250/mo | $0/order |
+| Premium | $350/mo | $0.65/order |
+| Command | $500/mo | $0.45/order |
 
-### Base product — POS analytics
+### Canada portal (CAD)
 
-All merchants get:
-- Month-to-month, no contract
-- No setup fee
-- 18-month historical backfill
-- All 30 POS analytics agents (revenue forecasting, peak hours, customer LTV, inventory intelligence, etc.)
-- Email digest + in-app alerts
-- One-click cancel
-- Standard support (24-hr first response)
+| Tier | Monthly | Per-order fee |
+|------|---------|---------------|
+| Standard | CA$350/mo | CA$0/order |
+| Premium | CA$500/mo | CA$0.75/order |
+| Command | CA$700/mo | CA$0.60/order |
 
-### Add-ons (line items on the proposal, not plan tiers)
+### Minutes licensing (zero-per-order) alternative
 
-| Add-on | What it unlocks | When to propose |
-|--------|----------------|-----------------|
-| **Camera intelligence** | Foot traffic counts, queue length, dwell time, zone heatmaps + all 10 cross-reference agents (POS × camera fusion) | Merchant already has cameras, or opens a location where cameras would help |
-| **Multi-location** | Multi-store rollups, location analyst, cross-store comparison | 2+ locations or plans to expand |
-| **API access + custom models + dedicated account manager** | Developer API, custom AI tuning, dedicated AM | Larger operator, franchise, or technical buyer |
-| **Priority support** | 4-hr first response, 24-hr resolution | Merchant explicitly wants faster support SLA |
+For merchants who won't accept a per-order fee, Premium and Command can be closed as a **$0/order minutes plan** at the same tier monthly:
 
-Quote each add-on as a separate line when building the proposal. All add-on pricing is custom — schedule a call with the product team if the merchant asks for numbers before you've done discovery.
+- **Premium** — 600 included agent-call minutes/month
+- **Command** — 1,000 included agent-call minutes/month
+- Overage: **$0.20/min** past the bucket (both markets), 5-minute per-call cap
+
+The merchant's monthly price does not change between the two models — it's per-order fee vs included-minutes bucket.
 
 ## Currency rules
 
-- Canadian merchants → always quote CAD. Use the `CA$` prefix verbally and in writing.
-- US merchants → USD.
-- Never mix. Billing follows the merchant's country.
-- Billing rail: **Stripe** (recurring monthly subscription + QR subscribe link). Not Square.
+- Canadian merchants → always quote CAD (`CA$`). US merchants → USD. Never mix; billing follows the merchant's country.
+- Phone-agent billing runs in CAD internally on both markets — you still QUOTE the table above in the merchant's currency.
 
 ## Tax (Canada)
 
-GST/HST applies on top of subscription price (it's a digital service). Province-dependent:
+GST/HST applies on top of subscription price (digital service). Province-dependent — "sales tax is applied automatically based on your province at billing." Don't get into tax debates during the sale.
 
-| Province | Rate on subscription |
-|----------|---------------------|
-| BC | 5% GST + 7% PST |
-| Alberta | 5% GST |
-| Ontario | 13% HST |
-| Quebec | 5% GST + 9.975% QST |
-| Manitoba | 5% GST + 7% PST |
+## Your commission — milestone schedule (the One-Pager)
 
-If asked: "Sales tax is applied automatically based on your province at billing — same as any software subscription."
+Commission is a **package-based milestone schedule**, not a percentage of revenue. Each closed account pays four fixed lump-sum milestones as the account stays active. You are an independent contractor; payouts are lump-sum and outcome-based.
 
-Don't get into tax debates during the sale. Move on.
+Milestones split each package's total in fixed weights (13 / 28 / 10 / 6 of 57 units):
 
-## Your commission
+| Milestone | Earned when | Weight |
+|-----------|------------|--------|
+| **M0** | At close, once the merchant's first payment clears. Paid the Friday at least 7 days after close. | 13 units |
+| **M1** | Account still active at month 4 | 28 units |
+| **M2** | Account still active at month 9 | 10 units |
+| **M3** | Account still active at month 12 | 6 units |
 
-**70% of monthly subscription revenue, recurring for the lifetime of the account.**
+Package schedule (CAD):
 
-Pricing is custom per deal, so your exact cut depends on the price you set. Illustrative examples:
+| Package (list monthly) | Unit value | M0 | M1 | M2 | M3 | Total |
+|------------------------|-----------|-----|-----|-----|-----|-------|
+| CA$200/mo (minimum) | CA$6.00 | CA$78 | CA$168 | CA$60 | CA$36 | **CA$342** |
+| CA$250/mo (starter) | CA$7.50 | CA$97.50 | CA$210 | CA$75 | CA$45 | **CA$427.50** |
+| CA$399/mo (middle) | CA$13.75 | CA$178.75 | CA$385 | CA$137.50 | CA$82.50 | **CA$783.75** |
+| CA$689/mo (higher) | CA$20.00 | CA$260 | CA$560 | CA$200 | CA$120 | **CA$1,140** |
 
-| If deal price is… | Your monthly cut | Annual (if retained 12mo) |
-|-------------------|-----------------|---------------------------|
-| CA$350/mo | CA$245 | CA$2,940 |
-| CA$600/mo | CA$420 | CA$5,040 |
-| CA$1,200/mo | CA$840 | CA$10,080 |
-| $350/mo (US) | $245 | $2,940 |
-| $600/mo (US) | $420 | $5,040 |
-| $1,200/mo (US) | $840 | $10,080 |
+Deals map to the nearest package by closed monthly price.
 
-Commission paid every month the account stays active. Churn = lost commission. **Retention is your real job after the close.**
+Adjustments (applied to M0 only):
 
-## Add-on upsell triggers
+- **Upsell** (closed above list): M0 increases by 50% of the difference.
+- **Discount** (closed below list): M0 decreases by 100% of the difference (M0 never goes below $0).
 
-| Signal from merchant | Add-on to propose | Your uplift |
-|---------------------|------------------|-------------|
-| Merchant has cameras, asks about foot traffic | Camera intelligence add-on | depends on custom price delta |
-| Opens a 2nd location | Multi-location add-on | depends on custom price delta |
-| Franchise / multi-unit owner | Multi-location add-on; often camera too | Often a significantly larger deal |
-| Technical buyer asks about API | API access add-on | depends on custom price delta |
+**Cancellation stops all future milestones immediately.** M1 is the largest milestone — an account that churns before month 4 pays you M0 only. **Retention is your real job after the close.**
 
-Natural upsell window: **month 2–3**, after they've seen value from the base product. Don't pitch camera intelligence on day one unless cameras came up in discovery.
+### Market status
+
+- **Canada: LIVE.** Milestones accrue automatically when your deal closes in the portal.
+- **US: schedule not yet ratified.** The payout path is built and switches on the moment US comp terms are signed off — until then, do not represent specific US commission amounts. Ask your region lead / admin for current status before quoting your own comp on US deals.
 
 ## When merchants ask "why is this expensive?"
 
 Never apologize for price. Reframe to ROI:
 
-> "If I show you CA$3,000/mo in revenue you're currently missing, is our monthly fee to capture that worth it? That's what our AI typically finds in week one."
+> "If I show you CA$3,000/mo in revenue you're currently missing, is our monthly fee to capture that worth it?"
 
 If they push harder, see `50-cheatsheets/objection-handlers.md`.
 
-## What's NOT included in the base product
-
-- Phone agent (separate product — **flat CA$1.50 per phone order**, no percentage of sales; ask if interested, route to product team)
-- Custom integration buildouts (API access add-on lets the merchant build their own; we don't custom-build for one merchant)
-- Hardware (cameras, edge devices) — merchant supplies their own; we recommend specific PoE models in `20-camera-integrations/`
-
 ---
 
-_Last updated: 2026-06-29_
-_Sourced from: docs/playbook/_status/phase-2-decisions.md + services/training_video_pipeline/lesson_content.json (lessons 1.3, 8.1, 8.3) + Phase 3 task spec_
+_Last updated: 2026-08-12_
+_Sourced from: src/billing/fee_terms.py (CANONICAL_FEE_TERMS + zero-per-order buckets) and src/services/commission_engine.py (One-Pager milestone schedule, migration 046)._

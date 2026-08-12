@@ -7,6 +7,8 @@ import { type Deal, type DealStage } from '@/lib/canada-sales-demo-data'
 import { usVerticalsByGroup, findUsVerticalByValue } from '@/data/usVerticals'
 import { usLeadsService } from '@/lib/us-leads-service'
 import { useSalesAuth } from '@/lib/sales-auth'
+import { getRegion } from '@/lib/regions'
+import { RegionHero } from '@/components/RegionHero'
 import { useTrainingLock } from '@/lib/training-progress'
 import { useToast } from '@/components/Toast'
 import { queueIfOffline, setupOfflineSync, getPendingCount } from '@/lib/offline-queue'
@@ -104,6 +106,7 @@ function ProgressBar({ currentStep }: { currentStep: number }) {
 
 export default function USPortalLeadsPage() {
   const { rep } = useSalesAuth()
+  const region = getRegion(rep?.region)
   const { toast } = useToast()
   const navigate = useNavigate()
   const { locked: trainingLocked } = useTrainingLock()
@@ -233,6 +236,9 @@ export default function USPortalLeadsPage() {
 
   return (
     <div className="space-y-5">
+      {/* Odyssey hero — region members only */}
+      {region && <RegionHero region={region} videoSrc="/regions/odyssey/leads-hero.mp4" />}
+
       {/* Header */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>

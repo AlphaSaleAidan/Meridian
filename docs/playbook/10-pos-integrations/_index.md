@@ -17,8 +17,9 @@ Quick lookup. Before promising anything to a merchant, **check the status column
 
 | POS | Status | Category | Doc |
 |-----|--------|----------|-----|
-| Square | **LIVE** | multi-vertical | [square.md](./square.md) |
-| Clover | **LIVE** (token-refresh bug pending fix) | multi-vertical | [clover.md](./clover.md) |
+| Square | **LIVE** (one-click OAuth connect) | multi-vertical | [square.md](./square.md) |
+| Clover | **LIVE** (one-click connect + phone-order injection into the POS) | multi-vertical | [clover.md](./clover.md) |
+| Stripe | **LIVE** (Stripe App — merchant installs from the Stripe marketplace) | multi-vertical / payments-led | — |
 | Toast | **LIVE** (webhooks shipping) | restaurant | [toast.md](./toast.md) |
 | Lightspeed Retail | WAVE 1 BUILDING | retail | [lightspeed-retail.md](./lightspeed-retail.md) |
 | Korona POS | WAVE 1 BUILDING | retail | [korona-pos.md](./korona-pos.md) |
@@ -111,5 +112,5 @@ Vendor has no API at all. If a merchant uses these, the answer is "CSV upload on
 
 ---
 
-_Last updated: 2026-05-31_
+_Last updated: 2026-08-12_
 _Sourced from: docs/playbook/_status/phase-2-decisions.md (Wave 1 + Wave 1.5 + Cannabis greenlight) + src/services/pos_connectors/registry.py (85 entries — 80 baseline + 5 Wave 1.5 adds) + docs/playbook/_status/pos-expansion-candidates.md (gap research)_

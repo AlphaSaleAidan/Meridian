@@ -1,6 +1,6 @@
 # Feature & Add-On Overview — Cheat Sheet
 
-Quick reference. Pricing is **custom per deal** — no published prices. Use "Schedule a Quote" framing with prospects.
+Quick reference. Pricing is **three published tiers** — US: Standard $250 / Premium $350 ($0.65/order) / Command $500 ($0.45/order); Canada: Standard CA$350 / Premium CA$500 (CA$0.75/order) / Command CA$700 (CA$0.60/order). Premium and Command can alternatively close as $0/order minutes plans (600 / 1,000 included minutes, $0.20/min overage). Quote from the table in `00-getting-started/03-pricing-commission.md`.
 
 ## What every merchant gets (base product)
 
@@ -85,16 +85,16 @@ _Requires camera intelligence add-on. Unlocked alongside it._
 
 ## Your commission
 
-**70% of monthly deal price, recurring.** Pricing is custom per deal — your cut scales with what you negotiate.
+**Package-based milestone schedule** — a lump sum at close (M0), then retention milestones at months 4 (M1), 9 (M2), and 12 (M3) of the account staying active. Deals map to the nearest package by closed monthly price.
 
-| If deal price is… | Your monthly cut | 12-month value |
-|-------------------|-----------------|----------------|
-| CA$350/mo | **CA$245** | CA$2,940 |
-| CA$600/mo | **CA$420** | CA$5,040 |
-| CA$1,200/mo | **CA$840** | CA$10,080 |
-| $350/mo (US) | **$245** | $2,940 |
-| $600/mo (US) | **$420** | $5,040 |
-| $1,200/mo (US) | **$840** | $10,080 |
+| Package (list monthly) | M0 at close | Full schedule total |
+|------------------------|-------------|---------------------|
+| CA$200/mo | CA$78 | **CA$342** |
+| CA$250/mo | CA$97.50 | **CA$427.50** |
+| CA$399/mo | CA$178.75 | **CA$783.75** |
+| CA$689/mo | CA$260 | **CA$1,140** |
+
+Canada is live; the US schedule is pending ratification — see `00-getting-started/03-pricing-commission.md` for the full table, upsell/discount adjustments, and payout timing.
 
 ## When to propose which add-ons
 
