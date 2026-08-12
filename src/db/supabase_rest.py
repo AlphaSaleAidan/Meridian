@@ -654,6 +654,52 @@ class SupabaseREST:
 
     # ─── Connection Management ────────────────────────────────
 
+    async def get_org_vertical(self, org_id: str) -> str | None:
+        """Best-effort read of a merchant's vertical for industry-template
+        selection. Delegates to get_org_metadata. Returns None if unresolved, so
+        the caller keeps the generic analyzer — never raises into analysis."""
+        meta = await self.get_org_metadata(org_id)
+        return meta.get("vertical")
+
+    async def get_org_metadata(self, org_id: str) -> dict:
+        """Best-effort merchant metadata for analysis: vertical, timezone,
+        province, currency. Reads the whole organizations row (US-era orgs) then
+        falls back to businesses (Canada entity split). Selects '*' so a column
+        that doesn't exist simply isn't in the row rather than failing the whole
+        query. Returns {} on any failure — callers keep their defaults; this
+        never raises into the analysis path."""
+        meta: dict = {}
+
+        def _harvest(row: dict) -> None:
+            # Tolerate the several column names these two tables use.
+            if not meta.get("vertical"):
+                meta["vertical"] = row.get("vertical") or row.get("business_type")
+            if not meta.get("timezone"):
+                meta["timezone"] = row.get("timezone") or row.get("tz")
+            if not meta.get("province"):
+                meta["province"] = row.get("province") or row.get("region") or row.get("state")
+            if not meta.get("currency"):
+                meta["currency"] = row.get("currency") or row.get("default_currency")
+            # country ('CA') is the most reliable Canada marker and the live
+            # schema has no currency column, so derive a CAD detection proxy when
+            # the merchant is Canadian and currency wasn't set explicitly.
+            country = (row.get("country") or "").strip().lower()
+            if not meta.get("currency") and country in ("ca", "can", "canada"):
+                meta["currency"] = "CAD"
+
+        for table, key in (("organizations", "id"), ("businesses", "org_id")):
+            if all(meta.get(k) for k in ("vertical", "timezone", "province", "currency")):
+                break
+            try:
+                rows = await self.select(
+                    table, columns="*", filters={key: f"eq.{org_id}"}, limit=1,
+                )
+                if rows:
+                    _harvest(rows[0])
+            except Exception:
+                logger.debug("get_org_metadata: %s lookup failed", table, exc_info=True)
+        return {k: v for k, v in meta.items() if v}
+
     async def get_pos_connection(self, org_id: str) -> dict | None:
         """Get the active POS connection for an org."""
         rows = await self.select(
