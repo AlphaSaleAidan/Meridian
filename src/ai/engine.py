@@ -255,9 +255,23 @@ class MeridianAI:
             result.errors.append(f"money_left: {str(e)}")
 
         # ── Phase 2b: Industry-Specific Overlay ──────────────
+        # DEFAULT OFF. The vertical templates read a FLAT metrics dict, but the
+        # analyzers above emit NESTED dicts (avg_ticket_cents lives under
+        # revenue["kpis"], not at top level) and ~half the metrics the templates
+        # want (membership_revenue_pct, food_cost_pct, units_per_transaction, …)
+        # are produced nowhere yet. With the wrong shape, a subset of guards
+        # written `if metric < threshold` fire on a missing value read as 0 and
+        # emit "$0.00 below benchmark" style artifacts to merchant portals.
+        # Enabling requires the data-contract fix (feed nested metrics) + making
+        # every threshold guard presence-require (`if metric and metric < …`).
+        # Until then the generic analyzer runs — exactly the pre-wiring behavior.
         try:
             from .industry_templates import get_industry_analyzer
-            industry = get_industry_analyzer(ctx.business_vertical, ctx.org_id)
+            from .industry_templates.base import GenericAnalyzer
+            if os.environ.get("INDUSTRY_TEMPLATES_ENABLED", "").lower() in ("1", "true"):
+                industry = get_industry_analyzer(ctx.business_vertical, ctx.org_id)
+            else:
+                industry = GenericAnalyzer(ctx.org_id)
             result.revenue_analysis["industry_overlay"] = industry.analyze_revenue(result.revenue_analysis)
             result.product_analysis["industry_overlay"] = industry.analyze_products(result.product_analysis)
             result.pattern_analysis["industry_overlay"] = industry.analyze_patterns(result.pattern_analysis)

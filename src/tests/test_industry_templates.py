@@ -53,3 +53,18 @@ def test_selects_specific_analyzer():
     a = get_industry_analyzer("ca-coffee", "org")
     assert a.vertical == "coffee_shop"
     assert not isinstance(a, GenericAnalyzer)
+
+
+def test_templates_fabricate_on_current_data_contract_so_stay_gated():
+    """WHY INDUSTRY_TEMPLATES_ENABLED defaults off (engine Phase 2b): the
+    templates read a FLAT metrics dict, but the analyzers emit NESTED dicts
+    (avg_ticket_cents lives under revenue["kpis"]), so a subset of guards read a
+    missing value as 0 and fabricate "$0.00 below benchmark" claims — even when a
+    real ticket exists. If someone fixes the data contract AND makes the guards
+    presence-require, update this test and flip the flag on."""
+    nested_real = {"kpis": {"avg_ticket_cents": 9800}}  # a real $98 ticket, nested
+    spa = get_industry_analyzer("spa", "org")
+    fabricated = spa.analyze_revenue(nested_real)["adjustments"]
+    assert any("$0.00" in a["detail"] for a in fabricated), "hazard should still exist"
+    # The default generic analyzer never fabricates — this is what prod runs.
+    assert GenericAnalyzer("org").analyze_revenue(nested_real)["adjustments"] == []
