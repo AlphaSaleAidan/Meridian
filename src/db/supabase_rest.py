@@ -680,6 +680,12 @@ class SupabaseREST:
                 meta["province"] = row.get("province") or row.get("region") or row.get("state")
             if not meta.get("currency"):
                 meta["currency"] = row.get("currency") or row.get("default_currency")
+            # country ('CA') is the most reliable Canada marker and the live
+            # schema has no currency column, so derive a CAD detection proxy when
+            # the merchant is Canadian and currency wasn't set explicitly.
+            country = (row.get("country") or "").strip().lower()
+            if not meta.get("currency") and country in ("ca", "can", "canada"):
+                meta["currency"] = "CAD"
 
         for table, key in (("organizations", "id"), ("businesses", "org_id")):
             if all(meta.get(k) for k in ("vertical", "timezone", "province", "currency")):
