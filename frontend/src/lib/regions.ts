@@ -15,8 +15,6 @@ export interface SalesRegion {
   id: string
   /** Display name shown as the Team-section title for region members. */
   name: string
-  /** Short descriptor under the region name. */
-  tagline: string
   /** false = the Leaderboard tab does not exist for this region's members. */
   showLeaderboard: boolean
   /** Two-tone theme, used ONLY inside the Team section for region members. */
@@ -34,7 +32,6 @@ export const REGIONS: Record<string, SalesRegion> = {
   odyssey: {
     id: 'odyssey',
     name: 'Odyssey Region',
-    tagline: 'Private territory · Cross-border roster (US + Canada)',
     showLeaderboard: false,
     // Aegean navy + antique gold — deliberately distinct from the core portal
     // teal so a region member always knows whose waters they are in.

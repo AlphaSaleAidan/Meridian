@@ -65,21 +65,13 @@ export function RegionBanner({ region, memberCount }: RegionBannerProps) {
             Isolated Territory
           </p>
           <h2 className="mt-0.5 text-lg font-bold leading-tight text-white">{region.name}</h2>
-          <p className="mt-0.5 text-xs text-white/55">{region.tagline}</p>
         </div>
-        <div className="flex items-center gap-2">
-          <span
-            className="inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] font-medium"
-            style={{ borderColor: accent + '33', color: accent, backgroundColor: accent + '0f' }}
-          >
-            {memberCount} {memberCount === 1 ? 'member' : 'members'}
-          </span>
-          {!region.showLeaderboard && (
-            <span className="inline-flex items-center rounded-full border border-white/15 bg-white/5 px-2.5 py-1 text-[10px] font-medium text-white/60">
-              Leaderboard off
-            </span>
-          )}
-        </div>
+        <span
+          className="inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] font-medium"
+          style={{ borderColor: accent + '33', color: accent, backgroundColor: accent + '0f' }}
+        >
+          {memberCount} {memberCount === 1 ? 'member' : 'members'}
+        </span>
       </div>
     </div>
   )
