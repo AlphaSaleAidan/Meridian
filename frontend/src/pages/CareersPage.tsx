@@ -216,8 +216,8 @@ export default function CareersPage() {
             </p>
             <h3 className="mt-1 text-lg font-semibold text-[#F5F5F7]">Odyssey Region</h3>
             <p className="mt-2 text-[13px] leading-relaxed text-white/60">
-              A dedicated cross-border territory spanning the US and Canada portals, with its own
-              roster and region lead. Select “Odyssey Region” in the form to apply directly to it.
+              A cross-border sales territory covering both the U.S. and Canada, with its own team
+              and regional lead. Select “Odyssey Region” in the application form below to apply.
             </p>
           </div>
         </div>
