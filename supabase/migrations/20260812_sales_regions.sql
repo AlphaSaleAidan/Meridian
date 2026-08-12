@@ -23,3 +23,7 @@ COMMENT ON COLUMN sales_reps.region IS
 
 CREATE INDEX IF NOT EXISTS idx_sales_reps_region
   ON sales_reps (region) WHERE region IS NOT NULL;
+
+-- Careers: applicants can request a region from the public careers form
+-- (Region dropdown, Odyssey only for now). Empty/NULL = core team.
+ALTER TABLE career_applications ADD COLUMN IF NOT EXISTS region TEXT;
