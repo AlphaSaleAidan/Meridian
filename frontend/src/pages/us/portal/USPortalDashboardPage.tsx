@@ -16,6 +16,8 @@ import {
   CheckCircle2,
 } from 'lucide-react'
 import { useSalesAuth } from '@/lib/sales-auth'
+import { getRegion } from '@/lib/regions'
+import { RegionHero } from '@/components/RegionHero'
 import {
   STAGE_CONFIG,
   STAGE_ORDER,
@@ -77,6 +79,7 @@ const MONTH1_MRR_GOAL = 2500
 
 export default function USPortalDashboardPage() {
   const { rep } = useSalesAuth()
+  const region = getRegion(rep?.region)
   const navigate = useNavigate()
   const [overview, setOverview] = useState<SalesOverview | null>(null)
   const [deals, setDeals] = useState<Deal[]>([])
@@ -156,6 +159,9 @@ export default function USPortalDashboardPage() {
 
   return (
     <div className="space-y-6">
+      {/* Odyssey hero — region members only */}
+      {region && <RegionHero region={region} videoSrc="/regions/odyssey/dashboard-hero.mp4" />}
+
       {/* ── Greeting ── */}
       <div>
         <h1 className="text-xl font-bold text-white">
