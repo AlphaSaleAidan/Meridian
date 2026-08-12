@@ -38,6 +38,7 @@ interface Props {
     disposition: Disposition,
     opts?: { callback?: { due_at: string; note?: string }; advance_stage?: string },
   ) => void
+  onBook: () => void
   onDialNow: () => void
   onTogglePause: () => void
 }
@@ -59,7 +60,7 @@ function defaultCallbackTime(): string {
 
 export function WrapUpModal({
   open, needsDisposition, entry, callSeconds, wrapRemaining, wrapTotal, paused,
-  lastCompleted, notes, onNotes, onSubmit, onDialNow, onTogglePause,
+  lastCompleted, notes, onNotes, onSubmit, onBook, onDialNow, onTogglePause,
 }: Props) {
   const reduceMotion = useReducedMotion()
   const dialogRef = useRef<HTMLDivElement>(null)
@@ -144,8 +145,8 @@ export function WrapUpModal({
                   {/* Hero outcomes — the wins get the weight */}
                   <div className="grid grid-cols-2 gap-2">
                     <HeroTile
-                      icon={Sparkles} title="Meeting booked" sub="Advances the lead"
-                      onClick={() => submit('meeting_booked', { advance_stage: 'appointment_set' })}
+                      icon={Sparkles} title="Meeting booked" sub="Pick a slot →"
+                      onClick={onBook}
                       filled
                     />
                     <HeroTile

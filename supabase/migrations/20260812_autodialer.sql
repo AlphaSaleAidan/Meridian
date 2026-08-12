@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS dialer_calls (
     session_id       uuid REFERENCES dialer_sessions(id),
     rep_id           uuid NOT NULL REFERENCES sales_reps(id),
     lead_id          uuid,
-    lead_table       text CHECK (lead_table IN ('canada_leads', 'us_leads')),
+    lead_table       text CHECK (lead_table IN ('canada_leads', 'us_leads', 'canada_phone_leads')),
     business_name    text NOT NULL DEFAULT '',
     contact_name     text NOT NULL DEFAULT '',
     phone_e164       text NOT NULL,

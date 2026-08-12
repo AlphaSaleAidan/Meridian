@@ -11,7 +11,7 @@ type Method = 'GET' | 'POST' | 'PATCH' | 'DELETE'
 interface Opts {
   params?: Record<string, string | number | boolean | undefined>
   method?: Method
-  body?: Record<string, unknown>
+  body?: object   // any JSON-serializable object (typed input models included)
 }
 
 async function req<T>(path: string, opts?: Opts): Promise<T> {
@@ -97,19 +97,39 @@ export interface GateInfo {
   country: string
 }
 
-export interface QueueLead extends GateInfo {
-  kind: 'lead'
+export type PosSystem =
+  | 'square' | 'clover' | 'toast' | 'lightspeed' | 'shopify' | 'none' | 'unknown' | string
+export type PhoneLeadStatus =
+  | 'new' | 'attempting' | 'contacted' | 'callback' | 'booked'
+  | 'converted' | 'not_interested' | 'bad_number' | 'dnc' | 'dead'
+
+export interface PhoneLead {
   id: string
   business_name: string
   contact_name: string
-  contact_phone: string
+  phone_e164: string
   contact_email: string
-  vertical: string
-  stage: string
   city: string
   province: string
+  vertical: string
+  pos_system: PosSystem
+  pos_source: string
+  website: string
+  est_monthly_value: number   // cents
   notes: string
-  recently_attempted: boolean
+  status: PhoneLeadStatus
+  attempts: number
+  last_attempt_at: string | null
+  last_disposition: Disposition | null
+  next_action_at: string | null
+  rep_id: string | null
+  source: string
+  converted_lead_id: string | null
+  created_at: string
+}
+
+export interface QueueLead extends GateInfo, PhoneLead {
+  kind: 'lead'
 }
 
 export interface QueueCallback extends GateInfo {
@@ -229,6 +249,68 @@ export const dialerApi = {
       method: 'PATCH', body: { status },
     }),
   webrtcToken: () => req<WebrtcToken>('/api/dialer/webrtc-token', { method: 'POST', body: {} }),
+
+  // ── Phone-lead pool: capture / recapture / promote ──
+  createLead: (body: PhoneLeadInput) =>
+    req<{ lead: PhoneLead }>('/api/dialer/phone-leads', { method: 'POST', body }),
+  importLeads: (source: string, leads: PhoneLeadInput[]) =>
+    req<{ imported: number; skipped_duplicate: number; skipped_invalid: number }>(
+      '/api/dialer/phone-leads/import', { method: 'POST', body: { source, leads } }),
+  listLeads: (status?: string) =>
+    req<{ leads: PhoneLead[] }>('/api/dialer/phone-leads', { params: { status } }),
+  updateLead: (id: string, body: Partial<PhoneLeadInput> & { status?: string }) =>
+    req<{ lead: PhoneLead }>(`/api/dialer/phone-leads/${id}`, { method: 'PATCH', body }),
+  promoteLead: (id: string) =>
+    req<{ pipeline_lead: { id: string }; already_converted: boolean }>(
+      `/api/dialer/phone-leads/${id}/promote`, { method: 'POST', body: {} }),
+
+  // ── Booking calendar ──
+  book: (body: {
+    phone_lead_id: string; scheduled_at: string; duration_min?: number
+    title?: string; notes?: string
+  }) =>
+    req<{ appointment: Appointment; pipeline_lead_id: string }>(
+      '/api/dialer/appointments', { method: 'POST', body }),
+  appointments: (days = 30) =>
+    req<{ appointments: Appointment[] }>('/api/dialer/appointments', { params: { days } }),
+  patchAppointment: (id: string, status: AppointmentStatus) =>
+    req<{ appointment: Appointment }>(`/api/dialer/appointments/${id}`, {
+      method: 'PATCH', body: { status },
+    }),
+}
+
+export interface PhoneLeadInput {
+  business_name?: string
+  contact_name?: string
+  phone: string
+  contact_email?: string
+  city?: string
+  province?: string
+  vertical?: string
+  pos_system?: PosSystem
+  website?: string
+  est_monthly_value?: number  // cents
+  notes?: string
+  source?: string
+}
+
+export type AppointmentStatus = 'booked' | 'completed' | 'cancelled' | 'no_show'
+
+export interface Appointment {
+  id: string
+  phone_lead_id: string | null
+  rep_id: string
+  rep_name?: string
+  lead_id: string | null
+  business_name: string
+  contact_name: string
+  phone_e164: string
+  scheduled_at: string
+  duration_min: number
+  timezone: string
+  title: string
+  notes: string
+  status: AppointmentStatus
 }
 
 // ─── Admin API (admin-or-better; 403 otherwise) ───────────
@@ -251,6 +333,8 @@ export const dialerAdminApi = {
     req<{ ok: boolean }>(`/api/dialer/admin/dnc/${encodeURIComponent(phone)}`, {
       method: 'DELETE',
     }),
+  appointments: (days = 30) =>
+    req<{ appointments: Appointment[] }>('/api/dialer/admin/appointments', { params: { days } }),
 }
 
 // ─── Small shared formatters ──────────────────────────────
@@ -260,6 +344,21 @@ export function fmtDuration(totalSeconds: number | null | undefined): string {
   const h = Math.floor(m / 60)
   if (h > 0) return `${h}h ${m % 60}m`
   return `${m}:${String(s % 60).padStart(2, '0')}`
+}
+
+export function fmtCents(cents: number | null | undefined): string {
+  const dollars = Math.round((cents || 0) / 100)
+  return dollars > 0 ? `$${dollars.toLocaleString()}/mo` : '—'
+}
+
+export const POS_LABELS: Record<string, string> = {
+  square: 'Square', clover: 'Clover', toast: 'Toast', lightspeed: 'Lightspeed',
+  shopify: 'Shopify', none: 'No POS', unknown: 'POS unknown',
+}
+
+export function posLabel(pos: string | null | undefined): string {
+  if (!pos) return 'POS unknown'
+  return POS_LABELS[pos] ?? pos
 }
 
 export const DISPOSITION_LABELS: Record<Disposition, string> = {

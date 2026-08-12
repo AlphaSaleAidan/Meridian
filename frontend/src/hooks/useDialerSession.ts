@@ -243,7 +243,10 @@ export function useDialerSession(market: DialerMarket) {
       ])
       sessionRef.current = sess
       setSession(sess)
-      const entries: QueueEntry[] = [...queue.callbacks, ...queue.leads.filter(l => !l.recently_attempted)]
+      // Recapture ordering is server-side now (next_action_at); the queue is
+      // already the ready-to-dial list. Callbacks stay concatenated (empty from
+      // the phone-lead queue, but harmless if a source ever supplies them).
+      const entries: QueueEntry[] = [...queue.callbacks, ...queue.leads]
       workingQueue.current = entries
       pointer.current = 0
       setLog([])
@@ -282,6 +285,22 @@ export function useDialerSession(market: DialerMarket) {
     dialNextRef.current()
   }, [])
 
+  /** Book a demo for the current lead (promotes + schedules), then advance. */
+  const bookAndAdvance = useCallback(async (
+    spec: { scheduled_at: string; duration_min: number; title: string; notes: string },
+  ) => {
+    const entry = entryRef.current
+    if (!entry) return
+    await dialerApi.book({ phone_lead_id: entry.id, ...spec })
+    await submitDispositionRef.current('meeting_booked')
+  }, [])
+
+  /** One-click "Send to pipeline" for the current lead (no booking). */
+  const sendToPipeline = useCallback(async () => {
+    const entry = entryRef.current
+    if (entry) await dialerApi.promoteLead(entry.id)
+  }, [])
+
   const setMuted = useCallback((muted: boolean) => {
     softphoneRef.current?.setMuted(muted)
   }, [])
@@ -303,6 +322,8 @@ export function useDialerSession(market: DialerMarket) {
       setError(err instanceof Error ? err.message : 'Could not save the disposition')
     }
   }, [notes, beginWrapup, invalidateQueue])
+  const submitDispositionRef = useRef(submitDisposition)
+  submitDispositionRef.current = submitDisposition
 
   const stop = useCallback(async () => {
     clearTimers()
@@ -333,6 +354,7 @@ export function useDialerSession(market: DialerMarket) {
     queueError: queueQuery.error,
     remaining: Math.max(0, remaining),
     start, stop, togglePause, hangup, setMuted, submitDisposition, dialNow,
+    bookAndAdvance, sendToPipeline,
     skip: hangup, // during dialing/ringing a hangup IS the skip
   }
 }

@@ -108,6 +108,42 @@ Pages + wiring:
 10. [ ] cloudflared quick tunnel → preview URL to Aidan
 11. [ ] Commit(s) on `feat/rep-autodialer`, push branch, open PR — **no merge, no push to main**
 
+## 7b. Phone-lead pool + capture/recapture + booking (2026-08-12, added)
+
+Doctrine: the dialer works a DEDICATED pool, never `canada_leads` (the live
+pipeline). Cold prospects with raw numbers in `canada_leads` would pollute every
+stage count and trip the RLS/regression tripwires — so a separate table + a single
+deliberate promote is the only bridge.
+
+- **`canada_phone_leads`** (migration `20260812_canada_phone_leads.sql`, APPLIED to
+  live 08-12): the dialing pool. Carries enrichment — `pos_system` ("has Square/
+  Clover/no POS"), `vertical`, `est_monthly_value`, `website` — surfaced on every
+  call card and queue row. Lifecycle `status` (new→attempting→contacted→callback→
+  booked→converted / not_interested / bad_number / dnc / dead), `attempts`,
+  `last_disposition`, and `next_action_at` (the recapture clock).
+- **Capture**: `POST /api/dialer/phone-leads` (one) + `/import` (bulk paste; de-dupes
+  against the rep's pool, skips invalid). UI: "Add leads" drawer (add-one form +
+  paste-a-list). This is how "the numbers are already there" — reps load a list once.
+- **Recapture** (fully automatic): each disposition updates the pool row — no_answer
+  → +4h, busy → +2h, voicemail/interested/other → +24h, callback → the callback time,
+  dead/not-interested/bad-number/dnc → out. The queue (`GET /queue`) only returns rows
+  whose `next_action_at` is due, ordered most-overdue first. Worked-but-unconverted
+  leads resurface on their own.
+- **Booking calendar** (`dialer_appointments`): "Meeting booked" opens a slot picker
+  (quick-slots + datetime + duration). `POST /api/dialer/appointments` books it AND
+  promotes in the same click. Calendar/agenda view in the dialer (Dialer|Calendar
+  toggle) + admin Console "Calendar" tab; mark done/no-show/cancel.
+- **One-click "Send to pipeline"** (`POST /phone-leads/{id}/promote`): the ONLY write
+  into `canada_leads` — creates a pipeline row (stage `appointment_set`, phone,
+  vertical, value from cents, `source: auto-dialer:<batch>`, POS in notes), links
+  `converted_lead_id`, marks the pool row converted. On the contact card, and implicit
+  in every booking. So the pipeline only ever receives qualified/booked leads.
+- Dialer telemetry (sessions/calls) still runs in the `DIALER_DEV_STORE` for previews;
+  the durable pool/appointments/promote always hit real Supabase.
+- E2E-verified 08-12 through the UI: import → enriched queue → dial → enriched card →
+  Meeting booked → slot picker → book → appointment on calendar + phone lead booked +
+  clean promoted `canada_leads` row; all test data deleted.
+
 ## 8. Post-approval runbook (not done in this PR)
 
 - Apply `20260812_autodialer.sql` to live Supabase (human step, with snapshot).

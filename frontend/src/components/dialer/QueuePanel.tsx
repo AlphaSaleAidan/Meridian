@@ -1,8 +1,9 @@
-// Upcoming work: due callbacks pinned on top, then the rep's callable leads.
-// Every entry carries the backend's dial-time gate annotation so the rep can
-// see WHY something is skipped (DNC / outside window) before it's ever dialed.
-import { CalendarClock, PhoneOff, Clock } from 'lucide-react'
-import type { DialerQueue, QueueCallback, QueueLead } from '@/lib/dialer-api'
+// The rep's ready-to-dial pool. Each row shows the compliance gate state
+// (callable / DNC / outside-window) and the "has ___ POS" enrichment, so the
+// rep sees who's next and why before dialing. Recapture ordering is server-side
+// (next_action_at) — this list is already the ready queue.
+import { PhoneOff, Clock, CreditCard } from 'lucide-react'
+import { fmtCents, posLabel, type DialerQueue, type QueueLead } from '@/lib/dialer-api'
 import type { QueueEntry } from '@/hooks/useDialerSession'
 
 interface Props {
@@ -13,40 +14,22 @@ interface Props {
 
 export function QueuePanel({ queue, currentEntry, dialedIds }: Props) {
   if (!queue) return null
-  const callbacks = queue.callbacks
   const leads = queue.leads
 
   return (
     <div className="bg-pm-canada-surface border border-pm-canada-border rounded-xl overflow-hidden">
       <div className="px-4 py-3 border-b border-pm-canada-border flex items-baseline justify-between">
         <h2 className="text-sm font-semibold text-white">Call queue</h2>
-        <span className="text-2xs text-pm-canada-text-faint">
-          {callbacks.length + leads.length} in list
-        </span>
+        <span className="text-2xs text-pm-canada-text-faint">{leads.length} ready</span>
       </div>
 
       <div className="max-h-[560px] overflow-y-auto divide-y divide-pm-canada-border/60">
-        {callbacks.map(cb => (
-          <Row
-            key={`cb-${cb.id}`}
-            entry={cb}
-            active={currentEntry?.id === cb.id}
-            done={dialedIds.has(cb.id)}
-            sub={<span className="inline-flex items-center gap-1 text-pm-amber-gold"><CalendarClock size={11} />Callback {new Date(cb.due_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>}
-          />
-        ))}
         {leads.map(ld => (
-          <Row
-            key={ld.id}
-            entry={ld}
-            active={currentEntry?.id === ld.id}
-            done={dialedIds.has(ld.id)}
-            sub={<span className="text-pm-canada-text-faint">{[ld.stage.replace(/_/g, ' '), ld.city].filter(Boolean).join(' · ')}</span>}
-          />
+          <Row key={ld.id} entry={ld} active={currentEntry?.id === ld.id} done={dialedIds.has(ld.id)} />
         ))}
-        {callbacks.length + leads.length === 0 && (
+        {leads.length === 0 && (
           <div className="px-4 py-10 text-center text-sm text-pm-canada-text-muted">
-            No callable leads assigned to you yet.
+            No leads ready to dial. Import a list or add one to get started.
           </div>
         )}
       </div>
@@ -54,18 +37,19 @@ export function QueuePanel({ queue, currentEntry, dialedIds }: Props) {
   )
 }
 
-function Row({ entry, active, done, sub }: {
-  entry: QueueLead | QueueCallback
-  active: boolean
-  done: boolean
-  sub: React.ReactNode
-}) {
+function Row({ entry, active, done }: { entry: QueueLead; active: boolean; done: boolean }) {
   return (
     <div className={`px-4 py-2.5 flex items-center gap-3 ${active ? 'bg-pm-accent/8 border-l-2 border-l-pm-accent' : ''} ${done && !active ? 'opacity-40' : ''}`}>
       <GateDot entry={entry} />
       <div className="min-w-0 flex-1">
         <p className="text-sm text-white truncate">{entry.business_name || entry.contact_name || entry.phone_e164}</p>
-        <p className="text-2xs truncate">{sub}</p>
+        <p className="text-2xs truncate flex items-center gap-1.5 text-pm-canada-text-faint">
+          <span className="inline-flex items-center gap-0.5">
+            <CreditCard size={10} />{posLabel(entry.pos_system)}
+          </span>
+          {entry.est_monthly_value > 0 && <span>· {fmtCents(entry.est_monthly_value)}</span>}
+          {entry.city && <span>· {entry.city}</span>}
+        </p>
       </div>
       {entry.local_time && (
         <span className="text-2xs text-pm-canada-text-faint tabular-nums shrink-0">
@@ -76,7 +60,7 @@ function Row({ entry, active, done, sub }: {
   )
 }
 
-function GateDot({ entry }: { entry: QueueLead | QueueCallback }) {
+function GateDot({ entry }: { entry: QueueLead }) {
   if (entry.on_dnc) {
     return <PhoneOff size={13} className="text-red-400 shrink-0" aria-label="On do-not-call list" />
   }

@@ -46,6 +46,9 @@ SENSITIVE_TABLES = {
     # SR auto dialer (20260812_autodialer.sql) — rep/lead PII: scoped authenticated
     # SELECT only (realtime), service_role writes; dialer_dnc backend-only.
     "dialer_sessions", "dialer_calls", "dialer_callbacks", "dialer_dnc",
+    # Phone-lead dialing pool + booking calendar (20260812_canada_phone_leads.sql):
+    # rep/lead PII, scoped authenticated SELECT (realtime), service_role writes.
+    "canada_phone_leads", "dialer_appointments",
 }
 
 # The only sensitive tables where an `authenticated USING(true)` read policy is

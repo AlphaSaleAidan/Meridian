@@ -22,12 +22,13 @@ import time
 from datetime import datetime, timedelta, timezone
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from .. import hierarchy
 from ..auth import require_jwt
 from ...services import dialer_compliance as compliance
+from ...services import phone_leads_store
 from ...services.dialer_store import dev_store_active, get_store
 from ...services.phone_safety import normalize_e164
 
@@ -35,19 +36,27 @@ logger = logging.getLogger("meridian.api.dialer")
 
 router = APIRouter(prefix="/api/dialer", tags=["dialer"])
 
-# Stages a lead can be power-dialed in — exclusion list so both markets'
-# vocabularies (canada_leads legacy+portal stages, us_leads) stay covered.
-# Deliberately narrow: onboarding-stage customers (walkthrough/checkout/
-# pos_connected) are legitimate follow-up calls; only closed pipelines are out.
-_UNDIALABLE_STAGES = {"closed_won", "closed_lost"}
-_LEAD_TABLES = {"canada": "canada_leads", "us": "us_leads"}
-_LEAD_COLS = ("id,business_name,contact_name,contact_phone,contact_email,"
-              "vertical,stage,city,province,notes,rep_id,updated_at")
-_ATTEMPT_COOLDOWN_HOURS = 4
+# The dialer works the canada_phone_leads pool (see routes/dialer_leads.py).
+# A call's lead_id points at a canada_phone_leads row; dispositions update that
+# pool row (recapture), never canada_leads.
+_LEAD_TABLES = {"canada": "canada_phone_leads", "us": "canada_phone_leads"}
 _DISPOSITIONS = {"meeting_booked", "interested", "callback", "left_voicemail",
                  "no_answer", "busy", "bad_number", "not_interested", "dnc", "other"}
-# Stages a disposition may advance a lead to (rep's own lead only).
-_ADVANCE_STAGES = {"contacted", "appointment_set", "demo_scheduled"}
+
+# Disposition -> (pool status, recapture delay in hours or None to hold out).
+# None delay = clear next_action_at (lead leaves the active queue).
+_RECAPTURE = {
+    "no_answer": ("attempting", 4),
+    "busy": ("attempting", 2),
+    "left_voicemail": ("attempting", 24),
+    "interested": ("contacted", 24),
+    "other": ("attempting", 24),
+    "callback": ("callback", None),          # next_action_at set to the callback time
+    "meeting_booked": ("booked", None),
+    "not_interested": ("not_interested", None),
+    "bad_number": ("bad_number", None),
+    "dnc": ("dnc", None),
+}
 
 
 class SessionStart(BaseModel):
@@ -99,95 +108,8 @@ async def _rep_scope(user: dict) -> hierarchy.RepScope:
     return scope
 
 
-def _user_token(request: Request) -> str:
-    auth_header = request.headers.get("authorization", "")
-    return auth_header.removeprefix("Bearer ").strip() if auth_header.startswith("Bearer ") else ""
-
-
-def _anon_key() -> str:
-    return (os.environ.get("SUPABASE_ANON_KEY", "")
-            or os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
-            or os.environ.get("SUPABASE_SERVICE_KEY", ""))
-
-
-async def _fetch_own_leads(request: Request, market: str, rep_id: str) -> list[dict]:
-    """Rep's leads via PostgREST WITH THE CALLER'S JWT (RLS plane enforced)."""
-    supabase_url = os.environ.get("SUPABASE_URL", "")
-    token = _user_token(request)
-    if not supabase_url or not token:
-        return []
-    table = _LEAD_TABLES[market]
-    headers = {"Authorization": f"Bearer {token}", "apikey": _anon_key()}
-    params = {
-        "select": _LEAD_COLS,
-        "rep_id": f"eq.{rep_id}",
-        "contact_phone": "neq.",
-        "order": "updated_at.desc",
-        "limit": "150",
-    }
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(f"{supabase_url}/rest/v1/{table}",
-                                    headers=headers, params=params)
-            if resp.status_code == 200:
-                return resp.json()
-            logger.warning("dialer queue lead fetch failed: %s %s",
-                           resp.status_code, resp.text[:200])
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("dialer queue lead fetch error: %s", exc)
-    return []
-
-
-@router.get("/queue")
-async def get_queue(request: Request, market: str = Query(pattern="^(canada|us)$"),
-                    user: dict = Depends(require_jwt)):
-    """Due callbacks first, then the rep's callable leads. Every entry is
-    annotated with the dial-time gate result so the UI can show why a lead is
-    skipped (DNC / outside window) before the rep ever hits Dial."""
-    scope = await _rep_scope(user)
-    store = get_store()
-    now = datetime.now(timezone.utc)
-
-    leads = await _fetch_own_leads(request, market, scope.rep_id)
-    leads = [ld for ld in leads if (ld.get("stage") or "") not in _UNDIALABLE_STAGES]
-
-    cooldown_since = (now - timedelta(hours=_ATTEMPT_COOLDOWN_HOURS)).isoformat()
-    attempted = await store.last_attempts(scope.rep_id, cooldown_since)
-
-    callbacks = await store.list_callbacks(rep_ids=[scope.rep_id], status="pending")
-    due = [cb for cb in callbacks if cb["due_at"] <= (now + timedelta(minutes=15)).isoformat()]
-
-    phones = ([normalize_e164(cb["phone_e164"]) for cb in due]
-              + [normalize_e164(ld.get("contact_phone") or "") for ld in leads])
-    dnc = await store.dnc_filter([p for p in phones if p])
-
-    def _annotate(phone: str) -> dict:
-        norm = normalize_e164(phone)
-        check = compliance.check_calling_window(norm)
-        return {
-            "phone_e164": norm,
-            "on_dnc": norm in dnc,
-            "callable_now": bool(norm) and norm not in dnc and check.allowed,
-            "gate_reason": "dnc" if norm in dnc else check.reason,
-            "local_time": check.local_time,
-            "window_label": check.window_label,
-            "country": check.country,
-        }
-
-    queue_callbacks = [{**cb, "kind": "callback", **_annotate(cb["phone_e164"])} for cb in due]
-    queue_leads = []
-    for ld in leads:
-        entry = {"kind": "lead", **ld, **_annotate(ld.get("contact_phone") or "")}
-        entry["recently_attempted"] = ld.get("id") in attempted
-        queue_leads.append(entry)
-    # Cooled-down leads sink to the back but stay visible.
-    queue_leads.sort(key=lambda e: e["recently_attempted"])
-
-    return {
-        "callbacks": queue_callbacks,
-        "leads": queue_leads,
-        "dev_store": dev_store_active(),
-    }
+# NOTE: GET /api/dialer/queue now lives in routes/dialer_leads.py — it reads the
+# canada_phone_leads dialing pool (with enrichment + recapture), NOT canada_leads.
 
 
 @router.get("/sessions/current")
@@ -310,30 +232,33 @@ async def patch_call(call_id: str, body: CallPatch, user: dict = Depends(require
     return {"call": await store.update_call(call_id, fields)}
 
 
-async def _advance_lead_stage(call: dict, rep_id: str, stage: str) -> bool:
-    """Service-role lead-stage advance, guarded to the caller's own lead row."""
-    supabase_url = os.environ.get("SUPABASE_URL", "")
-    key = (os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
-           or os.environ.get("SUPABASE_SERVICE_KEY", ""))
-    if not supabase_url or not key or not call.get("lead_id") or not call.get("lead_table"):
-        return False
-    # Prefer=representation so a guard miss (0 rows matched — e.g. a crafted
-    # lead_id owned by another rep) reports False instead of a silent "success"
-    # (PostgREST returns 2xx for zero-row updates; caught in the 08-12 E2E run).
-    headers = {"Authorization": f"Bearer {key}", "apikey": key,
-               "Prefer": "return=representation"}
-    try:
-        async with httpx.AsyncClient(timeout=8.0) as client:
-            resp = await client.patch(
-                f"{supabase_url}/rest/v1/{call['lead_table']}",
-                headers=headers,
-                params={"id": f"eq.{call['lead_id']}", "rep_id": f"eq.{rep_id}"},
-                json={"stage": stage, "updated_at": datetime.now(timezone.utc).isoformat()},
-            )
-        return resp.status_code == 200 and bool(resp.json())
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("dialer stage advance failed: %s", exc)
-        return False
+async def _recapture_phone_lead(call: dict, rep_id: str, disposition: str,
+                                callback_due: str | None) -> None:
+    """Update the canada_phone_leads pool row after a call — the recapture
+    engine. Sets status + attempts + next_action_at so worked-but-unconverted
+    leads re-surface at the right time (or leave the queue). Guarded to the
+    caller's own (or shared) pool row inside phone_leads_store.update."""
+    lead_id = call.get("lead_id")
+    if not lead_id or call.get("lead_table") != "canada_phone_leads":
+        return
+    status, delay_h = _RECAPTURE.get(disposition, ("attempting", 24))
+    fields: dict = {
+        "status": status,
+        "last_disposition": disposition,
+        "last_attempt_at": datetime.now(timezone.utc).isoformat(),
+    }
+    if disposition == "callback" and callback_due:
+        fields["next_action_at"] = callback_due
+    elif delay_h is not None:
+        fields["next_action_at"] = (
+            datetime.now(timezone.utc) + timedelta(hours=delay_h)).isoformat()
+    else:
+        fields["next_action_at"] = None
+    # attempts++ (real attempt only — blocked calls never reach disposition).
+    lead = await phone_leads_store.get(lead_id)
+    if lead:
+        fields["attempts"] = (lead.get("attempts") or 0) + 1
+        await phone_leads_store.update(lead_id, fields, rep_guard=rep_id)
 
 
 @router.post("/calls/{call_id}/disposition")
@@ -356,11 +281,11 @@ async def disposition_call(call_id: str, body: DispositionBody,
 
     side_effects: dict = {}
     if body.disposition == "dnc":
-        market = "canada" if call.get("lead_table") == "canada_leads" else "us"
-        await store.dnc_add(call["phone_e164"], market,
+        await store.dnc_add(call["phone_e164"], "canada",
                             f"rep disposition on call {call_id}", scope.rep_id)
         side_effects["dnc_added"] = True
-    if body.disposition == "callback" and body.callback:
+    callback_due = body.callback.due_at if (body.disposition == "callback" and body.callback) else None
+    if callback_due:
         check = compliance.check_calling_window(call["phone_e164"])
         cb = await store.create_callback({
             "rep_id": scope.rep_id,
@@ -370,16 +295,15 @@ async def disposition_call(call_id: str, body: DispositionBody,
             "phone_e164": call["phone_e164"],
             "business_name": call.get("business_name") or "",
             "contact_name": call.get("contact_name") or "",
-            "due_at": body.callback.due_at,
+            "due_at": callback_due,
             "timezone": check.tz,
             "note": body.callback.note[:1000],
         })
         side_effects["callback"] = cb
-    if body.advance_stage:
-        if body.advance_stage not in _ADVANCE_STAGES:
-            raise HTTPException(400, f"Stage '{body.advance_stage}' cannot be set from the dialer")
-        side_effects["stage_advanced"] = await _advance_lead_stage(
-            call, scope.rep_id, body.advance_stage)
+
+    # Recapture: update the phone-lead pool row (status / attempts / next dial).
+    await _recapture_phone_lead(call, scope.rep_id, body.disposition, callback_due)
+    side_effects["recaptured"] = True
 
     return {"call": updated, **side_effects}
 

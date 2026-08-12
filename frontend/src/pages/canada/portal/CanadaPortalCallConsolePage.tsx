@@ -3,18 +3,20 @@
 // Nav hiding is not a guard: this page re-checks the tier itself and the
 // backend enforces require_org_admin on every /api/dialer/admin endpoint.
 import { useState } from 'react'
-import { Activity, BarChart3, CalendarClock, Headphones, ListChecks, PhoneOff } from 'lucide-react'
+import { Activity, BarChart3, CalendarClock, CalendarDays, Headphones, ListChecks, PhoneOff } from 'lucide-react'
 import { repTier, useSalesAuth } from '@/lib/sales-auth'
 import { isCanadaAdmin } from '@/lib/canada-admins'
 import { AdminLiveBoard } from '@/components/dialer/AdminLiveBoard'
 import { AdminCallsTable } from '@/components/dialer/AdminCallsTable'
 import { AdminAnalytics, AdminCallbacks, AdminDncPanel } from '@/components/dialer/AdminPanels'
+import { AppointmentsCalendar } from '@/components/dialer/AppointmentsCalendar'
 
-type Tab = 'live' | 'calls' | 'callbacks' | 'dnc' | 'analytics'
+type Tab = 'live' | 'calls' | 'calendar' | 'callbacks' | 'dnc' | 'analytics'
 
 const TABS: { id: Tab; label: string; icon: typeof Activity }[] = [
   { id: 'live', label: 'Live board', icon: Activity },
   { id: 'calls', label: 'Calls', icon: ListChecks },
+  { id: 'calendar', label: 'Calendar', icon: CalendarDays },
   { id: 'callbacks', label: 'Callbacks', icon: CalendarClock },
   { id: 'dnc', label: 'DNC', icon: PhoneOff },
   { id: 'analytics', label: 'Analytics', icon: BarChart3 },
@@ -68,6 +70,7 @@ export default function CanadaPortalCallConsolePage() {
 
       {tab === 'live' && <AdminLiveBoard />}
       {tab === 'calls' && <AdminCallsTable />}
+      {tab === 'calendar' && <AppointmentsCalendar admin />}
       {tab === 'callbacks' && <AdminCallbacks />}
       {tab === 'dnc' && <AdminDncPanel />}
       {tab === 'analytics' && <AdminAnalytics />}
