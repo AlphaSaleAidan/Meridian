@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Send, Briefcase, TrendingUp, Users, CheckCircle2 } from 'lucide-react'
+import { ArrowLeft, Send, Briefcase, TrendingUp, Users, CheckCircle2, MapPin } from 'lucide-react'
 import SEO from '@/components/SEO'
 import MeridianLogo, { MeridianEmblem } from '@/components/MeridianLogo'
 import GrainOverlay from '@/components/landing/GrainOverlay'
@@ -48,6 +48,7 @@ export default function CareersPage() {
     email: '',
     phone: '',
     position: '',
+    region: '',
     experience: '',
     message: '',
   })
@@ -70,6 +71,7 @@ export default function CareersPage() {
           email: formData.email,
           phone: formData.phone,
           position: formData.position,
+          region: formData.region,
           experience: formData.experience,
           motivation: formData.message,
         }),
@@ -190,6 +192,37 @@ export default function CareersPage() {
         </div>
       </section>
 
+      {/* REGIONS */}
+      <section className="pb-16">
+        <div className="max-w-5xl mx-auto px-6">
+          <h2 className="text-xl font-semibold text-[#F5F5F7] mb-2 flex items-center gap-2">
+            <MapPin size={20} className="text-[#1A8FD6]" />
+            Regions
+          </h2>
+          <p className="text-[#A1A1A8] text-[13px] leading-relaxed mb-6 max-w-2xl">
+            Some Meridian teams operate as regions — dedicated territories with their own roster and
+            leadership. Pick a region in the application form below if you want to join one, or leave
+            it on the core team.
+          </p>
+          <div
+            className="rounded-xl border p-6 max-w-2xl"
+            style={{
+              borderColor: '#C9A24B3a',
+              background: 'linear-gradient(120deg, #0B1D33 0%, #13314F 62%, #0B1D33 100%)',
+            }}
+          >
+            <p className="text-[10px] font-semibold uppercase tracking-[0.28em]" style={{ color: '#C9A24B' }}>
+              Now Recruiting
+            </p>
+            <h3 className="mt-1 text-lg font-semibold text-[#F5F5F7]">Odyssey Region</h3>
+            <p className="mt-2 text-[13px] leading-relaxed text-white/60">
+              A dedicated cross-border territory spanning the US and Canada portals, with its own
+              roster and region lead. Select “Odyssey Region” in the form to apply directly to it.
+            </p>
+          </div>
+        </div>
+      </section>
+
       {/* APPLICATION FORM */}
       <section className="pb-24">
         <div className="max-w-2xl mx-auto px-6">
@@ -261,15 +294,28 @@ export default function CareersPage() {
                   </select>
                 </div>
               </div>
-              <div>
-                <label className="block text-[12px] text-[#A1A1A8] font-medium mb-1.5">Sales Experience</label>
-                <input
-                  type="text"
-                  value={formData.experience}
-                  onChange={(e) => setFormData({ ...formData, experience: e.target.value })}
-                  className="w-full bg-[#111113] border border-[#1F1F23] rounded-lg px-3 py-2.5 text-[#F5F5F7] text-[14px] focus:outline-none focus:border-[#1A8FD6]/50 transition-colors"
-                  placeholder="e.g. 2 years B2B, door-to-door, etc."
-                />
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[12px] text-[#A1A1A8] font-medium mb-1.5">Sales Experience</label>
+                  <input
+                    type="text"
+                    value={formData.experience}
+                    onChange={(e) => setFormData({ ...formData, experience: e.target.value })}
+                    className="w-full bg-[#111113] border border-[#1F1F23] rounded-lg px-3 py-2.5 text-[#F5F5F7] text-[14px] focus:outline-none focus:border-[#1A8FD6]/50 transition-colors"
+                    placeholder="e.g. 2 years B2B, door-to-door, etc."
+                  />
+                </div>
+                <div>
+                  <label className="block text-[12px] text-[#A1A1A8] font-medium mb-1.5">Region</label>
+                  <select
+                    value={formData.region}
+                    onChange={(e) => setFormData({ ...formData, region: e.target.value })}
+                    className="w-full bg-[#111113] border border-[#1F1F23] rounded-lg px-3 py-2.5 text-[#F5F5F7] text-[14px] focus:outline-none focus:border-[#1A8FD6]/50 transition-colors"
+                  >
+                    <option value="">Core team (no region)</option>
+                    <option value="odyssey">Odyssey Region</option>
+                  </select>
+                </div>
               </div>
               <div>
                 <label className="block text-[12px] text-[#A1A1A8] font-medium mb-1.5">Why do you want to join Meridian?</label>

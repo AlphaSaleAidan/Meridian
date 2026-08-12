@@ -79,6 +79,9 @@ class CareerApplication(BaseModel):
     referral_name: str = Field(
         "", validation_alias=AliasChoices("referral_name", "referral"),
     )
+    # Isolated territory the applicant wants to join (20260812 sales regions;
+    # e.g. 'odyssey'). Empty = core team.
+    region: str = ""
 
 
 async def submit_application(req: CareerApplication, country: str = "US") -> dict:
@@ -126,6 +129,8 @@ async def submit_application(req: CareerApplication, country: str = "US") -> dic
             "commission_experience": req.commission_experience,
             "availability": req.availability,
             "motivation": req.motivation,
+            # Dropped by the REST client until the 20260812 region column lands.
+            "region": req.region,
             "status": "pending",
             # Recruiting pipeline entry point (careers_pipeline.py). The
             # SupabaseREST client drops unknown columns, so this stays

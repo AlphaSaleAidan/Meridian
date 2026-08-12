@@ -999,7 +999,7 @@ async def get_team(request: Request, user: dict = Depends(require_jwt)):
         return {"reps": [], "applicants": []}
 
     base_cols = "id,name,email,phone,commission_rate,is_active,created_at,portal_context"
-    hier_cols = base_cols + ",role,manager_id,path,level"
+    hier_cols = base_cols + ",role,manager_id,path,level,region"
     headers = {"Authorization": f"Bearer {user_token}", "apikey": anon_key}
 
     async with httpx.AsyncClient(timeout=10.0) as client:
@@ -1022,13 +1022,16 @@ async def get_team(request: Request, user: dict = Depends(require_jwt)):
     scope = await hierarchy.resolve_scope(user)
     allowed = await hierarchy.visible_rep_ids(scope)
     rows = hierarchy.scope_roster_rows(rows, scope, allowed)
+    # Region fence (20260812): region members ↔ core never see each other.
+    rows = hierarchy.partition_by_region(rows, scope)
 
     reps = [r for r in rows if r.get("is_active")]
     applicants = [r for r in rows if not r.get("is_active")]
     return {
         "reps": reps,
         "applicants": applicants,
-        "viewer": {"role": scope.role, "rep_id": scope.rep_id, "is_admin": scope.is_admin},
+        "viewer": {"role": scope.role, "rep_id": scope.rep_id, "is_admin": scope.is_admin,
+                   "region": scope.region},
     }
 
 

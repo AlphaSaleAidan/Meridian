@@ -14,6 +14,8 @@ import {
   canadaKeys,
 } from '@/lib/canada-queries'
 import { useSalesAuth } from '@/lib/sales-auth'
+import { getRegion } from '@/lib/regions'
+import { RegionHero } from '@/components/RegionHero'
 import { useTrainingLock } from '@/lib/training-progress'
 import { useToast } from '@/components/Toast'
 import { queueIfOffline, setupOfflineSync, getPendingCount } from '@/lib/offline-queue'
@@ -112,6 +114,7 @@ function ProgressBar({ currentStep }: { currentStep: number }) {
 
 export default function CanadaPortalLeadsPage() {
   const { rep } = useSalesAuth()
+  const region = getRegion(rep?.region)
   const { toast } = useToast()
   const { locked: trainingLocked } = useTrainingLock()
   const navigate = useNavigate()
@@ -225,6 +228,9 @@ export default function CanadaPortalLeadsPage() {
 
   return (
     <div className="space-y-5">
+      {/* Odyssey hero — region members only */}
+      {region && <RegionHero region={region} videoSrc="/regions/odyssey/leads-hero.mp4" />}
+
       {/* Header */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>

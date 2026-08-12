@@ -44,7 +44,7 @@ export const COURSE_MODULES: CourseModule[] = [
         q: 'What does the merchant do in the one-click POS connect?',
         options: [
           'Copies API keys from their dashboard',
-          'Taps Square or Clover and approves in the tab that opens',
+          'Taps their provider (Square, Clover, or Stripe) and approves in the tab that opens',
           'Emails Meridian support their credentials',
           'Downloads a desktop sync app',
         ],
@@ -126,7 +126,7 @@ export const COURSE_MODULES: CourseModule[] = [
   {
     id: 'pos',
     title: 'POS Connect',
-    blurb: 'One-click Square/Clover connect and the first sync.',
+    blurb: 'One-click connect (Square, Clover, Stripe) and the first sync.',
     files: {
       landscape: 'connect-pos.mp4',
       vertical: 'connect-pos-vertical.mp4',

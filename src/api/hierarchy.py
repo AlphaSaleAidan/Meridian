@@ -37,10 +37,11 @@ ROLE_LEVELS: dict[str, int] = {
     "sales_rep": 7,
 }
 
-# Columns that may not exist until the 20260716 migration is applied; every
-# fetch falls back to the legacy column set so the API never 500s pre-apply
-# (it fails CLOSED: no role/path -> self-only scope).
-_HIER_COLS = "id,name,email,role,manager_id,path,level,is_active,portal_context,created_at"
+# Columns that may not exist until the 20260716 (hierarchy) / 20260812
+# (region) migrations are applied; every fetch falls back to the legacy column
+# set so the API never 500s pre-apply (it fails CLOSED: no role/path ->
+# self-only scope, no region -> core team).
+_HIER_COLS = "id,name,email,role,manager_id,path,level,is_active,portal_context,region,created_at"
 _LEGACY_COLS = "id,name,email,is_active,portal_context,created_at"
 
 
@@ -50,6 +51,8 @@ class RepScope:
     role: str
     path: str | None
     is_admin: bool
+    # Isolated territory slug (20260812, e.g. 'odyssey'); None = core team.
+    region: str | None = None
 
 
 def _supabase_env() -> tuple[str, str]:
@@ -126,13 +129,14 @@ async def resolve_scope(user: dict) -> RepScope:
     if not row:
         # No rep row: allowlisted admins keep access; everyone else fails closed.
         return RepScope(rep_id=None, role="admin" if allowlisted else "sales_rep",
-                        path=None, is_admin=allowlisted)
+                        path=None, is_admin=allowlisted, region=None)
     role = row.get("role") or "sales_rep"
     return RepScope(
         rep_id=row.get("id"),
         role=role,
         path=row.get("path"),
         is_admin=(role == "admin" or allowlisted),
+        region=(row.get("region") or None),
     )
 
 
@@ -174,6 +178,21 @@ def scope_roster_rows(rows: list[dict], scope: RepScope, allowed: set[str] | Non
     if scope.rep_id:
         keep.add(scope.rep_id)
     return [r for r in rows if r.get("id") in keep]
+
+
+def partition_by_region(rows: list[dict], scope: RepScope) -> list[dict]:
+    """Wall rosters off along the region boundary (20260812).
+
+    A region member sees ONLY their region's rows; core (region-less) callers
+    see ONLY core rows. Global allowlist admins are exempt — they keep the
+    whole roster for oversight. Applied AFTER subtree scoping, so a region is
+    a hard fence even where the tree would allow visibility (e.g. an upline
+    chain that crosses into another region can never leak roster rows)."""
+    if scope.is_admin:
+        return rows
+    if scope.region:
+        return [r for r in rows if (r.get("region") or None) == scope.region]
+    return [r for r in rows if not r.get("region")]
 
 
 # ── Role management guards ────────────────────────────────────────────────────

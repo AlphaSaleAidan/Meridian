@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react'
 import { supabase } from './supabase'
 import { canadaLeadsService } from './canada-leads-service'
+import { resolveDemoRegion } from './regions'
 
 export type PortalContext = 'us' | 'canada' | 'all'
 
@@ -21,6 +22,8 @@ export interface SalesRepProfile {
   role: string
   manager_id: string | null
   level: number | null
+  // Isolated territory slug (20260812, e.g. 'odyssey'); null = core team.
+  region: string | null
 }
 
 export interface SalesAuthState {
@@ -157,6 +160,7 @@ async function resolveRepProfile(email: string): Promise<SalesRepProfile | null>
     role: 'sales_rep',
     manager_id: null,
     level: null,
+    region: null,
   }
   return localProfile
 }
@@ -277,9 +281,15 @@ export function SalesAuthProvider({ children }: { children: ReactNode }) {
         } catch {}
       }
 
+      // Demo mode: region membership resolves from the email so the Odyssey
+      // experience is previewable without a backend (real sessions get region
+      // from their sales_reps row). Region demo logins lead their territory.
+      const demoRegion = resolveDemoRegion(email)
       const demoRep: SalesRepProfile = {
         rep_id: 'rep_' + crypto.randomUUID().replace(/-/g, '').slice(0, 12),
-        name: 'Demo Sales Rep',
+        name: demoRegion
+          ? email.split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+          : 'Demo Sales Rep',
         email,
         phone: '(555) 123-4567',
         commission_rate: 70,
@@ -288,10 +298,11 @@ export function SalesAuthProvider({ children }: { children: ReactNode }) {
         total_earned: 14820,
         total_paid: 9600,
         created_at: new Date(Date.now() - 90 * 86400000).toISOString(),
-        portal_context: resolvePortalContext(email),
-        role: 'sales_rep',
+        portal_context: demoRegion ? 'all' : resolvePortalContext(email),
+        role: demoRegion ? 'regional_manager' : 'sales_rep',
         manager_id: null,
         level: null,
+        region: demoRegion,
       }
       saveRep(demoRep)
       setRep(demoRep)
@@ -340,6 +351,7 @@ export function SalesAuthProvider({ children }: { children: ReactNode }) {
         role: 'sales_rep',
         manager_id: null,
         level: null,
+        region: resolveDemoRegion(email),
       }
       saveRep(demoRep)
       setRep(demoRep)
@@ -375,6 +387,7 @@ export function SalesAuthProvider({ children }: { children: ReactNode }) {
           role: 'sales_rep',
           manager_id: null,
           level: null,
+          region: null,
         }
         saveRep(profile)
         setRep(profile)
@@ -482,5 +495,6 @@ function repFromRow(data: Record<string, unknown>): SalesRepProfile {
     role: (data.role as string) || 'sales_rep',
     manager_id: (data.manager_id as string) || null,
     level: data.level != null ? Number(data.level) : null,
+    region: (data.region as string) || null,
   }
 }

@@ -3,7 +3,9 @@ import { useState, useEffect, useMemo } from 'react'
 import { Users, DollarSign, Target, CreditCard, Search, MoreVertical, X, Save, UserPlus, Clock, CheckCircle2, XCircle, Trophy, Crown, Medal, Award, Trash2 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useSalesAuth, repTier } from '@/lib/sales-auth'
-import { getAuthHeaders } from '@/lib/supabase'
+import { getAuthHeaders, supabase } from '@/lib/supabase'
+import { getRegion } from '@/lib/regions'
+import { RegionBanner } from '@/components/RegionBanner'
 import { deriveCommissionsFromLeads, type Commission, type Deal } from '@/lib/canada-sales-demo-data'
 import { useCanadaLeads, useCanadaLeadsRealtime } from '@/lib/canada-queries'
 import { fetchLeaderboard, type LeaderboardEntry } from '@/lib/leaderboard'
@@ -30,6 +32,8 @@ interface TeamMember {
   /** 7-level org role from the hierarchy migration (absent pre-migration). */
   org_role?: string
   manager_id?: string | null
+  /** Isolated territory slug (20260812); null/absent = core team. */
+  region?: string | null
   location: string
 }
 
@@ -176,8 +180,14 @@ export default function CanadaPortalTeamPage() {
   const tier = repTier(rep)
   const admin = isAdmin(rep?.email) || tier === 'admin'
   const isManager = !admin && tier === 'manager'
-  const canSeeTeam = admin || isManager
-  const hideBoard = isLeaderboardHidden()
+  // Region members (20260812) live in a walled-off territory: their own
+  // roster (visible to every member — a region is small by construction),
+  // no portal leaderboard while the region opts out (Odyssey's is off).
+  const region = getRegion(rep?.region)
+  const regionBoardHidden = !!region && !region.showLeaderboard
+  const regionLead = !!region && tier !== 'rep'
+  const canSeeTeam = admin || isManager || !!region
+  const hideBoard = isLeaderboardHidden() || regionBoardHidden
   const [search, setSearch] = useState('')
   const [team, setTeam] = useState<TeamMember[]>(DEMO_TEAM)
   const [applicants, setApplicants] = useState<Applicant[]>([])
@@ -215,6 +225,23 @@ export default function CanadaPortalTeamPage() {
     let cancelled = false
     async function fetchTeam() {
       const apiBase = import.meta.env.VITE_API_URL || ''
+      // Demo mode (no Supabase configured): no roster API. Region members get
+      // a self-seeded roster (DEMO_TEAM is core-only and would be fenced off);
+      // core demo keeps the DEMO_TEAM initial state.
+      if (!supabase) {
+        if (region) {
+          setTeam([{
+            id: rep?.rep_id || '', name: rep?.name || '', email: rep?.email || '',
+            phone: rep?.phone || '', commission_rate: rep?.commission_rate || 70,
+            deals_open: 0, deals_won: 0, total_mrr: 0, total_earned: 0, total_paid: 0,
+            is_active: true, joined: (rep?.created_at || '').slice(0, 10),
+            role: admin ? 'admin' : 'active', org_role: rep?.role || 'sales_rep',
+            manager_id: null, region: rep?.region || null, location: 'Canada',
+          }])
+        }
+        setTeamLoading(false)
+        return
+      }
       try {
         const headers = await getAuthHeaders()
         const resp = await fetch(`${apiBase}/api/canada/team`, { headers })
@@ -244,6 +271,7 @@ export default function CanadaPortalTeamPage() {
               role: adminRole ? 'admin' : 'active' as 'admin' | 'active',
               org_role: (r.role as string) || (adminRole ? 'admin' : 'sales_rep'),
               manager_id: (r.manager_id as string) || null,
+              region: (r.region as string) || null,
               location: 'Canada',
             }
           }))
@@ -278,8 +306,17 @@ export default function CanadaPortalTeamPage() {
     return () => { cancelled = true }
   }, [admin, hideBoard, rep?.rep_id])
 
+  // Region fence, client plane. The backend already partitions rosters by
+  // region; re-filter here so a stale cache or API regression can never show
+  // a region member the core roster (or vice versa). Admins keep everything.
+  const fencedTeam = admin
+    ? team
+    : region
+      ? team.filter(m => (m.region || null) === region.id)
+      : team.filter(m => !m.region)
+
   // Enrich team with computed deal stats
-  const enrichedTeam = computeTeamStats(team, deals)
+  const enrichedTeam = computeTeamStats(fencedTeam, deals)
 
   // Rows the Leaderboard tab (and non-admin stat cards) render: the aggregate
   // board for non-admins, the enriched scoped roster for admins (unchanged).
@@ -406,7 +443,7 @@ export default function CanadaPortalTeamPage() {
       {/* Header */}
       <div>
         <div className="flex items-center justify-between">
-          <h1 className="text-xl font-bold text-white">{admin ? 'Team Management' : hideBoard ? 'My Team' : 'Leaderboard'}</h1>
+          <h1 className="text-xl font-bold text-white">{region && !admin ? region.name : admin ? 'Team Management' : hideBoard ? 'My Team' : 'Leaderboard'}</h1>
           {/* Recruiting is deliberately not a nav tab — reachable from here. */}
           {admin && (
             <Link to="/canada/portal/recruiting" className="text-xs text-pm-accent hover:underline">
@@ -414,7 +451,7 @@ export default function CanadaPortalTeamPage() {
             </Link>
           )}
         </div>
-        <p className="text-sm text-pm-canada-text-muted mt-0.5">{admin ? (COMMISSION_TRACKING_PAUSED ? 'Manage your sales reps and applications.' : 'Manage your sales reps, commissions, and payouts.') : hideBoard ? 'Your team roster.' : 'See how you stack up against the team.'}</p>
+        <p className="text-sm text-pm-canada-text-muted mt-0.5">{region && !admin ? 'Your territory’s roster and pipeline.' : admin ? (COMMISSION_TRACKING_PAUSED ? 'Manage your sales reps and applications.' : 'Manage your sales reps, commissions, and payouts.') : hideBoard ? 'Your team roster.' : 'See how you stack up against the team.'}</p>
         {COMMISSION_TRACKING_PAUSED && (
           <p className="text-2xs text-pm-canada-text-faint mt-1">Commission tracking is temporarily paused.</p>
         )}
@@ -426,6 +463,9 @@ export default function CanadaPortalTeamPage() {
         isEmpty={pageIsEmpty}
         errorTitle="Could not load team data"
       >
+
+      {/* Region identity band — region members only */}
+      {region && !admin && <RegionBanner region={region} memberCount={enrichedTeam.length} />}
 
       {/* Stat Cards */}
       {admin ? (
@@ -534,7 +574,7 @@ export default function CanadaPortalTeamPage() {
             onClick={() => setActiveTab('reps')}
             className={clsx('px-4 py-1.5 rounded-lg text-xs font-medium transition-colors', activeTab === 'reps' ? 'bg-pm-canada-border text-white' : 'text-pm-canada-text-muted hover:text-white')}
           >
-            {admin ? 'Sales Reps' : 'My Team'}
+            {region && !admin ? 'My Region' : admin ? 'Sales Reps' : 'My Team'}
           </button>
         )}
         {!hideBoard && (
@@ -583,6 +623,7 @@ export default function CanadaPortalTeamPage() {
           <div className="space-y-3">
             {(search ? filtered.map(m => ({ member: m, depth: 0, directReports: 0 })) : buildTeamTree(filtered)).map(({ member, depth, directReports }) => {
               const badge = getMemberBadge(member)
+              const memberRegion = getRegion(member.region)
               const avatar = getAvatarClasses(member.name)
               const monthlyComm = Math.round((member.commission_rate / 100) * member.total_mrr)
 
@@ -590,7 +631,10 @@ export default function CanadaPortalTeamPage() {
                 <div
                   key={member.id}
                   className={clsx('bg-pm-canada-surface border border-pm-canada-border rounded-xl px-5 py-4', depth > 0 && 'border-l-2 border-l-pm-canada-border')}
-                  style={depth > 0 ? { marginLeft: Math.min(depth, 5) * 22 } : undefined}
+                  style={{
+                    ...(depth > 0 ? { marginLeft: Math.min(depth, 5) * 22 } : null),
+                    ...(memberRegion ? { borderColor: memberRegion.theme.accent + '2b' } : null),
+                  }}
                 >
                   <div className="flex items-center gap-4">
                     <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${avatar.softBg}`}>
@@ -603,13 +647,21 @@ export default function CanadaPortalTeamPage() {
                         <span className={clsx('inline-flex items-center px-2 py-0.5 rounded-full text-2xs font-medium border', badge.bg, badge.textColor, badge.border)}>
                           {badge.text}
                         </span>
+                        {memberRegion && (
+                          <span
+                            className="inline-flex items-center px-2 py-0.5 rounded-full text-2xs font-medium border"
+                            style={{ color: memberRegion.theme.accent, borderColor: memberRegion.theme.accent + '33', backgroundColor: memberRegion.theme.accent + '0f' }}
+                          >
+                            {memberRegion.name}
+                          </span>
+                        )}
                         {directReports > 0 && (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-medium bg-pm-canada-border/60 text-pm-canada-text-muted">
                             <Users size={10} /> {directReports}
                           </span>
                         )}
                       </div>
-                      {admin && <p className="text-xs text-pm-canada-text-muted mt-0.5">{member.email}</p>}
+                      {(admin || regionLead) && <p className="text-xs text-pm-canada-text-muted mt-0.5">{member.email}</p>}
                       <p className="text-2xs text-pm-canada-text-faint">{member.location}</p>
                     </div>
 
