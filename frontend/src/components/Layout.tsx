@@ -11,6 +11,7 @@ import {
   LineChart,
   Bell,
   Settings,
+  Plug,
   Menu,
   X,
   Bot,
@@ -94,6 +95,7 @@ const navGroups = [
     label: null,
     items: [
       { path: 'notifications', icon: Bell, label: 'Notifications' },
+      { path: 'integrations', icon: Plug, label: 'Integrations' },
       { path: 'settings', icon: Settings, label: 'Settings' },
     ],
   },

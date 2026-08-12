@@ -13,20 +13,46 @@ from datetime import datetime, timedelta, timezone
 
 from ..clover.oauth import CloverOAuthError, CloverOAuthManager
 from ..db import get_db
+from ..pos_connect.oauth import OAuthError as GenericOAuthError
 from ..security.encryption import decrypt_token, encrypt_token
 from ..square.oauth import OAuthManager, OAuthError
 
 logger = logging.getLogger("meridian.workers.token_refresh")
 
 
-def _oauth_for(provider: str):
-    """Return the OAuth manager for a connection's provider, or None if the
-    provider has no refresh flow (e.g. Toast client-credentials, generic)."""
+def _oauth_for(provider: str, conn: dict | None = None):
+    """Return an object with an async refresh_token(token) method for this
+    connection's provider, or None if the provider has no refresh flow here.
+
+    Registry (pos_connect) providers refresh through the generic manager —
+    EXCEPT stripe, whose rolling refresh token is owned by stripe_pos.tokens at
+    sync time (a concurrent refresh here would invalidate the rolled token and
+    kill the connection)."""
     if provider == "square":
         return OAuthManager()
     if provider == "clover":
         return CloverOAuthManager()
-    return None
+    if provider == "stripe":
+        return None
+    from ..pos_connect.registry import get_provider
+    cfg = get_provider(provider)
+    if cfg is None or not cfg.credentials_present():
+        return None
+
+    class _GenericRefresher:
+        """Adapts GenericOAuthManager.refresh to the refresh_token(token)
+        contract this worker calls. Lightspeed X-Series tokens live on a
+        per-account host — its {domain_prefix} is the stored merchant id."""
+
+        async def refresh_token(self, refresh_token: str) -> dict:
+            from ..pos_connect.oauth import GenericOAuthManager
+            domain_prefix = ""
+            if "{domain_prefix}" in cfg.token_url:
+                domain_prefix = (conn or {}).get("external_merchant_id", "") or ""
+            mgr = GenericOAuthManager(cfg, redirect_uri="")  # unused for refresh
+            return await mgr.refresh(refresh_token, domain_prefix=domain_prefix)
+
+    return _GenericRefresher()
 
 
 async def refresh_expiring_tokens() -> dict:
@@ -64,9 +90,11 @@ async def refresh_expiring_tokens() -> dict:
         org_id = conn.get("org_id", "unknown")
 
         try:
-            oauth = _oauth_for(conn.get("provider", ""))
+            oauth = _oauth_for(conn.get("provider", ""), conn)
             if oauth is None:
-                # Provider has no refresh flow (Toast/generic) — skip silently.
+                # Provider has no refresh flow here (Toast client-credentials,
+                # Stripe's sync-time rolling refresh, unconfigured registry
+                # providers) — skip silently.
                 continue
 
             refresh_token = decrypt_token(conn.get("refresh_token_enc", ""))
@@ -108,7 +136,7 @@ async def refresh_expiring_tokens() -> dict:
                 stats["recovered"] += 1
                 logger.info(f"Recovered errored connection {connection_id} (org={org_id})")
 
-        except (OAuthError, CloverOAuthError) as e:
+        except (OAuthError, CloverOAuthError, GenericOAuthError) as e:
             logger.error(f"Token refresh failed for connection {connection_id}: {e}")
             stats["errors"].append(f"{connection_id}: {str(e)}")
             stats["failed"] += 1

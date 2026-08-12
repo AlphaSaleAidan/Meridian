@@ -107,6 +107,7 @@ from .routes.time_clock import router as time_clock_router
 from .routes.team_chat import router as team_chat_router
 from .routes.chatbot import router as chatbot_router
 from .routes.hub import router as hub_router
+from .routes.integrations import router as integrations_router
 try:
     from .routes.billing import router as billing_router
     _has_billing = True
@@ -356,6 +357,7 @@ app.include_router(oauth_router)
 app.include_router(clover_oauth_router)
 app.include_router(clover_hco_router)
 app.include_router(pos_connect_router)
+app.include_router(integrations_router)
 app.include_router(webhook_router)
 app.include_router(dashboard_router)
 app.include_router(cpa_router)
