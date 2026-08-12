@@ -1,0 +1,179 @@
+{
+  "_purpose": "Per-provider registration playbook + stage ledger for the integration factory. `stage` advances: todo -> applied -> creds_stored -> sandbox_ok -> verified -> live. `owner_next` says who unblocks the next step: agent (automatable now), aidan (human moment - batched into the weekly approval train), vendor (their review queue).",
+  "_human_moment_types": {
+    "portal_signup": "Create developer account on vendor portal (email verify; agent can do with integrations mailbox access)",
+    "2fa": "Complete 2FA/SSO on Aidan's identity (eliminated once TOTP seeds are stored for the integrations identity)",
+    "tos_accept": "Accept developer ToS binding ASP EPC1 (one click, batched)",
+    "questionnaire": "Production-access questionnaire review before submit (agent drafts from company_pack, Aidan approves)",
+    "payment": "Attach a payment method if the program requires one",
+    "vendor_review": "Vendor-side human review - not ours to automate, only to track and chase"
+  },
+  "providers": [
+    {
+      "key": "quickbooks",
+      "portal": "https://developer.intuit.com",
+      "stage": "todo",
+      "owner_next": "agent",
+      "path_to_live": [
+        "agent: create Intuit developer account (integrations mailbox), create app, set redirect URI from company_pack template",
+        "agent: pull sandbox client_id/secret -> /root/.secrets/meridian-quickbooks.env + Railway env",
+        "agent: sandbox OAuth round-trip vs Intuit sandbox company -> factory verify quickbooks",
+        "agent drafts + aidan approves: production questionnaire (uses company_pack answers verbatim)",
+        "vendor: production key grant, then flip verified=True"
+      ],
+      "human_moments": ["tos_accept", "questionnaire"],
+      "notes": "Fully self-serve; sandbox needs no review. Highest-certainty 1-click after Lightspeed/Stripe."
+    },
+    {
+      "key": "xero",
+      "portal": "https://developer.xero.com/app/manage",
+      "stage": "todo",
+      "owner_next": "agent",
+      "path_to_live": [
+        "agent: Xero account + My Apps 'New app' form (name, company URL, redirect URI)",
+        "agent: store creds, sandbox round-trip vs Xero demo company -> factory verify xero",
+        "flip verified=True (Xero has no production gate for standard OAuth apps)"
+      ],
+      "human_moments": ["tos_accept"],
+      "notes": "Cleanest full-auto candidate: no production review at all. Uncertified apps limited to 25 connected orgs - fine for now, certification later."
+    },
+    {
+      "key": "mailchimp",
+      "portal": "https://us1.admin.mailchimp.com/account/oauth2/",
+      "stage": "todo",
+      "owner_next": "agent",
+      "path_to_live": [
+        "agent: register OAuth app in Mailchimp account settings",
+        "agent: store creds, round-trip vs our own Mailchimp account -> factory verify mailchimp",
+        "flip verified=True"
+      ],
+      "human_moments": ["portal_signup"],
+      "notes": "No review gate. Needs a Meridian Mailchimp account to exist."
+    },
+    {
+      "key": "gusto",
+      "portal": "https://dev.gusto.com",
+      "stage": "todo",
+      "owner_next": "agent",
+      "path_to_live": [
+        "agent: dev portal signup, demo-env app creation, store demo creds",
+        "agent: round-trip vs Gusto demo company -> sandbox_ok",
+        "agent drafts + aidan approves: production access application",
+        "vendor: approval, then flip verified=True"
+      ],
+      "human_moments": ["tos_accept", "questionnaire", "vendor_review"],
+      "notes": "Demo env is self-serve; production is application-gated."
+    },
+    {
+      "key": "uber_eats",
+      "portal": "https://developer.uber.com",
+      "stage": "todo",
+      "owner_next": "agent",
+      "path_to_live": [
+        "agent: Uber developer account + app creation (client works immediately for auth flow)",
+        "agent drafts + aidan approves: eats.* scope access request",
+        "vendor: scope approval (their queue)",
+        "agent: round-trip vs test store -> flip verified=True"
+      ],
+      "human_moments": ["tos_accept", "questionnaire", "vendor_review"],
+      "notes": "App creation self-serve; eats scopes are the gate."
+    },
+    {
+      "key": "sumup",
+      "portal": "https://developer.sumup.com",
+      "stage": "todo",
+      "owner_next": "agent",
+      "path_to_live": [
+        "agent: SumUp account + OAuth client, store creds, round-trip -> flip verified=True"
+      ],
+      "human_moments": ["portal_signup"],
+      "notes": "Self-serve. Low priority (small US share) but a fast win for catalog depth."
+    },
+    {
+      "key": "zettle",
+      "portal": "https://developer.zettle.com",
+      "stage": "todo",
+      "owner_next": "agent",
+      "path_to_live": [
+        "agent: PayPal developer account link + Zettle app, PKCE round-trip -> flip verified=True"
+      ],
+      "human_moments": ["portal_signup", "2fa"],
+      "notes": "Rides on PayPal identity - PayPal 2FA is aggressive; store TOTP seed for the integrations identity."
+    },
+    {
+      "key": "sevenshifts",
+      "portal": "mailto:partnerships@7shifts.com",
+      "stage": "todo",
+      "owner_next": "aidan",
+      "path_to_live": [
+        "agent drafts partnership email (technical contact, company name, logo PNG, callback URL - their stated checklist) -> Gmail draft",
+        "aidan: one click send",
+        "vendor: OAuth client issuance",
+        "agent: transcribe endpoints from their docs with real client, round-trip, promote from partner tier to registry, flip verified=True"
+      ],
+      "human_moments": ["vendor_review"],
+      "notes": "Their checklist is public - the draft can be complete and correct before you ever see it."
+    },
+    {
+      "key": "toast",
+      "portal": "https://pos.toasttab.com/partners/integration-partner-application",
+      "stage": "todo",
+      "owner_next": "aidan",
+      "path_to_live": [
+        "agent: prefill integration-partner application from company_pack (draft doc)",
+        "aidan: review + submit (binds ASP EPC1 to their API license)",
+        "vendor: certification process (longest queue in the set)",
+        "agent: build against partner sandbox when granted"
+      ],
+      "human_moments": ["tos_accept", "questionnaire", "vendor_review"],
+      "notes": "Manual-credential path already live for merchants who bring their own Toast creds."
+    },
+    {
+      "key": "doordash",
+      "portal": "https://developer.doordash.com",
+      "stage": "todo",
+      "owner_next": "aidan",
+      "path_to_live": [
+        "agent: prefill Marketplace interest form (pipeline closed to new partners as of 2026-08 - form queues us)",
+        "aidan: approve + submit",
+        "vendor: waitlist, chase quarterly"
+      ],
+      "human_moments": ["questionnaire", "vendor_review"],
+      "notes": "Blocked vendor-side regardless of automation."
+    },
+    {
+      "key": "opentable",
+      "portal": "https://www.opentable.com/restaurant-solutions/partners/",
+      "stage": "todo",
+      "owner_next": "aidan",
+      "path_to_live": [
+        "agent drafts partner inquiry -> Gmail draft; aidan sends; vendor review"
+      ],
+      "human_moments": ["vendor_review"],
+      "notes": "Partner program only."
+    },
+    {
+      "key": "restaurant365",
+      "portal": "https://www.restaurant365.com/partners/",
+      "stage": "todo",
+      "owner_next": "aidan",
+      "path_to_live": [
+        "agent drafts partner inquiry -> Gmail draft; aidan sends; vendor review"
+      ],
+      "human_moments": ["vendor_review"],
+      "notes": "Connect API partner-gated."
+    },
+    {
+      "key": "marketman",
+      "portal": "https://www.marketman.com",
+      "stage": "todo",
+      "owner_next": "aidan",
+      "path_to_live": [
+        "agent drafts API-key request to MarketMan support -> Gmail draft; aidan sends",
+        "agent: build key-based connector when granted (no OAuth - manual tier)"
+      ],
+      "human_moments": ["vendor_review"],
+      "notes": "Per-account API keys from support; stays manual tier."
+    }
+  ]
+}
