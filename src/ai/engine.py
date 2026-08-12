@@ -437,7 +437,21 @@ class MeridianAI:
     async def _load_context(self, org_id: str, days: int) -> AnalysisContext:
         """Load all data from DB for analysis."""
         ctx = AnalysisContext(org_id=org_id, analysis_days=days)
-        
+
+        # Populate the merchant vertical so industry templates actually select a
+        # specific analyzer instead of always falling back to GenericAnalyzer.
+        # Best-effort + getattr-guarded: an older DB adapter or a failed lookup
+        # simply leaves the default "other" (today's behavior). get_industry_analyzer
+        # normalizes the raw value (deck slug / POS label) onto a template key.
+        get_vertical = getattr(self.db, "get_org_vertical", None)
+        if get_vertical is not None:
+            try:
+                raw_vertical = await get_vertical(org_id)
+                if raw_vertical:
+                    ctx.business_vertical = raw_vertical
+            except Exception:
+                logger.debug("vertical load failed for %s", org_id, exc_info=True)
+
         # Load in parallel
         daily, hourly, products, transactions, inventory = await asyncio.gather(
             self.db.get_daily_revenue(org_id, days),

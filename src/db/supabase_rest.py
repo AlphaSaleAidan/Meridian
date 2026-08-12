@@ -654,6 +654,32 @@ class SupabaseREST:
 
     # ─── Connection Management ────────────────────────────────
 
+    async def get_org_vertical(self, org_id: str) -> str | None:
+        """Best-effort read of a merchant's vertical for industry-template
+        selection. Reads organizations.vertical (US-era orgs) first, then falls
+        back to businesses.business_type (Canada entity split). Returns None if
+        neither resolves, so the caller keeps the generic analyzer — this never
+        raises into the analysis path."""
+        try:
+            rows = await self.select(
+                "organizations", columns="vertical",
+                filters={"id": f"eq.{org_id}"}, limit=1,
+            )
+            if rows and rows[0].get("vertical"):
+                return rows[0]["vertical"]
+        except Exception:
+            logger.debug("get_org_vertical: organizations lookup failed", exc_info=True)
+        try:
+            rows = await self.select(
+                "businesses", columns="business_type",
+                filters={"org_id": f"eq.{org_id}"}, limit=1,
+            )
+            if rows and rows[0].get("business_type"):
+                return rows[0]["business_type"]
+        except Exception:
+            logger.debug("get_org_vertical: businesses lookup failed", exc_info=True)
+        return None
+
     async def get_pos_connection(self, org_id: str) -> dict | None:
         """Get the active POS connection for an org."""
         rows = await self.select(
