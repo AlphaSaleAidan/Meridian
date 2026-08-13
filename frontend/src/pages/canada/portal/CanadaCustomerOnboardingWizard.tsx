@@ -198,7 +198,9 @@ export default function CanadaCustomerOnboardingWizard() {
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (!cancelled && d) setCloverOAuthAvailable(!!d.oauth_available) })
       .catch(() => { /* leave false — manual path still available downstream */ })
-    fetch(`${API_BASE}/api/pos/stripe/status?org_id=${encodeURIComponent(org.org_id)}`)
+    // Same capabilities-not-status swap as Clover above: this wizard has no
+    // JWT and only needs the server-config flag — no org data.
+    fetch(`${API_BASE}/api/pos/stripe/capabilities`)
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (!cancelled && d) setStripeOAuthAvailable(!!d.oauth_available) })
       .catch(() => { /* leave false */ })
