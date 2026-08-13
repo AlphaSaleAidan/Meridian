@@ -133,7 +133,13 @@ class CameraProcessor:
     def _init_depth(self):
         try:
             from depth_processor import DepthProcessor
-            device = os.environ.get("DEPTH_DEVICE", "cuda")
+            device = os.environ.get("DEPTH_DEVICE")
+            if not device:
+                try:
+                    import torch
+                    device = "cuda" if torch.cuda.is_available() else "cpu"
+                except Exception:
+                    device = "cpu"
             model_size = os.environ.get("DEPTH_MODEL_SIZE", "small")
             self.depth_processor = DepthProcessor(model_size=model_size, device=device)
             logger.info("Depth Anything V2 enabled")
