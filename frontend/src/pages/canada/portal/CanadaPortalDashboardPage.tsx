@@ -15,7 +15,7 @@ import {
   CheckCircle2,
 } from 'lucide-react'
 import { useSalesAuth } from '@/lib/sales-auth'
-import { getRegion } from '@/lib/regions'
+import { getCanadaPortalRegion } from '@/lib/regions'
 import { RegionHero } from '@/components/RegionHero'
 import {
   STAGE_CONFIG,
@@ -67,7 +67,7 @@ const MONTH1_MRR_GOAL = 2025
 
 export default function CanadaPortalDashboardPage() {
   const { rep } = useSalesAuth()
-  const region = getRegion(rep?.region)
+  const region = getCanadaPortalRegion(rep?.region)
   const navigate = useNavigate()
   const { data: deals = [], isLoading, error } = useCanadaLeads(rep?.rep_id)
   useCanadaLeadsRealtime(rep?.rep_id)
@@ -118,7 +118,7 @@ export default function CanadaPortalDashboardPage() {
 
   return (
     <div className="space-y-6">
-      {/* Odyssey hero — region members only */}
+      {/* Odyssey hero — every Canada rep; a member's own region theme wins */}
       {region && <RegionHero region={region} videoSrc="/regions/odyssey/dashboard-hero.mp4" focus="50% 45%" />}
 
       {/* ── Greeting ── */}

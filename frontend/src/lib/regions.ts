@@ -49,6 +49,17 @@ export function getRegion(regionId: string | null | undefined): SalesRegion | nu
   return REGIONS[regionId] ?? null
 }
 
+/**
+ * The Canada portal ships the Odyssey identity for EVERY rep (Aidan,
+ * 2026-08-13): a member's own region still wins, core reps fall back to
+ * Odyssey. Presentation only — never feed this into enforcement-adjacent
+ * logic (leaderboard visibility, roster filtering), which stays on
+ * getRegion() membership.
+ */
+export function getCanadaPortalRegion(regionId: string | null | undefined): SalesRegion {
+  return getRegion(regionId) ?? REGIONS.odyssey
+}
+
 // Demo mode only (no Supabase configured): map known emails to a region so
 // the portals are previewable without a backend. Real sessions get `region`
 // from their sales_reps row — this list is never consulted for them.

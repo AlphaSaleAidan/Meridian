@@ -14,7 +14,7 @@ import {
   canadaKeys,
 } from '@/lib/canada-queries'
 import { useSalesAuth } from '@/lib/sales-auth'
-import { getRegion } from '@/lib/regions'
+import { getCanadaPortalRegion } from '@/lib/regions'
 import { RegionHero } from '@/components/RegionHero'
 import { useTrainingLock } from '@/lib/training-progress'
 import { useToast } from '@/components/Toast'
@@ -114,7 +114,7 @@ function ProgressBar({ currentStep }: { currentStep: number }) {
 
 export default function CanadaPortalLeadsPage() {
   const { rep } = useSalesAuth()
-  const region = getRegion(rep?.region)
+  const region = getCanadaPortalRegion(rep?.region)
   const { toast } = useToast()
   const { locked: trainingLocked } = useTrainingLock()
   const navigate = useNavigate()
@@ -228,7 +228,7 @@ export default function CanadaPortalLeadsPage() {
 
   return (
     <div className="space-y-5">
-      {/* Odyssey hero — region members only */}
+      {/* Odyssey hero — every Canada rep; a member's own region theme wins */}
       {region && <RegionHero region={region} videoSrc="/regions/odyssey/leads-hero.mp4" />}
 
       {/* Header */}
