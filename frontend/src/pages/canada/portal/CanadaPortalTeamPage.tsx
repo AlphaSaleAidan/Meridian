@@ -231,7 +231,8 @@ export default function CanadaPortalTeamPage() {
       const apiBase = import.meta.env.VITE_API_URL || ''
       // Demo mode (no Supabase configured): no roster API. Region members get
       // a self-seeded roster (DEMO_TEAM is core-only and would be fenced off);
-      // core demo keeps the DEMO_TEAM initial state.
+      // core demo seeds DEMO_TEAM explicitly here — the initial state is []
+      // so real reps never see phantom teammates on fetch failure.
       if (!supabase) {
         if (region) {
           setTeam([{
@@ -242,6 +243,8 @@ export default function CanadaPortalTeamPage() {
             role: admin ? 'admin' : 'active', org_role: rep?.role || 'sales_rep',
             manager_id: null, region: rep?.region || null, location: 'Canada',
           }])
+        } else {
+          setTeam(DEMO_TEAM)
         }
         setTeamLoading(false)
         return
