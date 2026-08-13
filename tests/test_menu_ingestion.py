@@ -131,7 +131,9 @@ def test_parse_llm_items_garbage_raises():
 def test_pdf_text_unavailable_in_this_env():
     # pypdf/pdfminer are intentionally NOT in requirements — the scraper must
     # flag pdf_unsupported rather than crash or add heavy deps.
-    assert menu_scraper._pdf_to_text(b"%PDF-1.4 fake") is None
+    # pypdf may or may not be present; either way a junk PDF yields no usable
+    # text (None when no lib, "" when the lib rejects the corrupt bytes).
+    assert not menu_scraper._pdf_to_text(b"%PDF-1.4 fake")
 
 
 # ── 3. ingestion routes → review gate ────────────────────────────────────

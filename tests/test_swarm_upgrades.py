@@ -33,6 +33,7 @@ def report(name: str, passed: bool, detail: str = ""):
 # ═══════════════════════════════════════════════════════════════
 def test_forecasting_ensemble():
     print("\n── Upgrade 1: Forecasting Ensemble ──")
+    pytest.importorskip("statsforecast")  # optional heavy dep — skip if absent
     import pandas as pd
     from statsforecast import StatsForecast
     from statsforecast.models import AutoARIMA, AutoETS, AutoTheta, SeasonalNaive
@@ -93,6 +94,7 @@ def test_forecasting_ensemble():
 # ═══════════════════════════════════════════════════════════════
 def test_clv_lifetimes():
     print("\n── Upgrade 2: CLV with lifetimes (BG/NBD + Gamma-Gamma) ──")
+    pytest.importorskip("lifetimes")  # optional heavy dep — skip if absent
     import numpy as np
     import pandas as pd
     from lifetimes import BetaGeoFitter, GammaGammaFitter
@@ -178,6 +180,7 @@ def test_vision_yolo():
 # ═══════════════════════════════════════════════════════════════
 def test_anomaly_detection():
     print("\n── Upgrade 4: Anomaly Detection ──")
+    pytest.importorskip("pyod")  # optional heavy dep — skip if absent
     import numpy as np
     from pyod.models.iforest import IForest
     from pyod.models.lof import LOF
