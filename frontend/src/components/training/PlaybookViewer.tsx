@@ -45,10 +45,10 @@ const SECTION_META: Record<string, { label: string; icon: typeof BookOpen; order
 // data-requirements matrices, decision trees, etc.) and not shown to reps.
 const HIDDEN_PREFIXES = ['_']
 
-// Canada sells Square + Clover only (the portal's POS pickers are restricted to
-// match), so Canadian reps only see those two integration guides. US keeps the
-// full catalog.
-const CANADA_POS_GUIDES = new Set(['square.md', 'clover.md', 'clover-read-only.md'])
+// Canada sells Square, Clover, and Stripe (the portal's POS pickers and the
+// onboarding wizard match), so Canadian reps see those integration guides.
+// US keeps the full catalog.
+const CANADA_POS_GUIDES = new Set(['square.md', 'clover.md', 'clover-read-only.md', 'stripe.md'])
 
 function visibleForCountry(path: string, country: 'canada' | 'us'): boolean {
   if (country !== 'canada') return true

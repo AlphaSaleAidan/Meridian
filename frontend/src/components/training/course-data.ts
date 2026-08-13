@@ -133,7 +133,7 @@ export const COURSE_MODULES: CourseModule[] = [
     },
     quiz: [
       {
-        q: 'In one-click connect, whose Square/Clover account signs in?',
+        q: 'In one-click connect, whose POS account (Square, Clover, or Stripe) signs in?',
         options: [
           'The rep\'s demo account',
           'Meridian\'s master account',
@@ -275,7 +275,8 @@ export const COURSE_MODULES: CourseModule[] = [
 
 // ─── Code of Conduct ─────────────────────────────────────────
 
-export const CONDUCT_VERSION = '1.0'
+// 1.1 (2026-08-13): POS provider list corrected to Square, Clover, or Stripe.
+export const CONDUCT_VERSION = '1.1'
 
 export interface ConductSection {
   title: string
@@ -294,7 +295,7 @@ export const CODE_OF_CONDUCT: ConductSection[] = [
     title: 'Claims you may never make',
     rules: [
       'Never guarantee revenue, sales lift, cost savings, or any specific ROI number. You may share real product capabilities; outcomes vary by business.',
-      'Never claim Meridian is a bank, a payment processor, or a point-of-sale system. Meridian connects to the merchant\'s POS (Square/Clover); payments are processed by those providers.',
+      'Never claim Meridian is a bank, a payment processor, or a point-of-sale system. Meridian connects to the merchant\'s existing systems (Square, Clover, or Stripe); payments are processed by those providers.',
       'Never promise unreleased features, dates, or roadmap items as if they exist today. If it isn\'t in your training materials, don\'t sell it.',
       'Never say the camera product records, monitors, or identifies people. Camera analytics are anonymous counts — walk-ins, queues, conversion. No facial recognition, ever.',
       'Never tell a caller or merchant that the AI phone agent is a human, and never deny it\'s AI when asked.',
@@ -305,7 +306,7 @@ export const CODE_OF_CONDUCT: ConductSection[] = [
     title: 'Privacy & compliance',
     rules: [
       'Never advise a merchant to skip consent, signage, or disclosure obligations (PIPEDA, Quebec Law 25, or any local rule). If they have compliance questions you can\'t answer from the guides, escalate — don\'t improvise.',
-      'Never ask for, handle, or store a merchant\'s passwords. The merchant signs into their own Square/Clover account during connect — always.',
+      'Never ask for, handle, or store a merchant\'s passwords. The merchant signs into their own Square, Clover, or Stripe account during connect — always.',
       'Never give legal, tax (GST/HST), or accounting advice.',
     ],
   },
