@@ -379,6 +379,22 @@ async def callback(
     }, origin)
 
 
+@router.get("/capabilities")
+async def capabilities():
+    """Whether Clover 1-click connect is configured on this server.
+
+    Deliberately org-free and public: it exposes only server configuration, no
+    merchant data. The customer onboarding wizard is portal-token authed and has
+    no JWT to send, so it reads its "show the 1-click button?" flag here instead
+    of from /status — which lets /status be tenancy-guarded (it returns
+    org-specific connection state) without breaking the wizard.
+    """
+    return {
+        "oauth_available": clover_config.has_oauth_credentials,
+        "clover_available": clover_config.is_enabled,
+    }
+
+
 @router.get("/status")
 async def connection_status(org_id: str):
     """Quick check if org has an active Clover connection + whether 1-click is available."""

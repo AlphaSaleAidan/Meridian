@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import POSLogo, { POSStatusBadge } from './POSLogo'
 import PasswordInput from '@/components/ui/PasswordInput'
+import { getAuthHeaders } from '@/lib/supabase'
 import { posSystems, type POSSystem, type POSSystemKey } from '@/data/pos-systems'
 import { useIsDemo, useOrgId } from '@/hooks/useOrg'
 
@@ -323,7 +324,10 @@ function LayoutA({ system, onConnect, isDemo, repId }: {
     const tick = async () => {
       try {
         const statusPath = OAUTH_STATUS[system.key] || `/api/${system.key}/status`
-        const res = await fetch(`${apiBase}${statusPath}?org_id=${encodeURIComponent(orgId)}`)
+        // /status returns this org's connection state, so carry the merchant's
+        // Supabase JWT — it was being polled anonymously (prep for the guard).
+        const headers = await getAuthHeaders()
+        const res = await fetch(`${apiBase}${statusPath}?org_id=${encodeURIComponent(orgId)}`, { headers })
         if (!res.ok) return
         const st = await res.json()
         if (active && st?.connected) {

@@ -65,6 +65,22 @@ async def list_providers():
     }
 
 
+@router.get("/{provider}/capabilities")
+async def capabilities(provider: str):
+    """Whether this framework provider's 1-click connect is configured.
+
+    Deliberately org-free and public (mirrors /api/clover/capabilities): it
+    exposes only server configuration, no merchant data. Surfaces that only
+    need the "show the 1-click button?" flag read it here instead of /status —
+    which lets /status be tenancy-guarded (it returns org-specific connection
+    state) without breaking portal-token-authed callers.
+    """
+    cfg = get_provider(provider)
+    if cfg is None:
+        raise HTTPException(404, "Unknown POS provider")
+    return {"oauth_available": cfg.enabled()}
+
+
 @router.get("/{provider}/status")
 async def status(provider: str, org_id: str):
     """Connection status for a framework provider (same shape as the dedicated

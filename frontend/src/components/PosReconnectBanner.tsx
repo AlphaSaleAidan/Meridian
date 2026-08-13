@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { AlertTriangle } from 'lucide-react'
 import { useOrgId } from '@/hooks/useOrg'
+import { getAuthHeaders } from '@/lib/supabase'
 
 // OAuth providers that can be re-linked in one click. Toast (manual token) is
 // intentionally excluded — it has no authorize flow.
@@ -30,10 +31,14 @@ export default function PosReconnectBanner() {
     if (!orgId || orgId === 'demo') return
     let active = true
     ;(async () => {
+      // /status returns this org's connection state, so it must carry the
+      // merchant's Supabase JWT — it was being fetched anonymously.
+      const headers = await getAuthHeaders()
       for (const provider of ['square', 'clover']) {
         try {
           const r = await fetch(
             `${apiBase}${STATUS_URL[provider]}?org_id=${encodeURIComponent(orgId)}`,
+            { headers },
           )
           const d = await r.json()
           if (d?.status === 'needs_reconnect') {
