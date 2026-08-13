@@ -82,6 +82,7 @@ export default function CanadaCustomerOnboardingWizard() {
     price: searchParams.get('price') || '',
     setup: searchParams.get('setup') || '',
     freemonth: searchParams.get('freemonth') || '',
+    repName: searchParams.get('rep_name') || '',
   }
 
   const [step, setStep] = useState<Step>('account')
@@ -723,6 +724,8 @@ export default function CanadaCustomerOnboardingWizard() {
                 This Agreement is entered into between <span className={T.text}>Meridian AI Business Solutions</span> ("Provider")
                 and <span className={T.text}>{account.businessName || '[Business Name]'}</span> ("Client"),
                 represented by <span className={T.text}>{account.ownerName || '[Owner Name]'}</span>.
+                {prefill.repName && <> This Agreement is arranged on Provider's behalf by Sales Representative{' '}
+                <span className={T.text}>{prefill.repName}</span>.</>}
               </p>
 
               <h3 className="text-sm-tight font-semibold mt-3">1. Services</h3>
