@@ -53,12 +53,22 @@ CREATE TABLE IF NOT EXISTS ad_spot_orders (
     --   boarding   → storyboard being written
     --   generating → shots submitted to the generation queue
     --   shots_ready→ every shot landed; awaiting the finishing cut
+    --   assembling → the cut is running (ffmpeg: concat + VO + bed)
+    --   assembled  → a master exists at master_url, awaiting human review
     --   delivered  → final master handed to the merchant
-    --   failed     → boarding or every shot failed; needs a human
+    --   failed     → boarding, generation or assembly failed; needs a human
     status            text NOT NULL DEFAULT 'boarding'
-        CHECK (status IN ('boarding', 'generating', 'shots_ready', 'delivered', 'failed')),
+        CHECK (status IN ('boarding', 'generating', 'shots_ready', 'assembling',
+                          'assembled', 'delivered', 'failed')),
     status_detail     text,
     storyboard        jsonb,
+
+    -- The cut. master_url is what assembly produced; delivered_url is what a
+    -- human signed off and handed over. They are usually the same file, and
+    -- deliberately separate columns: an assembled master is NOT a delivery.
+    master_url        text,
+    assembled_at      timestamptz,
+    assembly_notes    jsonb,
     delivered_url     text,
     delivered_at      timestamptz
 );
@@ -108,3 +118,15 @@ ALTER TABLE ad_spot_shots  ENABLE ROW LEVEL SECURITY;
 
 REVOKE ALL ON ad_spot_orders FROM anon, authenticated;
 REVOKE ALL ON ad_spot_shots  FROM anon, authenticated;
+
+-- ═══════════════════════════════════════════════════════════════
+-- 4. Storage bucket for the finished masters
+-- ═══════════════════════════════════════════════════════════════
+-- The assembly step uploads the cut MP4 here. PUBLIC on purpose: the merchant
+-- is handed a link to a file they have paid for and will run as an ad, and
+-- object names carry a random order id, so there is nothing to enumerate.
+-- The API creates the bucket on first upload too — this line just makes a
+-- fresh environment match a live one.
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('ad-spots', 'ad-spots', true)
+ON CONFLICT (id) DO NOTHING;

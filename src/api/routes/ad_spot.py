@@ -13,17 +13,21 @@ Closing the deal posts the rep's intake here. From that brief the route:
   3. SUBMITS each shot to the same fal.ai queue the content studio already
      runs on, then polls each to completion.
 
-WHAT THIS DOES NOT DO: it does not cut the master. Assembly — trimming to the
-read, voiceover, music bed, captions — is a finishing step on top of the
-completed shots, and the finished file is recorded back on the order via
-POST /api/content/ad-spot/{id}/deliver. `shots_ready` means footage in hand,
-not "ad delivered". Do not report an order as delivered before that call.
+  4. ASSEMBLES the shots into a master on request (src/media/spot_assembly.py:
+     concat to exact runtime, Telnyx voiceover of the boarded script, ducked
+     music bed, optional burned captions) and uploads it to Supabase Storage.
+
+`shots_ready` means footage in hand. `assembled` means a master exists and a
+human should watch it. Only POST /{id}/deliver marks a spot delivered — nothing
+in this pipeline decides on its own that a merchant's ad is finished.
 
 Routes:
-  POST /api/content/ad-spot/order          → record the sold brief + start generation
-  GET  /api/content/ad-spot/{order_id}     → order + per-shot status
-  GET  /api/content/ad-spot                → orders for the calling rep
-  POST /api/content/ad-spot/{id}/deliver   → attach the finished master (admin)
+  POST /api/content/ad-spot/order              → record the sold brief + start generation
+  GET  /api/content/ad-spot/{order_id}         → order + per-shot status
+  GET  /api/content/ad-spot                    → orders for the calling rep
+  POST /api/content/ad-spot/{id}/shots/{n}/retry → re-generate one weak or failed shot
+  POST /api/content/ad-spot/{id}/assemble      → cut the shots into a master
+  POST /api/content/ad-spot/{id}/deliver       → hand the master over (admin)
 """
 
 import asyncio
@@ -66,6 +70,10 @@ PLACEMENT_ASPECT = {
 
 MAX_POLLS = 200          # × POLL_INTERVAL ≈ 10 min per shot
 POLL_INTERVAL = 3
+
+# Supabase Storage bucket the cut masters land in (migration 078 creates it;
+# the upload path also creates it on demand so a fresh env self-heals).
+STORAGE_BUCKET = os.getenv("AD_SPOT_BUCKET", "ad-spots")
 
 _UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I)
 
@@ -171,12 +179,18 @@ class AdSpotOrderRequest(BaseModel):
 
 
 class AdSpotDeliverRequest(BaseModel):
-    deliveredUrl: str
+    #: Omit to hand over the assembled master. Supply a URL to deliver a cut
+    #: that was finished outside the pipeline (an editor's pass, say).
+    deliveredUrl: Optional[str] = None
 
     @field_validator("deliveredUrl")
     @classmethod
-    def validate_url(cls, v: str) -> str:
-        v = (v or "").strip()
+    def validate_url(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        v = v.strip()
+        if not v:
+            return None
         if not v.startswith("https://"):
             raise ValueError("deliveredUrl must be an https URL")
         return v
@@ -578,6 +592,194 @@ async def list_ad_spot_orders(repId: Optional[str] = None, user: dict = Depends(
     return {"ok": True, "orders": resp.json() if resp.status_code == 200 else []}
 
 
+async def _fetch_order(client: httpx.AsyncClient, url: str, key: str, order_id: str) -> dict:
+    resp = await client.get(
+        f"{url}/rest/v1/ad_spot_orders?id=eq.{order_id}&select=*", headers=_sb_headers(key)
+    )
+    rows = resp.json() if resp.status_code == 200 else []
+    if not rows:
+        raise HTTPException(404, "Ad-spot order not found")
+    return rows[0]
+
+
+async def _fetch_shots(client: httpx.AsyncClient, url: str, key: str, order_id: str) -> list[dict]:
+    resp = await client.get(
+        f"{url}/rest/v1/ad_spot_shots?order_id=eq.{order_id}&select=*&order=shot_number.asc",
+        headers=_sb_headers(key),
+    )
+    return resp.json() if resp.status_code == 200 else []
+
+
+@router.post("/{order_id}/shots/{shot_number}/retry")
+async def retry_shot(order_id: str, shot_number: int, user: dict = Depends(require_jwt)):
+    """Re-generate a single shot — the one that came back wrong, without
+    re-rolling (or re-paying for) the other five."""
+    if not _UUID_RE.match(order_id):
+        raise HTTPException(400, "Invalid order id")
+    if not 1 <= shot_number <= SHOT_COUNT:
+        raise HTTPException(400, f"shot_number must be 1..{SHOT_COUNT}")
+    url, key = _require_supabase()
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        order = await _fetch_order(client, url, key, order_id)
+        shots = await _fetch_shots(client, url, key, order_id)
+        shot = next((s for s in shots if s.get("shot_number") == shot_number), None)
+        if not shot:
+            raise HTTPException(404, f"Shot {shot_number} not found on this order")
+        if not shot.get("prompt"):
+            raise HTTPException(409, "That shot has no prompt to re-run — re-board the order instead")
+
+        aspect = order.get("aspect_ratio") or PLACEMENT_ASPECT["instagram_reel"]
+        await _sb_patch("ad_spot_shots", shot["id"], {
+            "status": "queued", "video_url": None, "error": None,
+            "fal_request_id": None, "fal_status_url": None, "fal_response_url": None,
+        })
+        handles = await _submit_shot(
+            client, order_id, shot["id"], shot["prompt"],
+            _pick_model(shot.get("model")), aspect,
+        )
+        if handles is None:
+            raise HTTPException(502, "Could not resubmit that shot to the generation queue")
+
+    async def finish() -> None:
+        async with httpx.AsyncClient(timeout=30.0) as poll_client:
+            await _poll_shot(poll_client, shot["id"], handles)
+
+    asyncio.create_task(finish())
+    return {"ok": True, "orderId": order_id, "shotNumber": shot_number, "status": "generating"}
+
+
+async def _upload_master(client: httpx.AsyncClient, url: str, key: str,
+                         order_id: str, data: bytes) -> str:
+    """Put the cut MP4 in the ad-spots bucket and return its public URL."""
+    # Idempotent bucket create — a fresh environment should not need a manual
+    # dashboard step before the first spot can be delivered.
+    await client.post(
+        f"{url}/storage/v1/bucket",
+        headers=_sb_headers(key),
+        json={"id": STORAGE_BUCKET, "name": STORAGE_BUCKET, "public": True},
+    )
+    object_path = f"{order_id}/master.mp4"
+    resp = await client.post(
+        f"{url}/storage/v1/object/{STORAGE_BUCKET}/{object_path}",
+        headers={
+            "Authorization": f"Bearer {key}",
+            "apikey": key,
+            "Content-Type": "video/mp4",
+            "x-upsert": "true",
+        },
+        content=data,
+    )
+    if resp.status_code not in (200, 201):
+        raise HTTPException(502, f"Master upload failed ({resp.status_code}): {resp.text[:200]}")
+    return f"{url}/storage/v1/object/public/{STORAGE_BUCKET}/{object_path}"
+
+
+async def _assemble_and_store(order_id: str, order: dict, completed: list[dict]) -> None:
+    """Cut, upload, record. Runs detached — see assemble_order for why.
+
+    Every exit path writes a status. An order that silently stayed on
+    `assembling` forever would look identical to one still working, and the
+    operator would never know to step in.
+    """
+    try:
+        from ...media.spot_assembly import assemble_spot
+        result = await assemble_spot(
+            shots=completed,
+            aspect_ratio=order.get("aspect_ratio") or "9:16",
+            shot_seconds=SHOT_SECONDS,
+            audio_treatment=order.get("audio") or "voiceover_music",
+        )
+    except Exception as exc:  # noqa: BLE001 — includes AssemblyError and ImportError
+        logger.exception("order=%s assembly failed", order_id)
+        await _sb_patch("ad_spot_orders", order_id, {
+            "status": "shots_ready",
+            "status_detail": f"assembly failed: {exc}"[:400],
+        })
+        return
+
+    try:
+        url, key = _get_supabase()
+        async with httpx.AsyncClient(timeout=180.0) as client:
+            master_url = await _upload_master(client, url, key, order_id, result.master)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("order=%s master upload failed", order_id)
+        await _sb_patch("ad_spot_orders", order_id, {
+            "status": "shots_ready",
+            "status_detail": f"cut fine but the upload failed: {exc}"[:400],
+        })
+        return
+
+    await _sb_patch("ad_spot_orders", order_id, {
+        "status": "assembled",
+        "status_detail": f"{result.duration_seconds}s master cut from {len(completed)} shots"
+                         + (f" — {'; '.join(result.notes)}" if result.notes else ""),
+        "master_url": master_url,
+        "assembled_at": datetime.now(timezone.utc).isoformat(),
+        "assembly_notes": {
+            "notes": result.notes,
+            "hasVoiceover": result.has_voiceover,
+            "hasMusic": result.has_music,
+            "hasCaptions": result.has_captions,
+            "width": result.width,
+            "height": result.height,
+            "shotsUsed": len(completed),
+        },
+    })
+    logger.info("order=%s assembled: %ss, %d shots", order_id, result.duration_seconds, len(completed))
+
+
+@router.post("/{order_id}/assemble")
+async def assemble_order(order_id: str, user: dict = Depends(require_jwt)):
+    """Start cutting the completed shots into one master.
+
+    Detached rather than synchronous: encoding six 1080p shots takes minutes,
+    and holding the request open that long means a proxy timeout can kill a
+    paid deliverable's cut halfway through. The order goes to `assembling` and
+    the console polls it — the same way it already watches generation.
+
+    Whatever the cut had to leave out lands in assembly_notes and is shown to
+    the operator; it is never quietly dropped.
+    """
+    if not _UUID_RE.match(order_id):
+        raise HTTPException(400, "Invalid order id")
+    url, key = _require_supabase()
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        order = await _fetch_order(client, url, key, order_id)
+        shots = await _fetch_shots(client, url, key, order_id)
+
+    completed = [s for s in shots if s.get("status") == "completed" and s.get("video_url")]
+    if not completed:
+        raise HTTPException(409, "No completed shots yet — nothing to cut")
+    if order.get("status") == "assembling":
+        raise HTTPException(409, "That spot is already being cut")
+
+    # Carry each shot's boarded voiceover line into assembly: the storyboard
+    # holds the script, the shot rows hold the footage.
+    board = {
+        int(s.get("shot", 0)): s
+        for s in ((order.get("storyboard") or {}).get("shots") or [])
+        if isinstance(s, dict)
+    }
+    for s in completed:
+        s["voiceover"] = (board.get(s.get("shot_number"), {}) or {}).get("voiceover", "")
+
+    await _sb_patch("ad_spot_orders", order_id, {
+        "status": "assembling",
+        "status_detail": f"cutting {len(completed)} shots",
+    })
+    asyncio.create_task(_assemble_and_store(order_id, order, completed))
+
+    return {
+        "ok": True,
+        "orderId": order_id,
+        "status": "assembling",
+        "shotsUsed": len(completed),
+        "durationSeconds": len(completed) * SHOT_SECONDS,
+    }
+
+
 @router.post("/{order_id}/deliver")
 async def deliver_ad_spot(order_id: str, req: AdSpotDeliverRequest, _admin: dict = Depends(require_admin_jwt)):
     """Attach the finished master to the order — the only thing that marks a
@@ -585,11 +787,24 @@ async def deliver_ad_spot(order_id: str, req: AdSpotDeliverRequest, _admin: dict
     they paid for."""
     if not _UUID_RE.match(order_id):
         raise HTTPException(400, "Invalid order id")
-    _require_supabase()
+    url, key = _require_supabase()
+
+    delivered_url = req.deliveredUrl
+    if not delivered_url:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            order = await _fetch_order(client, url, key, order_id)
+        delivered_url = order.get("master_url")
+        if not delivered_url:
+            raise HTTPException(
+                409,
+                "Nothing to deliver — assemble the spot first, or pass deliveredUrl "
+                "for a cut finished outside the pipeline",
+            )
+
     await _sb_patch("ad_spot_orders", order_id, {
         "status": "delivered",
-        "delivered_url": req.deliveredUrl,
+        "delivered_url": delivered_url,
         "delivered_at": datetime.now(timezone.utc).isoformat(),
         "status_detail": "final master delivered",
     })
-    return {"ok": True, "orderId": order_id, "status": "delivered"}
+    return {"ok": True, "orderId": order_id, "status": "delivered", "deliveredUrl": delivered_url}
