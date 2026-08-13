@@ -27,8 +27,6 @@ const ForecastsPage = lazyRetry(() => import('@/pages/ForecastsPage'))
 const NotificationsPage = lazyRetry(() => import('@/pages/NotificationsPage'))
 const SettingsPage = lazyRetry(() => import('@/pages/SettingsPage'))
 const IntegrationsHubPage = lazyRetry(() => import('@/pages/IntegrationsHubPage'))
-const PrivacyPage = lazyRetry(() => import('@/pages/PrivacyPage'))
-const TermsPage = lazyRetry(() => import('@/pages/TermsPage'))
 const InventoryPage = lazyRetry(() => import('@/pages/InventoryPage'))
 const AgentDashboardPage = lazyRetry(() => import('@/pages/AgentDashboardPage'))
 const HubPage = lazyRetry(() => import('@/pages/HubPage'))
@@ -326,8 +324,6 @@ export default function App() {
 
               {/* About / founder — owned entity page for the company + CEO */}
               <Route path="/about" element={<FounderPage />} />
-              <Route path="/privacy" element={<Suspense fallback={<LazyFallback />}><PrivacyPage /></Suspense>} />
-              <Route path="/terms" element={<Suspense fallback={<LazyFallback />}><TermsPage /></Suspense>} />
               <Route path="/founder" element={<Navigate to="/about" replace />} />
 
               {/* Guides — intent-based SEO content */}
