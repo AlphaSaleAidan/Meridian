@@ -12,7 +12,7 @@ import {
   CAD_VERTICALS,
 } from '@/data/cadVerticals'
 import { type Deal, type DealStage } from '@/lib/canada-sales-demo-data'
-import { closestMonthlyPlanCad, getPlan, PLAN_TIERS, ZERO_PER_ORDER_CARDS, REP_PRICE_HEADROOM_CAD, CAD_RATE, WEBSITE_MODULES, websiteMonthlyFree, CUSTOM_CRM_SERVICE, parseSetupServiceAmount, VOICE_INCLUDED_MINUTES, VOICE_OVERAGE_PER_MIN, VOICE_MAX_CALL_MINUTES, type PlanTier } from '@/lib/canada-proposal-plans'
+import { closestMonthlyPlanCad, getPlan, PLAN_TIERS, ZERO_PER_ORDER_CARDS, REP_PRICE_HEADROOM_CAD, CAD_RATE, WEBSITE_MODULES, websiteMonthlyFree, CUSTOM_CRM_SERVICE, parseSetupServiceAmount, AD_SPOT_SERVICE, AD_SPOT_PLACEMENTS, AD_SPOT_AUDIO, VOICE_INCLUDED_MINUTES, VOICE_OVERAGE_PER_MIN, VOICE_MAX_CALL_MINUTES, type PlanTier } from '@/lib/canada-proposal-plans'
 
 // Website Buildout is sold as modular line items (WEBSITE_MODULES) — the
 // one-time modules sum into the setup fee. Creating the customer fires the
@@ -184,7 +184,17 @@ export default function CanadaPortalLeadDetailPage() {
   const [crm, setCrm] = useState(false)
   const [crmAmount, setCrmAmount] = useState('')
   const crmOneTime = crm ? parseSetupServiceAmount(crmAmount) : 0
-  const setupFee = String((website ? websiteOneTime : 0) + crmOneTime)
+  // 30-Second AI Advertisement — a fixed-price Setup Service. The brief the
+  // rep takes here is what the generation pipeline boards the spot from.
+  const [adSpot, setAdSpot] = useState(false)
+  const [adGoal, setAdGoal] = useState('')
+  const [adHighlights, setAdHighlights] = useState('')
+  const [adBrand, setAdBrand] = useState('')
+  const [adPlacement, setAdPlacement] = useState(AD_SPOT_PLACEMENTS[0].id)
+  const [adAudio, setAdAudio] = useState(AD_SPOT_AUDIO[0].id)
+  const [adSpotOrderId, setAdSpotOrderId] = useState('')
+  const adSpotOneTime = adSpot ? AD_SPOT_SERVICE.price : 0
+  const setupFee = String((website ? websiteOneTime : 0) + crmOneTime + adSpotOneTime)
   const [firstMonthFree, setFirstMonthFree] = useState(false)
 
   // Proposal state
@@ -267,6 +277,12 @@ export default function CanadaPortalLeadDetailPage() {
       setCustomerCreating(false)
       return
     }
+    if (adSpot && !adGoal.trim()) {
+      setCustomerError(`${AD_SPOT_SERVICE.label} is on but has no brief — say what the spot has to sell.`)
+      creatingRef.current = false
+      setCustomerCreating(false)
+      return
+    }
 
     try {
       if (!supabase) throw new Error('Database not connected')
@@ -333,6 +349,39 @@ export default function CanadaPortalLeadDetailPage() {
           }
         } catch {
           setCustomerError('Account created, but the website build contest did not launch — start it manually at foundry.meridian.tips/agency/website.')
+        }
+      }
+      // 30-second spot sold → hand the brief to the generation pipeline
+      // (best-effort, same as the website sprint above).
+      if (adSpot) {
+        try {
+          const adRes = await fetch(`${API_BASE}/api/content/ad-spot/order`, {
+            method: 'POST',
+            headers: authHeaders,
+            body: JSON.stringify({
+              market: 'ca',
+              leadId: deal.id,
+              repId: rep?.rep_id || null,
+              repName: rep?.name || null,
+              businessName: deal.business_name,
+              businessType: deal.vertical || 'retail',
+              contactEmail: email,
+              priceCents: AD_SPOT_SERVICE.price * 100,
+              goal: adGoal.trim(),
+              highlights: adHighlights.trim(),
+              brandNotes: adBrand.trim(),
+              placement: adPlacement,
+              audio: adAudio,
+            }),
+          })
+          const adData = await adRes.json().catch(() => null)
+          if (adRes.ok && adData?.orderId) {
+            setAdSpotOrderId(adData.orderId)
+          } else {
+            setCustomerError('Account created, but the 30-second spot did not queue — flag it so the spot gets boarded manually.')
+          }
+        } catch {
+          setCustomerError('Account created, but the 30-second spot did not queue — flag it so the spot gets boarded manually.')
         }
       }
       // The fee seed is best-effort server-side — if it failed, creation still
@@ -1281,6 +1330,43 @@ export default function CanadaPortalLeadDetailPage() {
                 <input type="number" min={0} value={crmAmount} onChange={e => setCrmAmount(e.target.value)}
                   className={inputClass} placeholder="Build price — the amount you quoted (required)" />
                 <p className="text-2xs text-pm-canada-text-faint">Scoped per deal. Adds to the one-time setup fee.</p>
+              </div>
+            )}
+            <div className="flex items-center justify-between p-4 border-t border-pm-canada-border">
+              <div>
+                <p className="text-sm font-semibold text-white">{AD_SPOT_SERVICE.label}</p>
+                <p className="text-2xs text-pm-canada-text-muted">{AD_SPOT_SERVICE.blurb}</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-semibold text-pm-accent">CA${AD_SPOT_SERVICE.price.toLocaleString()}</span>
+                <div className={`w-9 h-5 rounded-full transition-colors relative cursor-pointer ${adSpot ? 'bg-pm-accent' : 'bg-pm-canada-border'}`}
+                  onClick={() => setAdSpot(!adSpot)}
+                >
+                  <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${adSpot ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                </div>
+              </div>
+            </div>
+            {adSpot && (
+              <div className="px-4 pb-4 pt-3 space-y-2 border-t border-pm-canada-border">
+                <textarea rows={2} value={adGoal} onChange={e => setAdGoal(e.target.value)}
+                  className={`${inputClass} resize-none`} placeholder="What must the ad sell? (required — this is the creative brief)" />
+                <input type="text" value={adHighlights} onChange={e => setAdHighlights(e.target.value)}
+                  className={inputClass} placeholder="Feature these — comma-separated" />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <select value={adPlacement} onChange={e => setAdPlacement(e.target.value)} className={inputClass}>
+                    {AD_SPOT_PLACEMENTS.map(p => <option key={p.id} value={p.id}>{p.label} ({p.aspect})</option>)}
+                  </select>
+                  <select value={adAudio} onChange={e => setAdAudio(e.target.value)} className={inputClass}>
+                    {AD_SPOT_AUDIO.map(a => <option key={a.id} value={a.id}>{a.label}</option>)}
+                  </select>
+                </div>
+                <input type="text" value={adBrand} onChange={e => setAdBrand(e.target.value)}
+                  className={inputClass} placeholder="Brand notes — colors, tone, ads they like" />
+                <p className="text-2xs text-pm-accent/60">
+                  {adSpotOrderId
+                    ? `Spot boarded — order ${adSpotOrderId}`
+                    : `Creating the account boards the spot into ${AD_SPOT_SERVICE.shotCount} shots and starts generating them.`}
+                </p>
               </div>
             )}
           </div>

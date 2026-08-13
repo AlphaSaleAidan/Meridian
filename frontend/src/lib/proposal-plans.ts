@@ -146,6 +146,62 @@ export const WEBSITE_MODULES: WebsiteModule[] = [
 ]
 
 /**
+ * 30-Second AI Advertisement (Aidan 2026-08-14) — a Setup Service alongside
+ * Website Buildout: FIXED price, billed into the same one-time setup fee.
+ *
+ * What the merchant buys is a finished 30-second commercial, not a credit
+ * balance: the rep's intake below becomes the creative brief, and closing the
+ * deal posts it to POST /api/content/ad-spot/order, where the Commercial
+ * Director boards it into SHOT_COUNT shots and submits each to the generation
+ * pipeline. Assembly (cut, voiceover, music, captions) is a finishing step on
+ * top of the generated shots — see docs and the route's module docstring.
+ */
+export interface AdSpotService {
+  id: string
+  label: string
+  blurb: string
+  price: number
+  /** Finished runtime of the delivered spot, in seconds. */
+  durationSeconds: number
+  /** Shots the spot is cut from — the pipeline generates one clip per shot. */
+  shotCount: number
+  /** What the merchant receives — quoted on the proposal, so keep it true. */
+  deliverables: string[]
+}
+
+export const AD_SPOT_SERVICE: AdSpotService = {
+  id: 'adspot',
+  label: '30-Second AI Advertisement',
+  blurb: 'A finished 30-second commercial for their business — scripted, generated, and cut for their channels',
+  price: 1000,
+  durationSeconds: 30,
+  shotCount: 6,
+  deliverables: [
+    'Scripted 30-second spot built from their offer',
+    'Six AI-generated shots, cut to the read',
+    'Voiceover and music bed',
+    'Delivered in their placement\'s aspect ratio, no watermark',
+    'One revision round on the cut',
+  ],
+}
+
+/** Where the spot runs — this picks the aspect ratio the shots generate at.
+ *  Ids match the backend PLATFORM_CONFIG keys; do not invent new ones here
+ *  without adding them there too (an unknown id silently falls back to 9:16). */
+export const AD_SPOT_PLACEMENTS: { id: string; label: string; aspect: string }[] = [
+  { id: 'instagram_reel', label: 'Reels / TikTok / Shorts', aspect: '9:16' },
+  { id: 'instagram_feed', label: 'Instagram + Facebook feed', aspect: '1:1' },
+  { id: 'youtube_video', label: 'YouTube / website / in-store screen', aspect: '16:9' },
+]
+
+/** How the spot is scored. Drives the finishing step, not the shot prompts. */
+export const AD_SPOT_AUDIO: { id: string; label: string }[] = [
+  { id: 'voiceover_music', label: 'Voiceover + music bed' },
+  { id: 'music_only', label: 'Music bed only' },
+  { id: 'captions_only', label: 'On-screen captions only (silent autoplay)' },
+]
+
+/**
  * Custom CRM build — a Setup Service alongside Website Buildout, billed into
  * the same one-time setup fee. Unlike the website modules its price is NOT
  * fixed: the build is scoped per deal, so the rep enters the amount they

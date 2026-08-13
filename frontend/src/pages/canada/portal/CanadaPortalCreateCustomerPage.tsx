@@ -4,12 +4,12 @@ import {
   ArrowLeft, ArrowRight, CheckCircle2, Copy, Send, Check,
   Store, User, Mail, Phone, DollarSign, FileDown,
   Loader2, Eye, Gift, Sparkles, QrCode, ExternalLink, X, Globe, Users,
-  AlertTriangle,
+  AlertTriangle, Clapperboard,
 } from 'lucide-react'
 import { useSalesAuth } from '@/lib/sales-auth'
 import { posSystems } from '@/data/pos-systems'
 import { supabase, getAuthHeaders } from '@/lib/supabase'
-import { PLAN_TIERS, getPlan, REP_PRICE_HEADROOM_CAD, ZERO_PER_ORDER_CARDS, WEBSITE_MODULES, websiteMonthlyFree, CUSTOM_CRM_SERVICE, parseSetupServiceAmount, type PlanTier } from '@/lib/canada-proposal-plans'
+import { PLAN_TIERS, getPlan, REP_PRICE_HEADROOM_CAD, ZERO_PER_ORDER_CARDS, WEBSITE_MODULES, websiteMonthlyFree, CUSTOM_CRM_SERVICE, parseSetupServiceAmount, AD_SPOT_SERVICE, AD_SPOT_PLACEMENTS, AD_SPOT_AUDIO, type PlanTier } from '@/lib/canada-proposal-plans'
 import { downloadProposalPdf, type ProposalInput } from '@/lib/generate-proposal-pdf'
 import { verticalsByGroup, findVerticalBySlug, DECK_BASE_URL, buildPersonalizedDeckUrl } from '@/data/cadVerticals'
 
@@ -60,6 +60,7 @@ function ProposalOverlay({
   verticalTitle,
   deckUrl,
   websiteAddon = 0,
+  adSpotAddon = 0,
 }: {
   open: boolean
   onClose: () => void
@@ -78,6 +79,8 @@ function ProposalOverlay({
   deckUrl?: string
   /** portion of setupFee that is the 48h website build — shown as its own line */
   websiteAddon?: number
+  /** portion of setupFee that is the 30-second spot — shown as its own line */
+  adSpotAddon?: number
 }) {
   const [currentSlide, setCurrentSlide] = useState(0)
   const totalSlides = 8
@@ -289,16 +292,22 @@ function ProposalOverlay({
                   <span className="text-sm-tight text-pm-canada-text-muted">{plan.label} Plan</span>
                   <span className="text-sm-tight text-white font-medium">CA${price}{interval}</span>
                 </div>
-                {setupFee - websiteAddon > 0 && (
+                {setupFee - websiteAddon - adSpotAddon > 0 && (
                   <div className="flex justify-between py-2 border-b border-pm-canada-border">
                     <span className="text-sm-tight text-pm-canada-text-muted">Setup Fee</span>
-                    <span className="text-sm-tight text-white font-medium">CA${setupFee - websiteAddon}</span>
+                    <span className="text-sm-tight text-white font-medium">CA${setupFee - websiteAddon - adSpotAddon}</span>
                   </div>
                 )}
                 {websiteAddon > 0 && (
                   <div className="flex justify-between py-2 border-b border-pm-canada-border">
                     <span className="text-sm-tight text-pm-canada-text-muted">Custom Website — built in 48 hours</span>
                     <span className="text-sm-tight text-white font-medium">CA${websiteAddon}</span>
+                  </div>
+                )}
+                {adSpotAddon > 0 && (
+                  <div className="flex justify-between py-2 border-b border-pm-canada-border">
+                    <span className="text-sm-tight text-pm-canada-text-muted">{AD_SPOT_SERVICE.label}</span>
+                    <span className="text-sm-tight text-white font-medium">CA${adSpotAddon.toLocaleString()}</span>
                   </div>
                 )}
                 {firstMonthFree && (
@@ -547,6 +556,14 @@ export default function CanadaPortalCreateCustomerPage() {
     // Custom CRM build: same setup fee, but rep-priced — scope varies per deal.
     crm: false,
     crmAmount: '',
+    // 30-Second AI Advertisement: fixed price into the setup fee; the intake
+    // below is the creative brief the generation pipeline boards from.
+    adSpot: false,
+    adGoal: '',
+    adHighlights: '',
+    adBrand: '',
+    adPlacement: AD_SPOT_PLACEMENTS[0].id,
+    adAudio: AD_SPOT_AUDIO[0].id,
     notes: '',
   })
 
@@ -581,7 +598,8 @@ export default function CanadaPortalCreateCustomerPage() {
   // one-time modules today, more services coming). Monthly modules bill
   // recurring and are disclosed separately, never in the one-time fee.
   const crmOneTime = form.crm ? parseSetupServiceAmount(form.crmAmount) : 0
-  const setupFee = (form.website ? websiteOneTime : 0) + crmOneTime
+  const adSpotOneTime = form.adSpot ? AD_SPOT_SERVICE.price : 0
+  const setupFee = (form.website ? websiteOneTime : 0) + crmOneTime + adSpotOneTime
   const dueToday = (form.firstMonthFree ? 0 : price) + setupFee
   const interval = selectedPlan.interval === 'week' ? '/wk' : '/mo'
 
@@ -681,6 +699,8 @@ export default function CanadaPortalCreateCustomerPage() {
   const [crmRecordError, setCrmRecordError] = useState<string | null>(null)
   const [websiteContestUrl, setWebsiteContestUrl] = useState('')
   const [websiteContestError, setWebsiteContestError] = useState<string | null>(null)
+  const [adSpotOrderId, setAdSpotOrderId] = useState('')
+  const [adSpotError, setAdSpotError] = useState<string | null>(null)
   // Survives a failed provision → retry doesn't insert a duplicate lead.
   const createdLeadIdRef = useRef<string | null>(null)
 
@@ -718,10 +738,50 @@ export default function CanadaPortalCreateCustomerPage() {
     }
   }
 
+  // 30-second spot sold → hand the brief to the generation pipeline. It boards
+  // the spot into six 5-second shots and generates each one; the finishing cut
+  // (voiceover, music, captions) happens on top of the shots that land. Like
+  // the website sprint this is best-effort — a pipeline hiccup must never
+  // block the customer the rep just closed.
+  async function launchAdSpot(leadId: string | null) {
+    try {
+      const adHeaders = await getAuthHeaders()
+      const res = await fetch(`${API_URL}/api/content/ad-spot/order`, {
+        method: 'POST',
+        headers: adHeaders,
+        body: JSON.stringify({
+          market: 'ca',
+          orgId,
+          leadId,
+          repId: rep?.rep_id || null,
+          repName: rep?.name || null,
+          businessName: form.businessName,
+          businessType: form.vertical || 'retail',
+          contactEmail: form.email,
+          priceCents: AD_SPOT_SERVICE.price * 100,
+          goal: form.adGoal.trim(),
+          highlights: form.adHighlights.trim(),
+          brandNotes: form.adBrand.trim(),
+          placement: form.adPlacement,
+          audio: form.adAudio,
+        }),
+      })
+      const data = await res.json().catch(() => null)
+      if (res.ok && data?.orderId) {
+        setAdSpotOrderId(data.orderId)
+      } else {
+        setAdSpotError(typeof data?.detail === 'string' ? data.detail : `Ad spot order failed (${res.status})`)
+      }
+    } catch {
+      setAdSpotError('Could not reach the ad pipeline — the spot is sold but not yet queued. Re-run it from the lead.')
+    }
+  }
+
   async function handleCreateCustomer() {
     setSaving(true)
     setError(null)
     setCrmRecordError(null)
+    setAdSpotError(null)
     try {
       if (!form.email.trim()) {
         throw new Error('Customer email is required to create their login')
@@ -731,6 +791,9 @@ export default function CanadaPortalCreateCustomerPage() {
       }
       if (form.crm && crmOneTime <= 0) {
         throw new Error('Custom CRM build is on but has no price — enter the amount you quoted')
+      }
+      if (form.adSpot && !form.adGoal.trim()) {
+        throw new Error('Ad brief: say what the 30-second spot has to sell — that brief is what gets boarded')
       }
 
       const token = generateToken()
@@ -755,7 +818,7 @@ export default function CanadaPortalCreateCustomerPage() {
             stage: 'closed_won',
             monthly_value: price,
             commission_rate: rep?.commission_rate ?? 70,
-            notes: (form.notes || `Plan: ${selectedPlan.label} at CA$${price}${interval}. Setup fee: CA$${setupFee}. First month free: ${form.firstMonthFree ? 'Yes' : 'No'}`) + (zeroPerOrder && zpoCard ? ` Pricing: $0/order minutes plan (${zpoCard.includedMinutes} min/mo included, CA$${zpoCard.overagePerMin.toFixed(2)}/min after).` : '') + (form.website ? ` Website Buildout: CA$${websiteOneTime} one-time (${WEBSITE_MODULES.filter(m => websiteModules.includes(m.id) || (m.monthly && monthlyFree)).map(m => m.label).join(', ')})${websiteMonthlyDue > 0 ? ` + CA$${websiteMonthlyDue}/mo recurring` : monthlyFree ? ` — maintenance & hosting included with ${selectedPlan.label}` : ''}.` : '') + (form.crm ? ` ${CUSTOM_CRM_SERVICE.label}: CA$${crmOneTime} one-time.` : ''),
+            notes: (form.notes || `Plan: ${selectedPlan.label} at CA$${price}${interval}. Setup fee: CA$${setupFee}. First month free: ${form.firstMonthFree ? 'Yes' : 'No'}`) + (zeroPerOrder && zpoCard ? ` Pricing: $0/order minutes plan (${zpoCard.includedMinutes} min/mo included, CA$${zpoCard.overagePerMin.toFixed(2)}/min after).` : '') + (form.website ? ` Website Buildout: CA$${websiteOneTime} one-time (${WEBSITE_MODULES.filter(m => websiteModules.includes(m.id) || (m.monthly && monthlyFree)).map(m => m.label).join(', ')})${websiteMonthlyDue > 0 ? ` + CA$${websiteMonthlyDue}/mo recurring` : monthlyFree ? ` — maintenance & hosting included with ${selectedPlan.label}` : ''}.` : '') + (form.crm ? ` ${CUSTOM_CRM_SERVICE.label}: CA$${crmOneTime} one-time.` : '') + (form.adSpot ? ` ${AD_SPOT_SERVICE.label}: CA$${adSpotOneTime} one-time (${AD_SPOT_PLACEMENTS.find(p => p.id === form.adPlacement)?.label}, ${AD_SPOT_AUDIO.find(a => a.id === form.adAudio)?.label}). Brief: ${form.adGoal.trim()}` : ''),
             rep_id: rep?.rep_id || null,
           }).select('id')
           if (leadErr) setCrmRecordError(leadErr.message)
@@ -834,6 +897,7 @@ export default function CanadaPortalCreateCustomerPage() {
       setAutoSendStatus(s => ({ ...s, email: !!provData.welcome_email_sent }))
 
       if (form.website) await launchWebsiteSprint()
+      if (form.adSpot) await launchAdSpot(leadId)
 
       setStep('confirm')
     } catch (err: any) {
@@ -1319,6 +1383,89 @@ export default function CanadaPortalCreateCustomerPage() {
                     </div>
                   </div>
                 )}
+                {/* 30-Second AI Advertisement — fixed price. The intake below
+                    is the brief the spot gets boarded from, so it is worth
+                    filling out properly on the call, not after. */}
+                <div className="flex items-center justify-between p-4 border-t border-pm-canada-border">
+                  <div className="flex items-center gap-3">
+                    <Clapperboard size={18} className={form.adSpot ? 'text-pm-accent' : 'text-pm-canada-text-faint'} />
+                    <div>
+                      <p className="text-sm-tight font-semibold text-white">{AD_SPOT_SERVICE.label}</p>
+                      <p className="text-2xs text-pm-canada-text-muted">{AD_SPOT_SERVICE.blurb}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm-tight font-semibold text-pm-accent">CA${AD_SPOT_SERVICE.price.toLocaleString()}</span>
+                    <button
+                      onClick={() => update('adSpot', !form.adSpot)}
+                      className={`relative w-12 h-6 rounded-full transition-colors duration-200 ${
+                        form.adSpot ? 'bg-pm-accent' : 'bg-pm-canada-border'
+                      }`}
+                    >
+                      <div className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform duration-200 ${
+                        form.adSpot ? 'translate-x-6' : ''
+                      }`} />
+                    </button>
+                  </div>
+                </div>
+                {form.adSpot && (
+                  <div className="px-4 pb-4 pt-3 space-y-3 border-t border-pm-canada-border">
+                    <div className="space-y-1 rounded-lg border border-pm-canada-border bg-pm-canada-surface px-3 py-2.5">
+                      <p className="text-2xs font-mono text-pm-canada-text-faint uppercase tracking-wider">What they get</p>
+                      {AD_SPOT_SERVICE.deliverables.map(d => (
+                        <div key={d} className="flex items-center gap-2">
+                          <CheckCircle2 size={11} className="text-pm-accent shrink-0" />
+                          <span className="text-2xs text-pm-canada-text-muted">{d}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div>
+                      <label className="block text-2xs font-medium text-pm-canada-text-muted mb-1.5">
+                        What must the ad sell? <span className="text-pm-accent">(required — this is the creative brief)</span>
+                      </label>
+                      <textarea rows={2} value={form.adGoal}
+                        onChange={e => update('adGoal', e.target.value)}
+                        placeholder="Fill tables on weeknights — push the CA$19 steak-frites special to locals within 5 km..."
+                        className="w-full px-3 py-2.5 text-sm-tight rounded-lg bg-pm-canada-surface border border-pm-canada-border text-white placeholder-pm-canada-text-faint focus:border-pm-accent/50 focus:outline-none resize-none" />
+                    </div>
+                    <div>
+                      <label className="block text-2xs font-medium text-pm-canada-text-muted mb-1.5">Feature these (comma-separated)</label>
+                      <input type="text" value={form.adHighlights}
+                        onChange={e => update('adHighlights', e.target.value)}
+                        placeholder="Steak frites, the patio, Sunday brunch"
+                        className="w-full px-3 py-2.5 text-sm-tight rounded-lg bg-pm-canada-surface border border-pm-canada-border text-white placeholder-pm-canada-text-faint focus:border-pm-accent/50 focus:outline-none" />
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-2xs font-medium text-pm-canada-text-muted mb-1.5">Where it runs</label>
+                        <select value={form.adPlacement}
+                          onChange={e => update('adPlacement', e.target.value)}
+                          className="w-full px-3 py-2.5 text-sm-tight rounded-lg bg-pm-canada-surface border border-pm-canada-border text-white focus:border-pm-accent/50 focus:outline-none">
+                          {AD_SPOT_PLACEMENTS.map(p => (
+                            <option key={p.id} value={p.id}>{p.label} ({p.aspect})</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-2xs font-medium text-pm-canada-text-muted mb-1.5">Sound</label>
+                        <select value={form.adAudio}
+                          onChange={e => update('adAudio', e.target.value)}
+                          className="w-full px-3 py-2.5 text-sm-tight rounded-lg bg-pm-canada-surface border border-pm-canada-border text-white focus:border-pm-accent/50 focus:outline-none">
+                          {AD_SPOT_AUDIO.map(a => (
+                            <option key={a.id} value={a.id}>{a.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-2xs font-medium text-pm-canada-text-muted mb-1.5">Brand notes (colors, tone, ads they like)</label>
+                      <input type="text" value={form.adBrand}
+                        onChange={e => update('adBrand', e.target.value)}
+                        className="w-full px-3 py-2.5 text-sm-tight rounded-lg bg-pm-canada-surface border border-pm-canada-border text-white focus:border-pm-accent/50 focus:outline-none" />
+                    </div>
+                    <p className="text-2xs text-pm-accent/60">Creating the customer boards the spot into {AD_SPOT_SERVICE.shotCount} shots and starts generating them. The cut comes back for one revision round before it ships.</p>
+                  </div>
+                )}
               </div>
               <p className="text-2xs text-pm-canada-text-faint mt-1.5">More setup services are on the way — each lists its price and adds to the one-time setup fee.</p>
             </div>
@@ -1373,6 +1520,12 @@ export default function CanadaPortalCreateCustomerPage() {
                 <div className="flex justify-between py-2 border-b border-pm-canada-border">
                   <span className="text-pm-canada-text-muted">{CUSTOM_CRM_SERVICE.label} <span className="text-pm-canada-text-faint">(in setup fee)</span></span>
                   <span className="text-white font-medium">CA${crmOneTime}</span>
+                </div>
+              )}
+              {form.adSpot && (
+                <div className="flex justify-between py-2 border-b border-pm-canada-border">
+                  <span className="text-pm-canada-text-muted">{AD_SPOT_SERVICE.label} <span className="text-pm-canada-text-faint">(in setup fee)</span></span>
+                  <span className="text-white font-medium">CA${adSpotOneTime.toLocaleString()}</span>
                 </div>
               )}
               {form.firstMonthFree && (
@@ -1605,7 +1758,7 @@ export default function CanadaPortalCreateCustomerPage() {
               <ArrowLeft size={14} /> Back
             </button>
             <button onClick={() => {
-              setForm({ businessName: '', ownerName: '', email: '', phone: '', vertical: '', pos: '', plan: 'premium', priceBump: 0, firstMonthFree: false, feeAllocationMode: 'business_pays', pricingModel: 'per_order', website: false, websiteCurrentUrl: '', websiteGoals: '', websitePages: '', websiteBrand: '', websiteContent: 'none', crm: false, crmAmount: '', notes: '' })
+              setForm({ businessName: '', ownerName: '', email: '', phone: '', vertical: '', pos: '', plan: 'premium', priceBump: 0, firstMonthFree: false, feeAllocationMode: 'business_pays', pricingModel: 'per_order', website: false, websiteCurrentUrl: '', websiteGoals: '', websitePages: '', websiteBrand: '', websiteContent: 'none', crm: false, crmAmount: '', adSpot: false, adGoal: '', adHighlights: '', adBrand: '', adPlacement: AD_SPOT_PLACEMENTS[0].id, adAudio: AD_SPOT_AUDIO[0].id, notes: '' })
               setStep('details')
               setOnboardingLink('')
               setCustomerLoginUrl('')
@@ -1666,6 +1819,7 @@ export default function CanadaPortalCreateCustomerPage() {
                 { label: 'Proposal shown to customer', done: proposalGenerated },
                 { label: 'POS system selected', done: !!form.pos },
                 { label: '48-hour website contest launched', done: !!websiteContestUrl, skip: !form.website },
+                { label: '30-second spot boarded and generating', done: !!adSpotOrderId, skip: !form.adSpot },
               ].filter(item => !('skip' in item && item.skip)).map(item => (
                 <div key={item.label} className="flex items-center gap-3 py-2 px-3 rounded-lg bg-pm-canada-bg border border-pm-canada-border">
                   <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${
@@ -1707,6 +1861,33 @@ export default function CanadaPortalCreateCustomerPage() {
                 The customer account was created and the website fee is in their setup fee, but the build
                 contest didn&rsquo;t start ({websiteContestError}). Start it manually at
                 foundry.meridian.tips/agency/website with the same details.
+              </p>
+            </div>
+          )}
+
+          {/* 30-second spot status */}
+          {form.adSpot && adSpotOrderId && (
+            <div className="bg-pm-canada-surface rounded-xl p-6 border border-pm-accent/20">
+              <div className="flex items-center gap-2 mb-2">
+                <Clapperboard size={16} className="text-pm-accent" />
+                <p className="text-2xs font-mono text-pm-accent tracking-wider">30-SECOND SPOT — GENERATING</p>
+              </div>
+              <p className="text-2xs text-pm-canada-text-muted mb-3">
+                The brief is boarded into {AD_SPOT_SERVICE.shotCount} shots and each one is generating now.
+                Shots typically land within the hour; the cut goes back to {form.ownerName.split(' ')[0]} for
+                one revision round before it ships. Order reference:
+              </p>
+              <input type="text" value={adSpotOrderId} readOnly
+                className="w-full px-3 py-2.5 text-xs rounded-lg bg-pm-canada-bg border border-pm-canada-border text-white font-mono truncate" />
+            </div>
+          )}
+          {form.adSpot && adSpotError && (
+            <div className="bg-pm-amber-orange/10 rounded-xl p-4 border border-pm-amber-orange/20">
+              <p className="text-sm font-semibold text-pm-amber-orange">Ad spot not queued</p>
+              <p className="text-xs text-pm-amber-orange/70 mt-1">
+                The customer account was created and the CA${AD_SPOT_SERVICE.price.toLocaleString()} spot is in their
+                setup fee, but generation didn&rsquo;t start ({adSpotError}). Nothing was charged to the
+                pipeline — flag it so the spot gets boarded manually.
               </p>
             </div>
           )}
@@ -1795,7 +1976,7 @@ export default function CanadaPortalCreateCustomerPage() {
               <ArrowLeft size={14} /> Back to Leads
             </button>
             <button onClick={() => {
-              setForm({ businessName: '', ownerName: '', email: '', phone: '', vertical: '', pos: '', plan: 'premium', priceBump: 0, firstMonthFree: false, feeAllocationMode: 'business_pays', pricingModel: 'per_order', website: false, websiteCurrentUrl: '', websiteGoals: '', websitePages: '', websiteBrand: '', websiteContent: 'none', crm: false, crmAmount: '', notes: '' })
+              setForm({ businessName: '', ownerName: '', email: '', phone: '', vertical: '', pos: '', plan: 'premium', priceBump: 0, firstMonthFree: false, feeAllocationMode: 'business_pays', pricingModel: 'per_order', website: false, websiteCurrentUrl: '', websiteGoals: '', websitePages: '', websiteBrand: '', websiteContent: 'none', crm: false, crmAmount: '', adSpot: false, adGoal: '', adHighlights: '', adBrand: '', adPlacement: AD_SPOT_PLACEMENTS[0].id, adAudio: AD_SPOT_AUDIO[0].id, notes: '' })
               setStep('details')
               setOnboardingLink('')
               setCustomerLoginUrl('')
@@ -1829,6 +2010,7 @@ export default function CanadaPortalCreateCustomerPage() {
         checkoutUrl={checkoutUrl}
         onDownloadPdf={handleDownloadPdf}
         websiteAddon={form.website ? websiteOneTime : 0}
+        adSpotAddon={adSpotOneTime}
         verticalTitle={selectedVertical?.title}
         deckUrl={
           selectedVertical

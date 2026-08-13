@@ -71,6 +71,11 @@ const CAD_MODULE_PRICES: Record<string, number> = {
 
 export type { WebsiteModule } from './proposal-plans'
 export { websiteMonthlyFree } from './proposal-plans'
+// 30-Second AI Advertisement — fixed price, so unlike the CRM build it DOES
+// convert: US$1,000 × 1.4 → CA$1,400 (already a clean $50 point). Placements
+// and audio options are creative choices, not money — shared verbatim.
+export type { AdSpotService } from './proposal-plans'
+export { AD_SPOT_PLACEMENTS, AD_SPOT_AUDIO } from './proposal-plans'
 // Custom CRM build is rep-priced per deal, so there is no fixed CAD price to
 // convert — the definition and the amount parser are shared verbatim.
 export { CUSTOM_CRM_SERVICE, parseSetupServiceAmount } from './proposal-plans'
@@ -93,12 +98,18 @@ export const ZERO_PER_ORDER_CARDS: Partial<Record<PlanTier['id'], import('./prop
   premium: { includedMinutes: 600, overagePerMin: 0.2 },
   command: { includedMinutes: 1000, overagePerMin: 0.2 },
 }
-import { WEBSITE_MODULES as US_WEBSITE_MODULES } from './proposal-plans'
+import { WEBSITE_MODULES as US_WEBSITE_MODULES, AD_SPOT_SERVICE as US_AD_SPOT_SERVICE } from './proposal-plans'
 
 export const WEBSITE_MODULES = US_WEBSITE_MODULES.map(m => ({
   ...m,
   price: CAD_MODULE_PRICES[m.id] ?? Math.round(m.price * CAD_RATE),
 }))
+
+/** US$1,000 × 1.4 → CA$1,400. Everything else about the spot is identical. */
+export const AD_SPOT_SERVICE = {
+  ...US_AD_SPOT_SERVICE,
+  price: roundToNearest50(US_AD_SPOT_SERVICE.price * CAD_RATE),
+}
 
 export function getPlan(id: string): PlanTier {
   return PLAN_TIERS.find(p => p.id === id) || PLAN_TIERS[1]
