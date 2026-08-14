@@ -246,6 +246,20 @@ async def _activate_from_checkout(db, data: dict) -> None:
     except Exception as e:  # noqa: BLE001 — bookkeeping never blocks activation
         logger.warning("checkout_sessions completed-flip failed for %s: %s", session_id, e)
 
+    # 4) The money landed → put every adder this merchant bought on the Foundry
+    # dev marketplace (migration 079). Payment is the trigger by design: nobody
+    # should do spec work against a deal that never paid. Idempotent on retry —
+    # only orders still awaiting_payment are posted.
+    #
+    # Non-critical on purpose: the payment is verified and the org is already
+    # active, so a marketplace hiccup must not make Stripe retry the whole
+    # event. A failed posting stays visible as `failed` on the work order.
+    try:
+        from ...services.setup_services import dispatch_paid_orders
+        await dispatch_paid_orders(org_id=org_id, session_id=session_id)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("work-order dispatch failed for org %s: %s", org_id, e)
+
 
 # ── Subscribe-link management ──────────────────────────────────────────────
 

@@ -10,6 +10,7 @@ import {
   Building2,
   GraduationCap,
   FileText,
+  Clapperboard,
   Users,
   Menu,
   X,
@@ -36,6 +37,7 @@ const salesNavBase = [
   { path: '/canada/portal/accounts', icon: Building2, label: 'Accounts' },
   { path: '/canada/portal/training', icon: GraduationCap, label: 'Training' },
   { path: '/canada/portal/proposals', icon: FileText, label: 'Proposals' },
+  { path: '/canada/portal/ad-spots', icon: Clapperboard, label: 'Ad Spots' },
 ] as const
 
 const teamNavAdmin = { path: '/canada/portal/team', icon: Users, label: 'Team' } as const

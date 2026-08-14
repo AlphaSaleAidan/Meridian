@@ -106,6 +106,10 @@ PLATFORM_CONFIG = {
     "facebook_feed": {"aspect_ratio": "4:5", "max_duration": 15, "hook_window": 3, "orientation": "portrait"},
     "facebook_reel": {"aspect_ratio": "9:16", "max_duration": 10, "hook_window": 3, "orientation": "vertical"},
     "youtube_short": {"aspect_ratio": "9:16", "max_duration": 10, "hook_window": 3, "orientation": "vertical"},
+    # Landscape placement for the sold 30-second spot (YouTube pre-roll, the
+    # merchant's own site, in-store screens). Without it the director would
+    # fall back to instagram_reel and board a 16:9 ad in 9:16.
+    "youtube_video": {"aspect_ratio": "16:9", "max_duration": 60, "hook_window": 5, "orientation": "landscape"},
 }
 
 MODEL_TIERS = {

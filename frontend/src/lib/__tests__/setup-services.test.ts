@@ -5,11 +5,19 @@
 // fractional amount would leak into money on four surfaces.
 import { describe, it, expect } from 'vitest'
 import {
+  AD_SPOT_AUDIO,
+  CRM_INTAKE_FIELDS,
+  AD_SPOT_PLACEMENTS,
+  AD_SPOT_SERVICE,
   CUSTOM_CRM_SERVICE,
   parseSetupServiceAmount,
   WEBSITE_MODULES,
 } from '../proposal-plans'
 import {
+  AD_SPOT_SERVICE as CA_AD_SPOT_SERVICE,
+  CRM_INTAKE_FIELDS as CA_CRM_INTAKE_FIELDS,
+  AD_SPOT_PLACEMENTS as CA_AD_SPOT_PLACEMENTS,
+  CAD_RATE,
   CUSTOM_CRM_SERVICE as CA_CUSTOM_CRM_SERVICE,
   parseSetupServiceAmount as caParseSetupServiceAmount,
   WEBSITE_MODULES as CA_WEBSITE_MODULES,
@@ -17,12 +25,16 @@ import {
 
 // Mirrors the composition both create-customer and both lead-detail pages do:
 //   setupFee = (website ? websiteOneTime : 0) + (crm ? parsed(crmAmount) : 0)
+//            + (adSpot ? AD_SPOT_SERVICE.price : 0)
 function composeSetupFee(
-  opts: { website?: boolean; crm?: boolean; crmAmount?: string },
+  opts: { website?: boolean; crm?: boolean; crmAmount?: string; adSpot?: boolean },
   modules = WEBSITE_MODULES,
+  adSpot = AD_SPOT_SERVICE,
 ): number {
   const websiteOneTime = modules.filter(m => !m.monthly).reduce((t, m) => t + m.price, 0)
-  return (opts.website ? websiteOneTime : 0) + (opts.crm ? parseSetupServiceAmount(opts.crmAmount) : 0)
+  return (opts.website ? websiteOneTime : 0)
+    + (opts.crm ? parseSetupServiceAmount(opts.crmAmount) : 0)
+    + (opts.adSpot ? adSpot.price : 0)
 }
 
 describe('parseSetupServiceAmount', () => {
@@ -66,6 +78,44 @@ describe('Custom CRM build as a Setup Service', () => {
   })
 })
 
+describe('30-Second AI Advertisement as a Setup Service', () => {
+  it('is US$1,000 / CA$1,400 — the price the rep quotes off', () => {
+    expect(AD_SPOT_SERVICE.price).toBe(1000)
+    expect(CA_AD_SPOT_SERVICE.price).toBe(1400)
+    expect(CA_AD_SPOT_SERVICE.price).toBe(Math.round((AD_SPOT_SERVICE.price * CAD_RATE) / 50) * 50)
+  })
+
+  it('does not collide with a Website Buildout module or the CRM service id', () => {
+    expect(WEBSITE_MODULES.map(m => m.id)).not.toContain(AD_SPOT_SERVICE.id)
+    expect(AD_SPOT_SERVICE.id).not.toBe(CUSTOM_CRM_SERVICE.id)
+  })
+
+  it('keeps the sold runtime and the boarded shot count consistent', () => {
+    // The backend generates SHOT_COUNT shots of SHOT_SECONDS each; if these
+    // drift apart the rep sells 30 seconds and the pipeline builds something
+    // else. src/api/routes/ad_spot.py holds the other half of this pair.
+    expect(AD_SPOT_SERVICE.durationSeconds).toBe(30)
+    expect(AD_SPOT_SERVICE.shotCount).toBe(6)
+    expect(AD_SPOT_SERVICE.durationSeconds % AD_SPOT_SERVICE.shotCount).toBe(0)
+  })
+
+  it('is the same spot in both markets — only the price converts', () => {
+    expect(CA_AD_SPOT_SERVICE.durationSeconds).toBe(AD_SPOT_SERVICE.durationSeconds)
+    expect(CA_AD_SPOT_SERVICE.shotCount).toBe(AD_SPOT_SERVICE.shotCount)
+    expect(CA_AD_SPOT_SERVICE.deliverables).toEqual(AD_SPOT_SERVICE.deliverables)
+    // Placements are creative choices, not money — shared verbatim so a new
+    // aspect ratio can never exist in one market and not the other.
+    expect(CA_AD_SPOT_PLACEMENTS).toBe(AD_SPOT_PLACEMENTS)
+  })
+
+  it('offers placements and audio treatments the rep can actually pick', () => {
+    expect(AD_SPOT_PLACEMENTS.length).toBeGreaterThan(0)
+    expect(AD_SPOT_AUDIO.length).toBeGreaterThan(0)
+    expect(new Set(AD_SPOT_PLACEMENTS.map(p => p.id)).size).toBe(AD_SPOT_PLACEMENTS.length)
+    expect(new Set(AD_SPOT_AUDIO.map(a => a.id)).size).toBe(AD_SPOT_AUDIO.length)
+  })
+})
+
 describe('setup fee composition', () => {
   const websiteOnly = composeSetupFee({ website: true })
 
@@ -90,15 +140,68 @@ describe('setup fee composition', () => {
     expect(composeSetupFee({ website: true, crm: true, crmAmount: 'abc' })).toBe(websiteOnly)
   })
 
+  it('adds the ad spot on top of everything else', () => {
+    expect(composeSetupFee({ adSpot: true })).toBe(AD_SPOT_SERVICE.price)
+    expect(composeSetupFee({ website: true, adSpot: true })).toBe(websiteOnly + AD_SPOT_SERVICE.price)
+    expect(composeSetupFee({ website: true, crm: true, crmAmount: '1200', adSpot: true }))
+      .toBe(websiteOnly + 1200 + AD_SPOT_SERVICE.price)
+  })
+
+  it('is unchanged by the ad spot when it is off', () => {
+    expect(composeSetupFee({ website: true, adSpot: false })).toBe(websiteOnly)
+  })
+
+  it('bills the ad spot in CAD on the Canada page', () => {
+    expect(composeSetupFee({ adSpot: true }, CA_WEBSITE_MODULES, CA_AD_SPOT_SERVICE))
+      .toBe(CA_AD_SPOT_SERVICE.price)
+  })
+
   it('stays a whole number for every combination, in both markets', () => {
-    for (const modules of [WEBSITE_MODULES, CA_WEBSITE_MODULES]) {
+    for (const [modules, adSpot] of [
+      [WEBSITE_MODULES, AD_SPOT_SERVICE],
+      [CA_WEBSITE_MODULES, CA_AD_SPOT_SERVICE],
+    ] as const) {
       for (const website of [true, false]) {
-        for (const crmAmount of ['', '   ', 'abc', '-5', '1199.99', '1200']) {
-          const total = composeSetupFee({ website, crm: true, crmAmount }, modules)
-          expect(Number.isInteger(total)).toBe(true)
-          expect(total).toBeGreaterThanOrEqual(0)
+        for (const spot of [true, false]) {
+          for (const crmAmount of ['', '   ', 'abc', '-5', '1199.99', '1200']) {
+            const total = composeSetupFee({ website, crm: true, crmAmount, adSpot: spot }, modules, adSpot)
+            expect(Number.isInteger(total)).toBe(true)
+            expect(total).toBeGreaterThanOrEqual(0)
+          }
         }
       }
     }
+  })
+})
+
+describe('Custom CRM build — the request detail', () => {
+  it('asks what the owner wants before a developer can bid on it', () => {
+    // A developer bidding on "a CRM" with no brief either overbuilds it or
+    // builds the wrong thing, so the two that make a build scopeable are
+    // required at close: what they want to see, and how they sell today.
+    const required = CRM_INTAKE_FIELDS.filter(f => f.required).map(f => f.id)
+    expect(required).toEqual(['crmGoal', 'crmPipeline'])
+  })
+
+  it('covers automations, integrations and what counts as a win', () => {
+    const ids = CRM_INTAKE_FIELDS.map(f => f.id)
+    expect(ids).toContain('crmAutomations')
+    expect(ids).toContain('crmIntegrations')
+    expect(ids).toContain('crmSuccess')
+  })
+
+  it('reads as questions a rep can say out loud, with an example answer', () => {
+    for (const f of CRM_INTAKE_FIELDS) {
+      expect(f.label.endsWith('?') || f.label.includes('—')).toBe(true)
+      expect(f.placeholder.length).toBeGreaterThan(20)
+    }
+  })
+
+  it('is the same interview in both markets — questions are not money', () => {
+    expect(CA_CRM_INTAKE_FIELDS).toBe(CRM_INTAKE_FIELDS)
+  })
+
+  it('has unique ids so answers cannot overwrite each other', () => {
+    expect(new Set(CRM_INTAKE_FIELDS.map(f => f.id)).size).toBe(CRM_INTAKE_FIELDS.length)
   })
 })

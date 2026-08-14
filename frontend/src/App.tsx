@@ -74,6 +74,7 @@ const CanadaPortalTeamPage = lazyRetry(() => import('@/pages/canada/portal/Canad
 const CanadaPortalRecruitingPage = lazyRetry(() => import('@/pages/canada/portal/CanadaPortalRecruitingPage'))
 const CanadaPortalTrainingPage = lazyRetry(() => import('@/pages/canada/portal/CanadaPortalTrainingPage'))
 const CanadaPortalProposalsPage = lazyRetry(() => import('@/pages/canada/portal/CanadaPortalProposalsPage'))
+const CanadaPortalAdSpotsPage = lazyRetry(() => import('@/pages/canada/portal/CanadaPortalAdSpotsPage'))
 const CanadaPortalSettingsPage = lazyRetry(() => import('@/pages/canada/portal/CanadaPortalSettingsPage'))
 const CanadaPortalCreateCustomerPage = lazyRetry(() => import('@/pages/canada/portal/CanadaPortalCreateCustomerPage'))
 const CanadaPortalOnboardingPage = lazyRetry(() => import('@/pages/canada/portal/CanadaPortalOnboardingPage'))
@@ -91,6 +92,7 @@ const USSalesProtectedRoute = lazyRetry(() => import('@/pages/us/portal/USSalesP
 const USPortalDashboardPage = lazyRetry(() => import('@/pages/us/portal/USPortalDashboardPage'))
 const USPortalLeadsPage = lazyRetry(() => import('@/pages/us/portal/USPortalLeadsPage'))
 const USPortalLeadDetailPage = lazyRetry(() => import('@/pages/us/portal/USPortalLeadDetailPage'))
+const USPortalAdSpotsPage = lazyRetry(() => import('@/pages/us/portal/USPortalAdSpotsPage'))
 const USPortalAccountsPage = lazyRetry(() => import('@/pages/us/portal/USPortalAccountsPage'))
 const USPortalTeamPage = lazyRetry(() => import('@/pages/us/portal/USPortalTeamPage'))
 const USPortalRecruitingPage = lazyRetry(() => import('@/pages/us/portal/USPortalRecruitingPage'))
@@ -548,6 +550,7 @@ export default function App() {
                 <Route path="accounts" element={<Suspense fallback={<InlineFallback />}><CanadaPortalAccountsPage /></Suspense>} />
                 <Route path="training" element={<Suspense fallback={<InlineFallback />}><CanadaPortalTrainingPage /></Suspense>} />
                 <Route path="proposals" element={<Suspense fallback={<InlineFallback />}><CanadaPortalProposalsPage /></Suspense>} />
+                <Route path="ad-spots" element={<Suspense fallback={<InlineFallback />}><CanadaPortalAdSpotsPage /></Suspense>} />
                 <Route path="team" element={<Suspense fallback={<InlineFallback />}><CanadaPortalTeamPage /></Suspense>} />
                 <Route path="recruiting" element={<Suspense fallback={<InlineFallback />}><CanadaPortalRecruitingPage /></Suspense>} />
                 <Route path="settings" element={<Suspense fallback={<InlineFallback />}><CanadaPortalSettingsPage /></Suspense>} />
@@ -630,6 +633,7 @@ export default function App() {
                 <Route path="accounts" element={<Suspense fallback={<InlineFallback />}><USPortalAccountsPage /></Suspense>} />
                 <Route path="training" element={<Suspense fallback={<InlineFallback />}><USPortalTrainingPage /></Suspense>} />
                 <Route path="proposals" element={<Suspense fallback={<InlineFallback />}><USPortalProposalsPage /></Suspense>} />
+                <Route path="ad-spots" element={<Suspense fallback={<InlineFallback />}><USPortalAdSpotsPage /></Suspense>} />
                 <Route path="team" element={<Suspense fallback={<InlineFallback />}><USPortalTeamPage /></Suspense>} />
                 {/* Recruiting: NOT a nav tab (mirrors /canada/portal/recruiting) — linked from the Team page header. */}
                 <Route path="recruiting" element={<Suspense fallback={<InlineFallback />}><USPortalRecruitingPage /></Suspense>} />

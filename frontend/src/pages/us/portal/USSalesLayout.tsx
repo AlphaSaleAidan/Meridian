@@ -9,6 +9,7 @@ import {
   Building2,
   GraduationCap,
   FileText,
+  Clapperboard,
   Users,
   Menu,
   X,
@@ -33,6 +34,7 @@ const salesNavItems = [
   { path: '/us/portal/accounts', icon: Building2, label: 'Accounts' },
   { path: '/us/portal/training', icon: GraduationCap, label: 'Training' },
   { path: '/us/portal/proposals', icon: FileText, label: 'Proposals' },
+  { path: '/us/portal/ad-spots', icon: Clapperboard, label: 'Ad Spots' },
   { path: '/us/portal/team', icon: Users, label: 'Team' },
   { path: '/us/portal/badge', icon: CreditCard, label: 'My Badge' },
   { path: '/us/portal/settings', icon: Settings, label: 'Settings' },
@@ -108,6 +110,7 @@ export default function USSalesLayout() {
       void import('./USPortalAccountsPage')
       void import('./USPortalTrainingPage')
       void import('./USPortalProposalsPage')
+      void import('./USPortalAdSpotsPage')
       void import('./USPortalTeamPage')
       void import('./USPortalSettingsPage')
       void import('./USPortalBadgePage')
