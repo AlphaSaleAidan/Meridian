@@ -374,6 +374,24 @@ class BookingStore:
         )
         return rows[0] if rows else {}
 
+    async def update_connection(self, connection_id: str, fields: dict) -> dict:
+        """Patch specific columns on a connection.
+
+        Used instead of upsert_connection wherever credentials must survive.
+        A PostgREST upsert derives its column list from the payload, so a
+        partial payload's behaviour on conflict depends on the server version —
+        and the column at risk here is credentials_encrypted, which holds the
+        merchant's OAuth tokens. Getting that wrong silently disconnects them
+        and the only repair is a re-authorization they have to be asked for.
+        A PATCH cannot touch a column it was not given.
+        """
+        rows = await self._req(
+            "PATCH", "booking_provider_connections",
+            params={"id": f"eq.{connection_id}"},
+            json={**fields, "updated_at": _now_iso()},
+        )
+        return rows[0] if rows else {}
+
     async def replace_busy_blocks(self, connection_id: str, rows: list[dict]) -> int:
         """Delete-and-replace everything this connection owns.
 

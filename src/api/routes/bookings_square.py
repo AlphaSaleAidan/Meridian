@@ -210,9 +210,9 @@ async def _bootstrap(connection: dict) -> None:
             "team_member_id": team[0]["team_member_id"],
         }
 
-    await store.upsert_connection({
-        "merchant_id": connection["merchant_id"],
-        "provider": _PROVIDER,
+    # PATCH, not upsert: credentials_encrypted must not be in this payload and
+    # must survive it. See booking_store.update_connection.
+    await store.update_connection(str(connection["id"]), {
         "status": "connected",
         "direction": "both" if access_level == "seller" else "write",
         "config": config,
@@ -260,9 +260,7 @@ async def save_mapping(merchant_id: str, body: dict,
         if field in body:
             config[field] = body[field]
 
-    await store.upsert_connection({
-        "merchant_id": merchant_id, "provider": _PROVIDER, "config": config,
-    })
+    await store.update_connection(str(connection["id"]), {"config": config})
     return {"saved": True, "config_keys": sorted(config.keys())}
 
 
