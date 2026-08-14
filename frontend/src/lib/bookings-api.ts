@@ -127,6 +127,37 @@ export interface AvailableProvider {
   webhooks: boolean
 }
 
+export interface SquareService {
+  serviceVariationId: string
+  serviceVariationVersion: number
+  name: string
+  durationMinutes: number | null
+}
+
+export interface SquareTeamMember {
+  teamMemberId: string
+  displayName: string
+  isBookable: boolean
+}
+
+export interface SquareOptions {
+  /**
+   * 'buyer' works on every Square plan and covers the whole booking loop.
+   * 'seller' additionally lets us read bookings taken elsewhere, and requires
+   * the merchant to pay for Appointments Plus or Premium.
+   */
+  accessLevel: 'buyer' | 'seller'
+  bookingEnabled: boolean
+  locationId: string
+  services: SquareService[]
+  teamMembers: SquareTeamMember[]
+  defaultService: {
+    serviceVariationId: string
+    serviceVariationVersion: number
+    teamMemberId: string
+  } | null
+}
+
 export interface UnavailableTool {
   key: string
   label: string
@@ -372,6 +403,62 @@ export const bookingsApi = {
       method: 'POST',
       body: { merchant_id: merchantId, url },
     })
+  },
+
+  /** Square Appointments: start OAuth. Returns the URL to send them to. */
+  async squareAuthorizeUrl(merchantId: string, returnTo: string): Promise<string> {
+    const r = await call<{ authorize_url: string }>('/square/authorize', {
+      params: { merchant_id: merchantId, return_to: returnTo },
+    })
+    return r.authorize_url
+  },
+
+  async squareOptions(merchantId: string): Promise<SquareOptions> {
+    const r = await call<any>(`/square/options/${merchantId}`)
+    return {
+      accessLevel: r.access_level === 'seller' ? 'seller' : 'buyer',
+      bookingEnabled: !!r.booking_enabled,
+      locationId: r.location_id || '',
+      services: (r.services || []).map((s: any) => ({
+        serviceVariationId: s.service_variation_id,
+        serviceVariationVersion: s.service_variation_version,
+        name: s.name || '',
+        durationMinutes: s.duration_minutes ?? null,
+      })),
+      teamMembers: (r.team_members || []).map((t: any) => ({
+        teamMemberId: t.team_member_id,
+        displayName: t.display_name || '',
+        isBookable: !!t.is_bookable,
+      })),
+      defaultService: r.default_service
+        ? {
+            serviceVariationId: r.default_service.service_variation_id,
+            serviceVariationVersion: r.default_service.service_variation_version,
+            teamMemberId: r.default_service.team_member_id,
+          }
+        : null,
+    }
+  },
+
+  async saveSquareMapping(merchantId: string, defaultService: {
+    serviceVariationId: string
+    serviceVariationVersion: number
+    teamMemberId: string
+  }) {
+    return call(`/square/options/${merchantId}`, {
+      method: 'POST',
+      body: {
+        default_service: {
+          service_variation_id: defaultService.serviceVariationId,
+          service_variation_version: defaultService.serviceVariationVersion,
+          team_member_id: defaultService.teamMemberId,
+        },
+      },
+    })
+  },
+
+  async refreshSquare(merchantId: string) {
+    return call(`/square/refresh/${merchantId}`, { method: 'POST' })
   },
 
   async enableFeed(merchantId: string): Promise<string> {

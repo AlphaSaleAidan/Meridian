@@ -15,7 +15,8 @@ import { useOrgId } from '@/hooks/useOrg'
 import {
   bookingsApi,
   type AvailableProvider, type Connection, type HoursRow,
-  type Resource, type ResourceKind, type Service, type UnavailableTool,
+  type Resource, type ResourceKind, type Service, type SquareOptions,
+  type UnavailableTool,
 } from '@/lib/bookings-api'
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
@@ -434,6 +435,156 @@ function HoursCard({ merchantId, hours, onChanged }: {
   )
 }
 
+function SquarePanel({ merchantId, connections, onChanged }: {
+  merchantId: string
+  connections: Connection[]
+  onChanged: () => void
+}) {
+  const connected = connections.find((c) => c.provider === 'square_appointments')
+  const [opts, setOpts] = useState<SquareOptions | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [service, setService] = useState('')
+  const [member, setMember] = useState('')
+  const [saved, setSaved] = useState(false)
+
+  useEffect(() => {
+    if (!connected) return
+    bookingsApi.squareOptions(merchantId).then((o) => {
+      setOpts(o)
+      setService(o.defaultService?.serviceVariationId || o.services[0]?.serviceVariationId || '')
+      setMember(o.defaultService?.teamMemberId || o.teamMembers[0]?.teamMemberId || '')
+    }).catch(() => setOpts(null))
+  }, [connected, merchantId])
+
+  const connect = async () => {
+    setBusy(true)
+    try {
+      const url = await bookingsApi.squareAuthorizeUrl(
+        merchantId, window.location.pathname + window.location.search)
+      window.location.href = url
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const saveMapping = async () => {
+    const chosen = opts?.services.find((s) => s.serviceVariationId === service)
+    if (!chosen || !member) return
+    setBusy(true)
+    try {
+      await bookingsApi.saveSquareMapping(merchantId, {
+        serviceVariationId: chosen.serviceVariationId,
+        serviceVariationVersion: chosen.serviceVariationVersion,
+        teamMemberId: member,
+      })
+      setSaved(true)
+      onChanged()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (!connected) {
+    return (
+      <div className="mb-4 rounded-lg border border-[#1F1F23] p-3.5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-[#F5F5F7]">Square Appointments</p>
+            <p className="mt-0.5 text-xs text-[#A1A1A8]">
+              The phone agent books straight into Square, so your staff see it in
+              the app they already use.
+            </p>
+          </div>
+          <button
+            onClick={connect}
+            disabled={busy}
+            className="shrink-0 rounded-lg bg-[#1A8FD6] px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-[#1A8FD6]/90 disabled:opacity-40"
+          >
+            {busy ? 'Opening…' : 'Connect Square'}
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="mb-4 rounded-lg border border-[#1F1F23] p-3.5 space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm font-medium text-[#F5F5F7]">Square Appointments</p>
+        <span className="rounded border border-[#17C5B0]/30 bg-[#17C5B0]/10 px-2 py-0.5 text-[11px] text-[#17C5B0]">
+          Connected
+        </span>
+      </div>
+
+      {opts && !opts.bookingEnabled && (
+        <p className="flex items-start gap-1.5 text-xs text-[#D9A441]">
+          <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" />
+          Online booking is switched off in your Square account, so we can't book
+          into it yet. Turn it on in Square, then hit refresh below.
+        </p>
+      )}
+
+      {opts && (
+        <p className="text-xs text-[#A1A1A8]">
+          {opts.accessLevel === 'seller'
+            ? 'Full access — we can also see bookings you take elsewhere in Square, so we never double-book.'
+            : "We can check your availability and add bookings. Reading bookings you take elsewhere needs Square's Appointments Plus or Premium plan — everything else works today."}
+        </p>
+      )}
+
+      {opts && opts.services.length > 0 && (
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="min-w-[9rem] flex-1 space-y-1">
+            <span className="text-xs uppercase tracking-wide text-[#A1A1A8]">
+              Book this service
+            </span>
+            <select
+              value={service}
+              onChange={(e) => { setService(e.target.value); setSaved(false) }}
+              className="w-full rounded-lg border border-[#1F1F23] bg-[#0A0A0B] px-3 py-2 text-sm text-[#F5F5F7] outline-none focus:border-[#1A8FD6]/50"
+            >
+              {opts.services.map((s) => (
+                <option key={s.serviceVariationId} value={s.serviceVariationId}>
+                  {s.name}{s.durationMinutes ? ` (${s.durationMinutes} min)` : ''}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="min-w-[8rem] flex-1 space-y-1">
+            <span className="text-xs uppercase tracking-wide text-[#A1A1A8]">With</span>
+            <select
+              value={member}
+              onChange={(e) => { setMember(e.target.value); setSaved(false) }}
+              className="w-full rounded-lg border border-[#1F1F23] bg-[#0A0A0B] px-3 py-2 text-sm text-[#F5F5F7] outline-none focus:border-[#1A8FD6]/50"
+            >
+              {opts.teamMembers.filter((t) => t.isBookable).map((t) => (
+                <option key={t.teamMemberId} value={t.teamMemberId}>
+                  {t.displayName || t.teamMemberId}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            onClick={saveMapping}
+            disabled={busy || !service || !member}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-[#1F1F23] px-3 py-2 text-sm text-[#F5F5F7] transition-colors hover:border-[#1A8FD6]/40 disabled:opacity-40"
+          >
+            {saved ? <Check className="h-4 w-4" /> : null}
+            {saved ? 'Saved' : 'Save'}
+          </button>
+        </div>
+      )}
+
+      <button
+        onClick={async () => { await bookingsApi.refreshSquare(merchantId); onChanged() }}
+        className="text-xs text-[#A1A1A8] underline-offset-2 transition-colors hover:text-[#F5F5F7] hover:underline"
+      >
+        Re-read my Square services and staff
+      </button>
+    </div>
+  )
+}
+
 function IntegrationsCard({
   merchantId, connections, available, unavailable, onChanged,
 }: {
@@ -497,6 +648,10 @@ function IntegrationsCard({
             </li>
           ))}
         </ul>
+      )}
+
+      {available.some((a) => a.key === 'square_appointments') && (
+        <SquarePanel merchantId={merchantId} connections={connections} onChanged={onChanged} />
       )}
 
       <div className="space-y-2">

@@ -33,6 +33,16 @@ oauth:
   - "GET /api/pos/providers"
   - "GET /api/pos/{provider}/authorize"
   - "GET /api/pos/{provider}/callback"
+  # Square Appointments BOOKING authorization — deliberately separate from the
+  # Square POS connection so a merchant granting booking-write is a distinct
+  # decision (src/config.py:232 keeps the POS scopes read-only). The callback is
+  # a browser redirect from Square with no session, so it is unauthenticated by
+  # necessity and protected exactly as the Clover/POS callbacks are: an
+  # HMAC-signed, expiring `state` carrying the merchant id
+  # (src/pos_connect/oauth.py:68 verify_state -> None on tamper or expiry), and
+  # src/api/routes/bookings_square.py:callback redirects to an error page
+  # without touching the database when verification fails.
+  - "GET /api/bookings/square/callback"
   # Framework-provider twin of /api/square/status and /api/clover/status:
   # the frontend's post-OAuth poller reads `connected` before a session
   # exists; org ids are validated and unknown orgs return not_connected.

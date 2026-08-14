@@ -131,6 +131,32 @@ def _speak_code(code: str) -> str:
     return " ".join(code.upper())
 
 
+async def _slots(setup: be.MerchantBookingSetup, day: date_cls, party_size: int,
+                 *, now: datetime | None = None, limit: int = 40) -> list[be.Slot]:
+    """Open times, from whichever system owns this merchant's calendar.
+
+    Provider mode falls back to our own calendar when the merchant's system
+    cannot be reached. That is the right failure direction on a live phone
+    call: our slots may be slightly stale against theirs, but the alternative
+    is telling a caller we cannot help them because a third party is down.
+    The booking write then reconciles — Square refuses a taken slot.
+    """
+    if setup.mode != "provider":
+        return await be.find_slots(setup, day, party_size, now=now, limit=limit)
+
+    from src.services import booking_provider_mode as pm
+
+    connection = await pm.active_connection(setup.merchant_id)
+    if connection:
+        try:
+            return await pm.provider_slots(
+                setup, connection, day, party_size, now=now, limit=limit)
+        except pm.ProviderUnavailable as e:
+            logger.warning("provider availability unavailable for %s: %s",
+                           setup.merchant_id, e)
+    return await be.find_slots(setup, day, party_size, now=now, limit=limit)
+
+
 def _spawn_push(merchant_id: str, row: dict) -> None:
     """Push to the merchant's calendar in the background, swallowing failures.
 
@@ -168,7 +194,7 @@ async def handle_check_availability(args: dict, setup: be.MerchantBookingSetup,
         return f"We only take {noun}s about six months ahead. Could you pick a closer date?"
 
     party_size = _party_size(args)
-    slots = await be.find_slots(setup, day, party_size, now=now)
+    slots = await _slots(setup, day, party_size, now=now)
 
     if not slots:
         nearby = await _nearby_days(setup, day, party_size, now)
@@ -252,11 +278,38 @@ async def handle_book(args: dict, setup: be.MerchantBookingSetup,
 
     phone = (args.get("phone") or caller_phone or "").strip() or None
 
+    notes = (args.get("notes") or "").strip() or None
+
+    # Provider mode first: when the merchant's own system owns the calendar,
+    # writing anywhere else would create a booking their staff never see.
+    if setup.mode == "provider":
+        from src.services import booking_provider_mode as pm
+
+        connection = await pm.active_connection(setup.merchant_id)
+        if connection:
+            try:
+                row = await pm.provider_reserve(
+                    setup, connection, start_utc, party_size, name,
+                    customer_phone=phone, notes=notes,
+                    vapi_call_id=vapi_call_id,
+                )
+                return _confirmation(name, row, day, party_size, at)
+            except pm.ProviderUnavailable as e:
+                # Do NOT silently fall through to our own calendar here. In
+                # native mode our row IS the booking; in provider mode it is a
+                # copy their staff will never look at, so "booked" would be a
+                # lie of exactly the kind this system must not tell.
+                logger.warning("provider booking failed for %s: %s",
+                               setup.merchant_id, e)
+                return ("I'm having trouble reaching our booking system right "
+                        "now, so I haven't booked anything. Could you try us "
+                        "again in a few minutes?")
+
     try:
         row = await be.reserve(
             setup, start_utc, party_size, name,
             customer_phone=phone,
-            notes=(args.get("notes") or "").strip() or None,
+            notes=notes,
             service_id=args.get("service_id") or None,
             source="phone",
             vapi_call_id=vapi_call_id,
@@ -264,7 +317,7 @@ async def handle_book(args: dict, setup: be.MerchantBookingSetup,
     except be.BookingClosed:
         return "We're closed at that time. Would another time work?"
     except be.NoAvailability:
-        slots = await be.find_slots(setup, day, party_size, now=now)
+        slots = await _slots(setup, day, party_size, now=now)
         if slots:
             return (f"That time just went. I do have {_list_times(slots)} — "
                     "would any of those work?")
@@ -277,6 +330,11 @@ async def handle_book(args: dict, setup: be.MerchantBookingSetup,
     # the push is a convenience copy, so it is fire-and-forget by design.
     _spawn_push(setup.merchant_id, row)
 
+    return _confirmation(name, row, day, party_size, at)
+
+
+def _confirmation(name: str, row: dict, day: date_cls, party_size: int,
+                  at: time) -> str:
     code = row.get("confirmation_code", "")
     when = row.get("local_time") or _speak_requested(at)
     people = "" if party_size <= 1 else f" for {party_size}"

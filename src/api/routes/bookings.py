@@ -80,6 +80,7 @@ async def _setup_for(merchant_id: str) -> be.MerchantBookingSetup:
         merchant_id,
         cfg.get("business_timezone") or "",
         noun=cfg.get("booking_noun") or "reservation",
+        mode=cfg.get("booking_mode") or "native",
     )
 
 

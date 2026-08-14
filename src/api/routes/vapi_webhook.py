@@ -947,7 +947,7 @@ def _booking_enabled(config) -> bool:
     (tests/test_vapi_hotpath_perf.py asserts the exact count), so booking must
     never cost an extra round trip here.
     """
-    return (getattr(config, "booking_mode", "off") or "off") == "native"
+    return (getattr(config, "booking_mode", "off") or "off") in ("native", "provider")
 
 
 def _booking_tools(config) -> list[dict]:
@@ -1264,6 +1264,7 @@ async def _handle_booking_tool(name: str, args: dict, config,
         config.merchant_id,
         getattr(config, "business_timezone", "") or "",
         noun=(getattr(config, "booking_noun", "") or "reservation"),
+        mode=(getattr(config, "booking_mode", "native") or "native"),
     )
 
     if name == "check_availability":

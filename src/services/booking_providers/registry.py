@@ -19,10 +19,24 @@ from dataclasses import dataclass
 from .base import BookingProvider, Capabilities
 from .google_calendar import GoogleCalendarProvider, is_configured as google_configured
 from .ics_feed import IcsFeedProvider
+from .square_appointments import SquareAppointmentsProvider
 
 _PROVIDERS: dict[str, BookingProvider] = {
-    p.key: p for p in (GoogleCalendarProvider(), IcsFeedProvider())
+    p.key: p for p in (
+        SquareAppointmentsProvider(),
+        GoogleCalendarProvider(),
+        IcsFeedProvider(),
+    )
 }
+
+
+def square_configured() -> bool:
+    """True when the Square OAuth app credentials exist to authorize against."""
+    try:
+        from src.config import square as sq_config
+        return bool(sq_config.app_id and sq_config.app_secret)
+    except Exception:  # noqa: BLE001
+        return False
 
 
 def get_provider(key: str) -> BookingProvider | None:
@@ -39,6 +53,8 @@ def available_providers() -> list[dict]:
     out = []
     for key, provider in _PROVIDERS.items():
         if key == "google_calendar" and not google_configured():
+            continue
+        if key == "square_appointments" and not square_configured():
             continue
         cap = provider.capabilities
         out.append({

@@ -83,6 +83,9 @@ class MerchantBookingSetup:
     hours: list[dict] = field(default_factory=list)
     pacing: list[dict] = field(default_factory=list)
     noun: str = "reservation"
+    # 'native' = we own the calendar; 'provider' = the merchant's own system
+    # does and we book into it (src/services/booking_provider_mode.py).
+    mode: str = "native"
 
 
 def resolve_timezone(tz_name: str | None) -> tuple[ZoneInfo, str]:
@@ -104,7 +107,8 @@ def resolve_timezone(tz_name: str | None) -> tuple[ZoneInfo, str]:
 
 
 async def load_setup(merchant_id: str, tz_name: str | None,
-                     noun: str = "reservation") -> MerchantBookingSetup:
+                     noun: str = "reservation",
+                     mode: str = "native") -> MerchantBookingSetup:
     store = get_booking_store()
     tz, resolved = resolve_timezone(tz_name)
     resources = await store.list_resources(merchant_id)
@@ -115,6 +119,7 @@ async def load_setup(merchant_id: str, tz_name: str | None,
         merchant_id=merchant_id, tz=tz, tz_name=resolved,
         resources=resources, services=services, hours=hours,
         pacing=pacing, noun=noun or "reservation",
+        mode=(mode or "native"),
     )
 
 
