@@ -370,9 +370,121 @@ async def handle_cancel(args: dict, setup: be.MerchantBookingSetup,
         return "What's the confirmation code?"
 
     await store.cancel_booking(str(row["id"]), reason="cancelled by caller on the phone")
+
+    # The freed slot is worth more in the next ten minutes than at any later
+    # point, so recovery starts before the caller has hung up. Fire-and-forget:
+    # the cancellation is already done and must not depend on this.
+    _spawn_recovery(setup.merchant_id, row)
+
     start = be._parse_ts(row.get("starts_at"))
     when = be._speak_time(start.astimezone(setup.tz)) if start else "that time"
     return f"Done — your {noun} at {when} is cancelled. Anything else I can help with?"
+
+
+def _spawn_recovery(merchant_id: str, cancelled: dict) -> None:
+    import asyncio
+
+    async def _run():
+        try:
+            from src.services.booking_waitlist import recover_slot
+            await recover_slot(merchant_id, cancelled)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("waitlist recovery spawn failed: %s", e)
+
+    try:
+        asyncio.get_running_loop().create_task(_run())
+    except RuntimeError:
+        pass
+
+
+async def handle_join_waitlist(args: dict, setup: be.MerchantBookingSetup,
+                               *, caller_phone: str | None = None,
+                               vapi_call_id: str | None = None,
+                               now: datetime | None = None) -> str:
+    """Nothing open — take their number and call them if something frees up.
+
+    This is the whole reason a caller who hears "we're full" is worth more than
+    a hang-up: an incumbent's waitlist is a list someone might work, ours acts
+    on the next cancellation by itself.
+    """
+    now = now or datetime.now(timezone.utc)
+    today_local = now.astimezone(setup.tz).date()
+    noun = _noun(setup)
+
+    name = (args.get("customer_name") or "").strip()
+    if not name:
+        return "Can I get a name for the waiting list?"
+
+    phone = (args.get("phone") or caller_phone or "").strip()
+    if not phone:
+        return "What's the best number to reach you on?"
+
+    day = parse_date(args.get("date"), today_local)
+    if not day:
+        return "Which day are you hoping for?"
+    if day < today_local:
+        return "That day has already passed — which day did you mean?"
+
+    party_size = _party_size(args)
+    earliest = parse_time(args.get("earliest")) or time(0, 0)
+    latest = parse_time(args.get("latest")) or time(23, 59)
+    if latest <= earliest:
+        latest = time(23, 59)
+
+    window_start = be.parse_local_request(day, earliest, setup)
+    window_end = be.parse_local_request(day, latest, setup)
+
+    store = get_booking_store()
+    # Don't stack duplicates — a caller who rings twice should end up on the
+    # list once, or they get two texts for the same table.
+    try:
+        existing = await store.find_waitlist_by_phone(setup.merchant_id, phone)
+        if existing:
+            return (f"You're already on the list for that. We'll text you the "
+                    f"moment something opens up.")
+    except Exception:  # noqa: BLE001
+        pass
+
+    try:
+        await store.create_waitlist_entry({
+            "merchant_id": setup.merchant_id,
+            "customer_name": name[:200],
+            "customer_phone": phone,
+            "party_size": party_size,
+            "notes": (args.get("notes") or "").strip() or None,
+            "window_start": window_start.isoformat(),
+            "window_end": window_end.isoformat(),
+            "status": "waiting",
+            "source": "phone",
+            "vapi_call_id": vapi_call_id,
+        })
+    except Exception as e:  # noqa: BLE001
+        logger.error("could not add to waitlist: %s", e)
+        return ("I'm sorry — I couldn't add you to the waiting list just then. "
+                "Please give us a call back in a moment.")
+
+    return (f"You're on the list for {day.strftime('%A')}. If a {noun} opens up "
+            "we'll text you straight away and hold it for you.")
+
+
+async def handle_claim_waitlist(args: dict, setup: be.MerchantBookingSetup,
+                                *, caller_phone: str | None = None) -> str:
+    """Caller ringing back to take a slot we texted them about."""
+    from src.services import booking_waitlist as wl
+
+    code = (args.get("claim_code") or "").strip()
+    if not code:
+        return "What's the code from the text we sent you?"
+
+    booking = await wl.claim(setup.merchant_id, code)
+    if not booking:
+        return ("That code isn't valid any more — the time may have gone to "
+                "someone else. Would you like me to check what else is open?")
+
+    start = be._parse_ts(booking.get("starts_at"))
+    when = be._speak_time(start.astimezone(setup.tz)) if start else "that time"
+    return (f"Lovely — that's confirmed for {when}. Your confirmation code is "
+            f"{_speak_code(booking.get('confirmation_code', ''))}.")
 
 
 async def handle_lookup(args: dict, setup: be.MerchantBookingSetup,

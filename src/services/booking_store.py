@@ -348,6 +348,59 @@ class BookingStore:
         await self._req("PATCH", "bookings", params={"id": f"eq.{booking_id}"},
                         json={column: _now_iso()})
 
+    # ─── Waitlist (migrations/082) ────────────────────────────
+
+    async def list_waitlist(self, merchant_id: str, *,
+                            status: str = "waiting") -> list[dict]:
+        params = {
+            "merchant_id": f"eq.{merchant_id}",
+            "select": "*",
+            "order": "created_at.asc",
+            "limit": "200",
+        }
+        if status:
+            params["status"] = f"eq.{status}"
+        return await self._req("GET", "booking_waitlist", params=params)
+
+    async def create_waitlist_entry(self, fields: dict) -> dict:
+        rows = await self._req("POST", "booking_waitlist", json=fields)
+        return rows[0] if rows else {}
+
+    async def update_waitlist(self, entry_id: str, fields: dict) -> dict:
+        rows = await self._req(
+            "PATCH", "booking_waitlist",
+            params={"id": f"eq.{entry_id}"},
+            json={**fields, "updated_at": _now_iso()},
+        )
+        return rows[0] if rows else {}
+
+    async def find_waitlist_by_claim(self, merchant_id: str,
+                                     claim_code: str) -> dict | None:
+        rows = await self._req("GET", "booking_waitlist", params={
+            "merchant_id": f"eq.{merchant_id}",
+            "claim_code": f"ilike.{(claim_code or '').strip()}",
+            "status": "eq.offered",
+            "select": "*", "limit": "1",
+        })
+        return rows[0] if rows else None
+
+    async def find_waitlist_by_phone(self, merchant_id: str,
+                                     phone: str) -> list[dict]:
+        return await self._req("GET", "booking_waitlist", params={
+            "merchant_id": f"eq.{merchant_id}",
+            "customer_phone": f"eq.{phone}",
+            "status": f"in.(waiting,offered)",
+            "select": "*", "limit": "5",
+        })
+
+    async def expired_offers(self, now_iso: str) -> list[dict]:
+        """Offers whose hold has run out. Drives the expiry sweep."""
+        return await self._req("GET", "booking_waitlist", params={
+            "status": "eq.offered",
+            "offer_expires_at": f"lt.{now_iso}",
+            "select": "*", "limit": "200",
+        })
+
     # ─── Provider connections ─────────────────────────────────
 
     async def list_connections(self, merchant_id: str) -> list[dict]:

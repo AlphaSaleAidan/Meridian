@@ -934,8 +934,57 @@ _LOOKUP_BOOKING_TOOL = {
     "server": {"url": WEBHOOK_URL},
 }
 
+_JOIN_WAITLIST_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "join_waitlist",
+        "description": (
+            "Call when nothing is open at the time the caller wants and they'd "
+            "like to be told if something frees up. Always offer this before "
+            "letting a caller go — a freed table is worth nothing if nobody "
+            "knows who wanted it."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "customer_name": {"type": "string"},
+                "date": {"type": "string", "description": "YYYY-MM-DD, business local date."},
+                "earliest": {"type": "string",
+                             "description": "Earliest 24-hour HH:MM they'd accept."},
+                "latest": {"type": "string",
+                           "description": "Latest 24-hour HH:MM they'd accept."},
+                "party_size": {"type": "integer"},
+                "phone": {"type": "string",
+                          "description": "Only if different from the number they're calling from."},
+                "notes": {"type": "string"},
+            },
+            "required": ["customer_name", "date"],
+        },
+    },
+    "server": {"url": WEBHOOK_URL},
+}
+
+_CLAIM_WAITLIST_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "claim_waitlist_offer",
+        "description": (
+            "Call when the caller says they got a text about a spot opening up "
+            "and wants to take it. Ask for the short code in the message."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {"claim_code": {"type": "string"}},
+            "required": ["claim_code"],
+        },
+    },
+    "server": {"url": WEBHOOK_URL},
+}
+
+
 _BOOKING_TOOL_NAMES = frozenset(
-    {"check_availability", "book_reservation", "cancel_reservation", "lookup_reservation"}
+    {"check_availability", "book_reservation", "cancel_reservation",
+     "lookup_reservation", "join_waitlist", "claim_waitlist_offer"}
 )
 
 
@@ -953,8 +1002,11 @@ def _booking_enabled(config) -> bool:
 def _booking_tools(config) -> list[dict]:
     if not _booking_enabled(config):
         return []
-    return [_CHECK_AVAILABILITY_TOOL, _BOOK_RESERVATION_TOOL,
-            _CANCEL_BOOKING_TOOL, _LOOKUP_BOOKING_TOOL]
+    tools = [_CHECK_AVAILABILITY_TOOL, _BOOK_RESERVATION_TOOL,
+             _CANCEL_BOOKING_TOOL, _LOOKUP_BOOKING_TOOL]
+    if getattr(config, "waitlist_enabled", False):
+        tools += [_JOIN_WAITLIST_TOOL, _CLAIM_WAITLIST_TOOL]
+    return tools
 
 
 def _safe_transfer_number(config) -> str:
@@ -1276,6 +1328,12 @@ async def _handle_booking_tool(name: str, args: dict, config,
         return await booking_agent.handle_cancel(args, setup, caller_phone=caller_phone)
     if name == "lookup_reservation":
         return await booking_agent.handle_lookup(args, setup, caller_phone=caller_phone)
+    if name == "join_waitlist":
+        return await booking_agent.handle_join_waitlist(
+            args, setup, caller_phone=caller_phone, vapi_call_id=vapi_call_id)
+    if name == "claim_waitlist_offer":
+        return await booking_agent.handle_claim_waitlist(
+            args, setup, caller_phone=caller_phone)
     return "ok"
 
 

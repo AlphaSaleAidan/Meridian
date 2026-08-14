@@ -103,6 +103,11 @@ celery_app.conf.update(
             "schedule": crontab(hour=8, minute=0),  # 8 AM UTC daily
             "options": {"queue": "default"},
         },
+        "waitlist-offer-expiry": {
+            "task": "src.workers.tasks.expire_waitlist_offers",
+            "schedule": 120.0,  # every 2 min — must be well under the offer window
+            "options": {"queue": "default"},
+        },
         "booking-calendar-sync": {
             "task": "src.workers.tasks.sync_booking_calendars",
             "schedule": 1200.0,  # every 20 min — see the task docstring

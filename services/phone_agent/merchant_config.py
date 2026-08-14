@@ -125,6 +125,11 @@ class MerchantPhoneConfig:
     # The noun the agent says out loud — "table", "chair", "bay". A barbershop
     # caller should never be offered a table.
     booking_noun: str = "reservation"
+    # CANCELLATION RECOVERY (migrations/082). Off by default: texting a guest
+    # that a table opened is an outbound message sent on the merchant's behalf,
+    # which is theirs to opt into.
+    waitlist_enabled: bool = False
+    waitlist_offer_minutes: int = 15
     # Agent personality (formality/upsell/humor/custom phrases/brand keywords)
     # set in Phone Orders settings; rendered into the live system prompt.
     personality: dict | None = None
@@ -390,6 +395,8 @@ async def get_merchant_config(merchant_id: str) -> Optional[MerchantPhoneConfig]
             reservation_config=row.get("reservation_config") or None,
             booking_mode=_norm_booking_mode(row.get("booking_mode")),
             booking_noun=(row.get("booking_noun") or "reservation").strip() or "reservation",
+            waitlist_enabled=bool(row.get("waitlist_enabled")),
+            waitlist_offer_minutes=int(row.get("waitlist_offer_minutes") or 15),
             personality=row.get("personality") or None,
             # Default to pay_now if the column is missing/null (anti-scam default).
             payment_mode=_norm_payment_mode(row.get("payment_mode")),
