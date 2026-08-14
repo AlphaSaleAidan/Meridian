@@ -9,7 +9,7 @@ import {
 import { useSalesAuth } from '@/lib/sales-auth'
 import POSSystemPicker from '@/components/POSSystemPicker'
 import { supabase, getAuthHeaders } from '@/lib/supabase'
-import { PLAN_TIERS, getPlan, REP_PRICE_HEADROOM, ZERO_PER_ORDER_CARDS, WEBSITE_MODULES, websiteMonthlyFree, CUSTOM_CRM_SERVICE, parseSetupServiceAmount, AD_SPOT_SERVICE, AD_SPOT_PLACEMENTS, AD_SPOT_AUDIO, type PlanTier } from '@/lib/proposal-plans'
+import { PLAN_TIERS, getPlan, REP_PRICE_HEADROOM, ZERO_PER_ORDER_CARDS, WEBSITE_MODULES, websiteMonthlyFree, CUSTOM_CRM_SERVICE, CRM_INTAKE_FIELDS, parseSetupServiceAmount, AD_SPOT_SERVICE, AD_SPOT_PLACEMENTS, AD_SPOT_AUDIO, type PlanTier } from '@/lib/proposal-plans'
 import { downloadProposalPdf, type ProposalInput } from '@/lib/generate-proposal-pdf'
 import { usVerticalsByGroup, findUsVerticalBySlug, US_DECK_BASE_URL, buildPersonalizedUsDeckUrl } from '@/data/usVerticals'
 
@@ -554,6 +554,14 @@ export default function USPortalCreateCustomerPage() {
     // Custom CRM build: same setup fee, but rep-priced — scope varies per deal.
     crm: false,
     crmAmount: '',
+    // What the owner actually wants out of the build — a developer
+    // bidding on "a CRM" with no brief either overbuilds it or builds
+    // the wrong thing, so these are asked on the call, not after.
+    crmGoal: '',
+    crmPipeline: '',
+    crmAutomations: '',
+    crmIntegrations: '',
+    crmSuccess: '',
     // 30-Second AI Advertisement: fixed price into the setup fee; the intake
     // below is the creative brief the generation pipeline boards from.
     adSpot: false,
@@ -755,8 +763,14 @@ export default function USPortalCreateCustomerPage() {
   async function recordCrmBuild(leadId: string | null) {
     try {
       await recordSetupService('crm', crmOneTime * 100, {
-        scope: form.notes.trim() || `${CUSTOM_CRM_SERVICE.label} for ${form.businessName}`,
-        acceptance: '',
+        scope: [
+          `What they want to see: ${form.crmGoal.trim()}`,
+          `How they sell today: ${form.crmPipeline.trim()}`,
+          form.crmAutomations.trim() && `Should run by itself: ${form.crmAutomations.trim()}`,
+          form.crmIntegrations.trim() && `Must talk to: ${form.crmIntegrations.trim()}`,
+          form.notes.trim() && `Rep notes: ${form.notes.trim()}`,
+        ].filter(Boolean).join(' '),
+        acceptance: form.crmSuccess.trim(),
       }, leadId)
     } catch (e) {
       setCrmRecordError(e instanceof Error ? e.message : 'Could not record the CRM build')
@@ -815,6 +829,9 @@ export default function USPortalCreateCustomerPage() {
       }
       if (form.crm && crmOneTime <= 0) {
         throw new Error('Custom CRM build is on but has no price — enter the amount you quoted')
+      }
+      if (form.crm && (!form.crmGoal.trim() || !form.crmPipeline.trim())) {
+        throw new Error('CRM request: what they want to see, and how they sell today — a build cannot be scoped without both')
       }
       if (form.adSpot && !form.adGoal.trim()) {
         throw new Error('Ad brief: say what the 30-second spot has to sell — that brief is what gets boarded')
@@ -1403,6 +1420,27 @@ export default function USPortalCreateCustomerPage() {
                       </div>
                       <p className="text-[10px] text-[#4a5550] mt-1">In USD. Adds to the one-time setup fee — quote it from the scope you agreed on the call.</p>
                     </div>
+                    {/* The request detail. This is what a developer bids
+                        against — without it the build is a guess. */}
+                    {CRM_INTAKE_FIELDS.map(f => (
+                      <div key={f.id}>
+                        <label className="block text-[11px] font-medium text-[#A1A1A8] mb-1.5">
+                          {f.label} {f.required && <span className="text-[#17C5B0]">(required)</span>}
+                        </label>
+                        {f.rows ? (
+                          <textarea rows={f.rows} value={form[f.id]}
+                            onChange={e => update(f.id, e.target.value)}
+                            placeholder={f.placeholder}
+                            className="w-full px-3 py-2.5 text-[13px] rounded-lg bg-[#111113] border border-[#1F1F23] text-white placeholder-[#4a5550] focus:border-[#17C5B0]/50 focus:outline-none resize-none" />
+                        ) : (
+                          <input type="text" value={form[f.id]}
+                            onChange={e => update(f.id, e.target.value)}
+                            placeholder={f.placeholder}
+                            className="w-full px-3 py-2.5 text-[13px] rounded-lg bg-[#111113] border border-[#1F1F23] text-white placeholder-[#4a5550] focus:border-[#17C5B0]/50 focus:outline-none" />
+                        )}
+                      </div>
+                    ))}
+                    <p className="text-[10px] text-[#17C5B0]/60">This is the brief developers bid against — the more specific, the closer the first build lands.</p>
                   </div>
                 )}
                 {/* 30-Second AI Advertisement — fixed price. The intake below
@@ -1780,7 +1818,7 @@ export default function USPortalCreateCustomerPage() {
               <ArrowLeft size={14} /> Back
             </button>
             <button onClick={() => {
-              setForm({ businessName: '', ownerName: '', email: '', phone: '', vertical: '', pos: '', plan: 'premium', priceBump: 0, firstMonthFree: false, feeAllocationMode: 'business_pays', pricingModel: 'per_order', website: false, websiteCurrentUrl: '', websiteGoals: '', websitePages: '', websiteBrand: '', websiteContent: 'none', crm: false, crmAmount: '', adSpot: false, adGoal: '', adHighlights: '', adBrand: '', adPlacement: AD_SPOT_PLACEMENTS[0].id, adAudio: AD_SPOT_AUDIO[0].id, notes: '' })
+              setForm({ businessName: '', ownerName: '', email: '', phone: '', vertical: '', pos: '', plan: 'premium', priceBump: 0, firstMonthFree: false, feeAllocationMode: 'business_pays', pricingModel: 'per_order', website: false, websiteCurrentUrl: '', websiteGoals: '', websitePages: '', websiteBrand: '', websiteContent: 'none', crm: false, crmAmount: '', crmGoal: '', crmPipeline: '', crmAutomations: '', crmIntegrations: '', crmSuccess: '', adSpot: false, adGoal: '', adHighlights: '', adBrand: '', adPlacement: AD_SPOT_PLACEMENTS[0].id, adAudio: AD_SPOT_AUDIO[0].id, notes: '' })
               setStep('details')
               setOnboardingLink('')
               setCustomerLoginUrl('')
@@ -1992,7 +2030,7 @@ export default function USPortalCreateCustomerPage() {
               <ArrowLeft size={14} /> Back to Leads
             </button>
             <button onClick={() => {
-              setForm({ businessName: '', ownerName: '', email: '', phone: '', vertical: '', pos: '', plan: 'premium', priceBump: 0, firstMonthFree: false, feeAllocationMode: 'business_pays', pricingModel: 'per_order', website: false, websiteCurrentUrl: '', websiteGoals: '', websitePages: '', websiteBrand: '', websiteContent: 'none', crm: false, crmAmount: '', adSpot: false, adGoal: '', adHighlights: '', adBrand: '', adPlacement: AD_SPOT_PLACEMENTS[0].id, adAudio: AD_SPOT_AUDIO[0].id, notes: '' })
+              setForm({ businessName: '', ownerName: '', email: '', phone: '', vertical: '', pos: '', plan: 'premium', priceBump: 0, firstMonthFree: false, feeAllocationMode: 'business_pays', pricingModel: 'per_order', website: false, websiteCurrentUrl: '', websiteGoals: '', websitePages: '', websiteBrand: '', websiteContent: 'none', crm: false, crmAmount: '', crmGoal: '', crmPipeline: '', crmAutomations: '', crmIntegrations: '', crmSuccess: '', adSpot: false, adGoal: '', adHighlights: '', adBrand: '', adPlacement: AD_SPOT_PLACEMENTS[0].id, adAudio: AD_SPOT_AUDIO[0].id, notes: '' })
               setStep('details')
               setOnboardingLink('')
               setCustomerLoginUrl('')

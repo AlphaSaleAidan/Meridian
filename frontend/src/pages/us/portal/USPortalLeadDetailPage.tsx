@@ -14,7 +14,7 @@ import QRCode from 'qrcode'
 import POSSystemPicker from '@/components/POSSystemPicker'
 import { type Deal, type DealStage } from '@/lib/canada-sales-demo-data'
 import { usLeadsService } from '@/lib/us-leads-service'
-import { getPlan, closestMonthlyPlan, PLAN_TIERS, ZERO_PER_ORDER_CARDS, REP_PRICE_HEADROOM, WEBSITE_MODULES, websiteMonthlyFree, CUSTOM_CRM_SERVICE, parseSetupServiceAmount, AD_SPOT_SERVICE, AD_SPOT_PLACEMENTS, AD_SPOT_AUDIO, VOICE_INCLUDED_MINUTES, VOICE_OVERAGE_PER_MIN, VOICE_MAX_CALL_MINUTES, type PlanTier } from '@/lib/proposal-plans'
+import { getPlan, closestMonthlyPlan, PLAN_TIERS, ZERO_PER_ORDER_CARDS, REP_PRICE_HEADROOM, WEBSITE_MODULES, websiteMonthlyFree, CUSTOM_CRM_SERVICE, CRM_INTAKE_FIELDS, parseSetupServiceAmount, AD_SPOT_SERVICE, AD_SPOT_PLACEMENTS, AD_SPOT_AUDIO, VOICE_INCLUDED_MINUTES, VOICE_OVERAGE_PER_MIN, VOICE_MAX_CALL_MINUTES, type PlanTier } from '@/lib/proposal-plans'
 
 // Website Buildout is sold as modular line items (WEBSITE_MODULES) — the
 // one-time modules sum into the setup fee. Creating the customer fires the
@@ -154,6 +154,9 @@ export default function USPortalLeadDetailPage() {
   // the build is scoped per deal, so the rep enters the amount they quoted.
   const [crm, setCrm] = useState(false)
   const [crmAmount, setCrmAmount] = useState('')
+  // The CRM request detail — what the owner actually wants out of the
+  // build. This is the brief developers bid against.
+  const [crmDetail, setCrmDetail] = useState<Record<string, string>>({})
   const crmOneTime = crm ? parseSetupServiceAmount(crmAmount) : 0
   // 30-Second AI Advertisement — a fixed-price Setup Service. The brief the
   // rep takes here is what the generation pipeline boards the spot from.
@@ -338,6 +341,12 @@ export default function USPortalLeadDetailPage() {
       setCustomerCreating(false)
       return
     }
+    if (crm && (!crmDetail.crmGoal?.trim() || !crmDetail.crmPipeline?.trim())) {
+      setCustomerError('CRM request: what they want to see, and how they sell today — a build cannot be scoped without both.')
+      creatingRef.current = false
+      setCustomerCreating(false)
+      return
+    }
     if (adSpot && !adGoal.trim()) {
       setCustomerError(`${AD_SPOT_SERVICE.label} is on but has no brief — say what the spot has to sell.`)
       creatingRef.current = false
@@ -385,36 +394,69 @@ export default function USPortalLeadDetailPage() {
 
       setCustomerCredentials({ email, tempPassword: data.temp_password })
 
-      // Website Buildout sold → fire the 48-hour build contest on Meridian
-      // Foundry (best-effort: a Foundry hiccup never blocks the account).
+      // Setup Services follow one rule (Aidan 2026-08-14): closing RECORDS a
+      // work order; it reaches the Foundry dev marketplace when the merchant's
+      // payment lands. Best-effort — a recording failure is surfaced to the
+      // rep, never allowed to fail the account they just created.
+      // Narrowing from the `if (!deal) return` guard above does not survive
+      // into a closure — capture the row so TS keeps it non-null.
+      const dealRow = deal
+      async function recordSetupService(serviceKind: string, priceCents: number, brief: Record<string, unknown>) {
+        const res = await fetch(`${API_BASE}/api/setup-services/order`, {
+          method: 'POST',
+          headers: authHeaders,
+          body: JSON.stringify({
+            serviceKind,
+            market: 'us',
+            leadId: dealRow.id,
+            repId: rep?.rep_id || null,
+            repName: rep?.name || null,
+            businessName: dealRow.business_name,
+            businessType: dealRow.vertical || 'retail',
+            contactName: dealRow.contact_name,
+            contactEmail: email,
+            priceCents,
+            brief,
+          }),
+        })
+        if (!res.ok) {
+          const body = await res.json().catch(() => null)
+          throw new Error(typeof body?.detail === 'string' ? body.detail : `Could not record ${serviceKind}`)
+        }
+      }
+
       if (website) {
         try {
           const rawUrl = websiteCurrentUrl.trim()
-          const sprintRes = await fetch(FOUNDRY_ORDER_URL, {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({
-              company: deal.business_name,
-              contactName: deal.contact_name,
-              email,
-              currentUrl: rawUrl ? (/^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`) : '',
-              goals: websiteGoals.trim(),
-              pages: websitePages.split(',').map(x => x.trim()).filter(Boolean).slice(0, 12),
-              brandNotes: [websiteBrand.trim(), `Modules sold: ${WEBSITE_MODULES.filter(m => websiteModules.includes(m.id) || (m.monthly && monthlyFree)).map(m => m.label).join(', ')}.`, `Sold with Meridian ${selectedPlan.label} (US) by rep ${rep?.name || 'unknown'}.`].filter(Boolean).join(' '),
-              contentReady: websiteContent,
-              repEmail: '',
-            }),
+          await recordSetupService('website', websiteOneTime * 100, {
+            currentUrl: rawUrl,
+            goals: websiteGoals.trim(),
+            pages: websitePages.split(',').map(x => x.trim()).filter(Boolean).slice(0, 12),
+            brandNotes: [websiteBrand.trim(), `Modules sold: ${WEBSITE_MODULES.filter(m => websiteModules.includes(m.id) || (m.monthly && monthlyFree)).map(m => m.label).join(', ')}.`, `Sold with Meridian ${selectedPlan.label} by rep ${rep?.name || 'unknown'}.`].filter(Boolean).join(' '),
+            contentReady: websiteContent,
           })
-          const sprintData = await sprintRes.json().catch(() => null)
-          if ((sprintRes.ok || sprintRes.status === 409) && sprintData?.jobId) {
-            setWebsiteContestUrl(`${FOUNDRY_JOB_BASE}/${sprintData.jobId}`)
-          } else {
-            setCustomerError('Account created, but the website build contest did not launch — start it manually at foundry.meridian.tips/agency/website.')
-          }
-        } catch {
-          setCustomerError('Account created, but the website build contest did not launch — start it manually at foundry.meridian.tips/agency/website.')
+          setWebsiteContestUrl('recorded')
+        } catch (e) {
+          setCustomerError(e instanceof Error ? e.message : 'Account created, but the website buildout was not recorded — flag it before the walkthrough.')
         }
       }
+
+      if (crm) {
+        try {
+          await recordSetupService('crm', crmOneTime * 100, {
+            scope: [
+              `What they want to see: ${(crmDetail.crmGoal || '').trim()}`,
+              `How they sell today: ${(crmDetail.crmPipeline || '').trim()}`,
+              (crmDetail.crmAutomations || '').trim() && `Should run by itself: ${crmDetail.crmAutomations.trim()}`,
+              (crmDetail.crmIntegrations || '').trim() && `Must talk to: ${crmDetail.crmIntegrations.trim()}`,
+            ].filter(Boolean).join(' '),
+            acceptance: (crmDetail.crmSuccess || '').trim(),
+          })
+        } catch (e) {
+          setCustomerError(e instanceof Error ? e.message : 'Account created, but the CRM build was not recorded — flag it before the walkthrough.')
+        }
+      }
+
       // 30-second spot sold → hand the brief to the generation pipeline
       // (best-effort, same as the website sprint above).
       if (adSpot) {
@@ -424,11 +466,11 @@ export default function USPortalLeadDetailPage() {
             headers: authHeaders,
             body: JSON.stringify({
               market: 'us',
-              leadId: deal.id,
+              leadId: dealRow.id,
               repId: rep?.rep_id || null,
               repName: rep?.name || null,
-              businessName: deal.business_name,
-              businessType: deal.vertical || 'retail',
+              businessName: dealRow.business_name,
+              businessType: dealRow.vertical || 'retail',
               contactEmail: email,
               priceCents: AD_SPOT_SERVICE.price * 100,
               goal: adGoal.trim(),
@@ -1343,6 +1385,20 @@ export default function USPortalLeadDetailPage() {
                 <input type="number" min={0} value={crmAmount} onChange={e => setCrmAmount(e.target.value)}
                   className={inputClass} placeholder="Build price — the amount you quoted (required)" />
                 <p className="text-[10px] text-[#4a5550]">Scoped per deal. Adds to the one-time setup fee.</p>
+                {CRM_INTAKE_FIELDS.map(f => (
+                  f.rows ? (
+                    <textarea key={f.id} rows={f.rows} value={crmDetail[f.id] || ''}
+                      onChange={e => setCrmDetail(d => ({ ...d, [f.id]: e.target.value }))}
+                      className={`${inputClass} resize-none`}
+                      placeholder={`${f.label}${f.required ? ' (required)' : ''}`} />
+                  ) : (
+                    <input key={f.id} type="text" value={crmDetail[f.id] || ''}
+                      onChange={e => setCrmDetail(d => ({ ...d, [f.id]: e.target.value }))}
+                      className={inputClass}
+                      placeholder={`${f.label}${f.required ? ' (required)' : ''}`} />
+                  )
+                ))}
+                <p className="text-[10px] text-[#17C5B0]/60">This is the brief developers bid against — the more specific, the closer the first build lands.</p>
               </div>
             )}
             <div className="flex items-center justify-between p-4 border-t border-[#1F1F23]">

@@ -6,6 +6,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   AD_SPOT_AUDIO,
+  CRM_INTAKE_FIELDS,
   AD_SPOT_PLACEMENTS,
   AD_SPOT_SERVICE,
   CUSTOM_CRM_SERVICE,
@@ -14,6 +15,7 @@ import {
 } from '../proposal-plans'
 import {
   AD_SPOT_SERVICE as CA_AD_SPOT_SERVICE,
+  CRM_INTAKE_FIELDS as CA_CRM_INTAKE_FIELDS,
   AD_SPOT_PLACEMENTS as CA_AD_SPOT_PLACEMENTS,
   CAD_RATE,
   CUSTOM_CRM_SERVICE as CA_CUSTOM_CRM_SERVICE,
@@ -169,5 +171,37 @@ describe('setup fee composition', () => {
         }
       }
     }
+  })
+})
+
+describe('Custom CRM build — the request detail', () => {
+  it('asks what the owner wants before a developer can bid on it', () => {
+    // A developer bidding on "a CRM" with no brief either overbuilds it or
+    // builds the wrong thing, so the two that make a build scopeable are
+    // required at close: what they want to see, and how they sell today.
+    const required = CRM_INTAKE_FIELDS.filter(f => f.required).map(f => f.id)
+    expect(required).toEqual(['crmGoal', 'crmPipeline'])
+  })
+
+  it('covers automations, integrations and what counts as a win', () => {
+    const ids = CRM_INTAKE_FIELDS.map(f => f.id)
+    expect(ids).toContain('crmAutomations')
+    expect(ids).toContain('crmIntegrations')
+    expect(ids).toContain('crmSuccess')
+  })
+
+  it('reads as questions a rep can say out loud, with an example answer', () => {
+    for (const f of CRM_INTAKE_FIELDS) {
+      expect(f.label.endsWith('?') || f.label.includes('—')).toBe(true)
+      expect(f.placeholder.length).toBeGreaterThan(20)
+    }
+  })
+
+  it('is the same interview in both markets — questions are not money', () => {
+    expect(CA_CRM_INTAKE_FIELDS).toBe(CRM_INTAKE_FIELDS)
+  })
+
+  it('has unique ids so answers cannot overwrite each other', () => {
+    expect(new Set(CRM_INTAKE_FIELDS.map(f => f.id)).size).toBe(CRM_INTAKE_FIELDS.length)
   })
 })

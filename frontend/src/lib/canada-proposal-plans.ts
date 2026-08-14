@@ -78,7 +78,8 @@ export type { AdSpotService } from './proposal-plans'
 export { AD_SPOT_PLACEMENTS, AD_SPOT_AUDIO } from './proposal-plans'
 // Custom CRM build is rep-priced per deal, so there is no fixed CAD price to
 // convert — the definition and the amount parser are shared verbatim.
-export { CUSTOM_CRM_SERVICE, parseSetupServiceAmount } from './proposal-plans'
+export { CUSTOM_CRM_SERVICE, parseSetupServiceAmount, CRM_INTAKE_FIELDS } from './proposal-plans'
+export type { CrmIntakeField } from './proposal-plans'
 // Voice-call terms are market-independent: call time is not billed in either
 // market (overage retired 2026-08-07), so there is nothing to FX-convert —
 // only the shared included-minutes and hard call cap carry over.
