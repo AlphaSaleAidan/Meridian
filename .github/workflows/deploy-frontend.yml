@@ -47,5 +47,16 @@ jobs:
             # queries the configured one, so pin an uncommon port.
             PRERENDER_PORT=45177 bash scripts/prerender-all.sh
             test -s dist/about/index.html
+            # Bump the service-worker cache name to the commit being shipped.
+            # WHY THIS IS NOT OPTIONAL: sw.js caches the bundle under
+            # CACHE_NAME, so shipping new assets under an UNCHANGED name leaves
+            # every returning client serving the old JS — the feature looks
+            # missing on live while the docroot is provably correct. That has
+            # bitten this project repeatedly (2026-08-08 and again 2026-08-14,
+            # when the portal shipped under a name from the day before).
+            # Deriving it from the SHA means it can never be forgotten.
+            SW_NAME="meridian-$(git rev-parse --short HEAD)-$(date -u +%Y%m%d)"
+            sed -i "s/const CACHE_NAME = '[^']*'/const CACHE_NAME = '${SW_NAME}'/" dist/sw.js
+            grep -q "const CACHE_NAME = '${SW_NAME}'" dist/sw.js
             rsync -a --delete dist/ /root/Meridian/frontend/dist/
             echo "deployed $(git rev-parse --short HEAD) to /root/Meridian/frontend/dist"
