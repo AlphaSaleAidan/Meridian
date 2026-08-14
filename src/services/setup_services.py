@@ -241,7 +241,7 @@ async def record_work_order(
                 headers={**_headers(key), "Prefer": "return=representation"},
                 json=payload,
             )
-    except Exception as exc:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 — logger.exception carries the traceback
         logger.exception("work order insert errored for %s", business_name)
         return None
 
