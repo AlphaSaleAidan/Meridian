@@ -95,6 +95,7 @@ from .routes.credits import router as credits_router
 from .routes.pos_connections import router as pos_connections_router
 from .routes.inference import router as inference_router
 from .routes.website import router as website_router
+from .routes.bookings import router as bookings_router
 from .routes.schedule import router as schedule_router
 from .routes.garry import router as garry_router
 from .routes.garry_patches import router as garry_patches_router
@@ -407,6 +408,8 @@ app.include_router(pos_connections_router)
 app.include_router(inference_router)
 app.include_router(website_router)
 app.include_router(schedule_router)
+# Bookings — reservations and appointments (migrations/081_bookings.sql)
+app.include_router(bookings_router)
 app.include_router(garry_router)
 app.include_router(garry_patches_router)
 app.include_router(archives_router)

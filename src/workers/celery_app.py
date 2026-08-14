@@ -103,6 +103,16 @@ celery_app.conf.update(
             "schedule": crontab(hour=8, minute=0),  # 8 AM UTC daily
             "options": {"queue": "default"},
         },
+        "booking-calendar-sync": {
+            "task": "src.workers.tasks.sync_booking_calendars",
+            "schedule": 1200.0,  # every 20 min — see the task docstring
+            "options": {"queue": "default"},
+        },
+        "booking-reminders": {
+            "task": "src.workers.tasks.send_booking_reminders",
+            "schedule": 900.0,  # every 15 min — see the task docstring
+            "options": {"queue": "default"},
+        },
         "phone-vocab-mining": {
             "task": "src.workers.tasks.mine_phone_vocab",
             "schedule": crontab(hour=9, minute=30),  # 9:30 AM UTC daily

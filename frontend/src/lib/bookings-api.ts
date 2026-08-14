@@ -1,0 +1,383 @@
+/**
+ * Bookings API client — reservations and appointments.
+ *
+ * Wire format is snake_case (PostgREST all the way down); the UI works in
+ * camelCase. Mapping happens here rather than in components so a column
+ * rename touches one file.
+ *
+ * Times on the wire are always UTC ISO instants. The *label* a merchant reads
+ * is computed server-side in their own timezone and shipped as `localLabel` —
+ * the browser's timezone is irrelevant and must never be used to render a
+ * booking time, because an owner checking tonight's book from an airport
+ * would otherwise see every reservation shifted.
+ */
+import { getAuthHeaders } from '@/lib/supabase'
+
+const API_BASE = import.meta.env.VITE_API_URL || ''
+
+async function call<T>(
+  path: string,
+  opts: { method?: string; body?: unknown; params?: Record<string, string> } = {},
+): Promise<T> {
+  const url = new URL(`${API_BASE}/api/bookings${path}`, window.location.origin)
+  Object.entries(opts.params || {}).forEach(([k, v]) => {
+    if (v !== undefined && v !== null && v !== '') url.searchParams.set(k, v)
+  })
+  const res = await fetch(url.toString(), {
+    method: opts.method || 'GET',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(await getAuthHeaders()),
+    },
+    body: opts.body ? JSON.stringify(opts.body) : undefined,
+  })
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
+    throw new BookingsApiError(res.status, text)
+  }
+  return res.json() as Promise<T>
+}
+
+export class BookingsApiError extends Error {
+  constructor(public status: number, public body: string) {
+    super(`API ${status}: ${body}`)
+    this.name = 'BookingsApiError'
+  }
+  /** 409 is the double-book collision, which the UI handles specifically. */
+  get isSlotTaken() {
+    return this.status === 409
+  }
+}
+
+export type ResourceKind = 'table' | 'staff' | 'chair' | 'bay' | 'room'
+export type BookingStatus =
+  | 'confirmed' | 'seated' | 'completed' | 'cancelled' | 'no_show'
+
+export interface Resource {
+  id: string
+  name: string
+  kind: ResourceKind
+  seats: number
+  sortOrder: number
+  active: boolean
+}
+
+export interface Service {
+  id: string
+  name: string
+  description?: string
+  durationMinutes: number
+  bufferMinutes: number
+  priceCents?: number | null
+  minParty: number
+  maxParty: number
+  active: boolean
+}
+
+export interface HoursRow {
+  weekday: number
+  opensAt: string
+  closesAt: string
+  slotMinutes: number
+}
+
+export interface Booking {
+  id: string
+  resourceId: string
+  serviceId?: string | null
+  startsAt: string
+  endsAt: string
+  durationMinutes?: number | null
+  partySize: number
+  customerName: string
+  customerPhone?: string | null
+  customerEmail?: string | null
+  notes?: string | null
+  status: BookingStatus
+  source: string
+  confirmationCode: string
+  provider?: string | null
+}
+
+export interface Slot {
+  startsAt: string
+  endsAt: string
+  localLabel: string
+  resourceId: string
+  resourceName: string
+  durationMinutes: number
+}
+
+export interface Connection {
+  id: string
+  provider: string
+  status: 'pending' | 'connected' | 'error' | 'disabled'
+  direction: 'read' | 'write' | 'both'
+  lastSyncAt?: string | null
+  lastError?: string | null
+}
+
+export interface AvailableProvider {
+  key: string
+  label: string
+  summary: string
+  readBusy: boolean
+  writeBooking: boolean
+  webhooks: boolean
+}
+
+export interface UnavailableTool {
+  key: string
+  label: string
+  reason: string
+  workaround: string
+}
+
+const resource = (r: any): Resource => ({
+  id: r.id,
+  name: r.name,
+  kind: r.kind,
+  seats: r.seats ?? 1,
+  sortOrder: r.sort_order ?? 0,
+  active: r.active !== false,
+})
+
+const service = (s: any): Service => ({
+  id: s.id,
+  name: s.name,
+  description: s.description ?? undefined,
+  durationMinutes: s.duration_minutes ?? 60,
+  bufferMinutes: s.buffer_minutes ?? 0,
+  priceCents: s.price_cents ?? null,
+  minParty: s.min_party ?? 1,
+  maxParty: s.max_party ?? 1,
+  active: s.active !== false,
+})
+
+const booking = (b: any): Booking => ({
+  id: b.id,
+  resourceId: b.resource_id,
+  serviceId: b.service_id ?? null,
+  startsAt: b.starts_at,
+  endsAt: b.ends_at,
+  durationMinutes: b.duration_minutes ?? null,
+  partySize: b.party_size ?? 1,
+  customerName: b.customer_name ?? '',
+  customerPhone: b.customer_phone ?? null,
+  customerEmail: b.customer_email ?? null,
+  notes: b.notes ?? null,
+  status: b.status,
+  source: b.source ?? 'phone',
+  confirmationCode: b.confirmation_code ?? '',
+  provider: b.provider ?? null,
+})
+
+const connection = (c: any): Connection => ({
+  id: c.id,
+  provider: c.provider,
+  status: c.status,
+  direction: c.direction,
+  lastSyncAt: c.last_sync_at ?? null,
+  lastError: c.last_error ?? null,
+})
+
+export const bookingsApi = {
+  async listResources(merchantId: string): Promise<Resource[]> {
+    const r = await call<{ resources: any[] }>(`/resources/${merchantId}`)
+    return (r.resources || []).map(resource)
+  },
+
+  async createResource(input: {
+    merchantId: string; name: string; kind: ResourceKind
+    seats: number; sortOrder?: number
+  }): Promise<Resource> {
+    const r = await call<{ resource: any }>('/resources', {
+      method: 'POST',
+      body: {
+        merchant_id: input.merchantId,
+        name: input.name,
+        kind: input.kind,
+        seats: input.seats,
+        sort_order: input.sortOrder ?? 0,
+      },
+    })
+    return resource(r.resource)
+  },
+
+  async updateResource(id: string, patch: Partial<Resource>): Promise<Resource> {
+    const r = await call<{ resource: any }>(`/resources/${id}`, {
+      method: 'PATCH',
+      body: {
+        name: patch.name,
+        seats: patch.seats,
+        sort_order: patch.sortOrder,
+        active: patch.active,
+      },
+    })
+    return resource(r.resource)
+  },
+
+  async listServices(merchantId: string): Promise<Service[]> {
+    const r = await call<{ services: any[] }>(`/services/${merchantId}`)
+    return (r.services || []).map(service)
+  },
+
+  async createService(input: {
+    merchantId: string; name: string; durationMinutes: number
+    bufferMinutes?: number; minParty?: number; maxParty?: number
+    resourceKind?: ResourceKind; priceCents?: number | null
+  }): Promise<Service> {
+    const r = await call<{ service: any }>('/services', {
+      method: 'POST',
+      body: {
+        merchant_id: input.merchantId,
+        name: input.name,
+        duration_minutes: input.durationMinutes,
+        buffer_minutes: input.bufferMinutes ?? 0,
+        min_party: input.minParty ?? 1,
+        max_party: input.maxParty ?? 1,
+        resource_kind: input.resourceKind ?? null,
+        price_cents: input.priceCents ?? null,
+      },
+    })
+    return service(r.service)
+  },
+
+  async listHours(merchantId: string): Promise<HoursRow[]> {
+    const r = await call<{ hours: any[] }>(`/hours/${merchantId}`)
+    return (r.hours || []).map((h) => ({
+      weekday: h.weekday,
+      opensAt: String(h.opens_at || '').slice(0, 5),
+      closesAt: String(h.closes_at || '').slice(0, 5),
+      slotMinutes: h.slot_minutes ?? 15,
+    }))
+  },
+
+  async replaceHours(merchantId: string, rows: HoursRow[]): Promise<HoursRow[]> {
+    const r = await call<{ hours: any[] }>('/hours', {
+      method: 'PUT',
+      body: {
+        merchant_id: merchantId,
+        rows: rows.map((h) => ({
+          weekday: h.weekday,
+          opens_at: h.opensAt,
+          closes_at: h.closesAt,
+          slot_minutes: h.slotMinutes,
+        })),
+      },
+    })
+    return (r.hours || []).map((h) => ({
+      weekday: h.weekday,
+      opensAt: String(h.opens_at || '').slice(0, 5),
+      closesAt: String(h.closes_at || '').slice(0, 5),
+      slotMinutes: h.slot_minutes ?? 15,
+    }))
+  },
+
+  async listBookings(
+    merchantId: string, startIso: string, endIso: string,
+    includeCancelled = false,
+  ): Promise<Booking[]> {
+    const r = await call<{ bookings: any[] }>(`/list/${merchantId}`, {
+      params: {
+        start: startIso,
+        end: endIso,
+        include_cancelled: String(includeCancelled),
+      },
+    })
+    return (r.bookings || []).map(booking)
+  },
+
+  async availability(
+    merchantId: string, day: string, partySize = 1,
+  ): Promise<{ timezone: string; slots: Slot[] }> {
+    const r = await call<{ timezone: string; slots: any[] }>(
+      `/availability/${merchantId}`,
+      { params: { day, party_size: String(partySize) } },
+    )
+    return {
+      timezone: r.timezone,
+      slots: (r.slots || []).map((s) => ({
+        startsAt: s.starts_at,
+        endsAt: s.ends_at,
+        localLabel: s.local_label,
+        resourceId: s.resource_id,
+        resourceName: s.resource_name,
+        durationMinutes: s.duration_minutes,
+      })),
+    }
+  },
+
+  async createBooking(input: {
+    merchantId: string; startsAt: string; partySize: number
+    customerName: string; customerPhone?: string; notes?: string
+    serviceId?: string; source?: string
+  }): Promise<Booking> {
+    const r = await call<{ booking: any }>('/create', {
+      method: 'POST',
+      body: {
+        merchant_id: input.merchantId,
+        starts_at: input.startsAt,
+        party_size: input.partySize,
+        customer_name: input.customerName,
+        customer_phone: input.customerPhone || null,
+        notes: input.notes || null,
+        service_id: input.serviceId || null,
+        source: input.source || 'portal',
+      },
+    })
+    return booking(r.booking)
+  },
+
+  async updateBooking(id: string, patch: {
+    status?: BookingStatus; startsAt?: string; resourceId?: string
+    partySize?: number; notes?: string
+  }): Promise<Booking> {
+    const r = await call<{ booking: any }>(`/${id}`, {
+      method: 'PATCH',
+      body: {
+        status: patch.status,
+        starts_at: patch.startsAt,
+        resource_id: patch.resourceId,
+        party_size: patch.partySize,
+        notes: patch.notes,
+      },
+    })
+    return booking(r.booking)
+  },
+
+  async integrations(merchantId: string): Promise<{
+    connections: Connection[]
+    available: AvailableProvider[]
+    unavailable: UnavailableTool[]
+  }> {
+    const r = await call<any>(`/integrations/${merchantId}`)
+    return {
+      connections: (r.connections || []).map(connection),
+      available: (r.available || []).map((p: any) => ({
+        key: p.key,
+        label: p.label,
+        summary: p.summary,
+        readBusy: !!p.read_busy,
+        writeBooking: !!p.write_booking,
+        webhooks: !!p.webhooks,
+      })),
+      unavailable: r.unavailable || [],
+    }
+  },
+
+  async connectIcsFeed(merchantId: string, url: string) {
+    return call<{ connection: any; sync: any }>('/integrations/ics', {
+      method: 'POST',
+      body: { merchant_id: merchantId, url },
+    })
+  },
+
+  async enableFeed(merchantId: string): Promise<string> {
+    const r = await call<{ feed_url: string }>(`/feed/${merchantId}/enable`, {
+      method: 'POST',
+    })
+    return r.feed_url
+  },
+}

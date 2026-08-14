@@ -124,6 +124,18 @@ inline-auth:
   # returns None when GATEWAY_JWT_SECRET is unset). Minting the code itself is
   # require_org_access (camera_connect.py:164).
   - "POST /api/connector/pair"
+  #
+  # Calendar-feed subscription. The 32-hex token in the path IS the credential:
+  # calendar clients (Google/Outlook/Apple) cannot send an Authorization header,
+  # which is the whole reason this endpoint is public. feed_for_token()
+  # (src/services/booking_feed.py) rejects anything that is not exactly 32 hex
+  # characters BEFORE querying, looks the token up against a unique partial
+  # index on phone_agent_config.booking_feed_token, and returns 404 — never 403 —
+  # so probing reveals nothing about which merchants exist. The token is minted
+  # only on explicit merchant request (POST /api/bookings/feed/{merchant_id}/enable,
+  # require_service_auth) and rotating it revokes the old URL immediately. The
+  # feed body carries only what is already in a booking confirmation.
+  - "GET /api/bookings/feed/{token}.ics"
   # Browser/phone camera frame ingest. Per-camera HMAC frame token bound to
   # (camera_id, org_id): verify_frame_token() at
   # src/api/routes/browser_camera.py:50 → 401 (src/camera/frame_ingest.py:73 —

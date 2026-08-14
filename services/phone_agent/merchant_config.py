@@ -116,6 +116,15 @@ class MerchantPhoneConfig:
     # {link} placeholders, safe-replaced by sms_checkout). "" = default copy.
     sms_pay_template: str = ""
     reservation_config: dict | None = None
+    # BOOKINGS (migrations/081_bookings.sql). "off" (default) keeps the legacy
+    # behaviour byte-for-byte: reservations are a prompt instruction, not a
+    # system. "native" turns on the real availability engine and the booking
+    # tools. "external_link" reads the caller a URL. "provider" books through
+    # the merchant's own tool.
+    booking_mode: str = "off"
+    # The noun the agent says out loud — "table", "chair", "bay". A barbershop
+    # caller should never be offered a table.
+    booking_noun: str = "reservation"
     # Agent personality (formality/upsell/humor/custom phrases/brand keywords)
     # set in Phone Orders settings; rendered into the live system prompt.
     personality: dict | None = None
@@ -223,6 +232,20 @@ def _norm_payment_mode(value: Optional[str]) -> str:
     """Normalize the configured payment_mode; unknown/missing → pay_now (default)."""
     mode = (value or "").strip().lower()
     return mode if mode in _VALID_PAYMENT_MODES else "pay_now"
+
+
+_VALID_BOOKING_MODES = ("off", "native", "external_link", "provider")
+
+
+def _norm_booking_mode(value: Optional[str]) -> str:
+    """Normalize booking_mode; unknown/missing → off.
+
+    Failing to "off" is the whole safety property: a merchant whose column is
+    missing, null or garbage keeps the pre-booking prompt exactly as it was
+    and the agent never offers a time it cannot honour.
+    """
+    mode = (value or "").strip().lower()
+    return mode if mode in _VALID_BOOKING_MODES else "off"
 
 
 def _norm_payment_link_provider(value: Optional[str]) -> str:
@@ -365,6 +388,8 @@ async def get_merchant_config(merchant_id: str) -> Optional[MerchantPhoneConfig]
             tax_rate=row.get("tax_rate", 0.13),
             sms_pay_template=(row.get("sms_pay_template") or "").strip(),
             reservation_config=row.get("reservation_config") or None,
+            booking_mode=_norm_booking_mode(row.get("booking_mode")),
+            booking_noun=(row.get("booking_noun") or "reservation").strip() or "reservation",
             personality=row.get("personality") or None,
             # Default to pay_now if the column is missing/null (anti-scam default).
             payment_mode=_norm_payment_mode(row.get("payment_mode")),

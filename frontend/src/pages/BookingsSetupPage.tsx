@@ -1,0 +1,586 @@
+/**
+ * Booking setup — what we can hold, when we're open, and what else to talk to.
+ *
+ * The integrations section deliberately shows the tools we CANNOT connect to
+ * alongside the ones we can, with the reason and the workaround. A merchant on
+ * Booksy who sees nothing about Booksy assumes we haven't got round to it and
+ * asks their rep; a merchant who reads "Booksy publishes no API — connect your
+ * Google Calendar instead" can act on it in the same minute.
+ */
+import { useCallback, useEffect, useState } from 'react'
+import {
+  AlertCircle, Armchair, Calendar, Check, Copy, Info, Link2, Plus, Trash2,
+} from 'lucide-react'
+import { useOrgId } from '@/hooks/useOrg'
+import {
+  bookingsApi,
+  type AvailableProvider, type Connection, type HoursRow,
+  type Resource, type ResourceKind, type Service, type UnavailableTool,
+} from '@/lib/bookings-api'
+
+const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+
+const KIND_LABEL: Record<ResourceKind, string> = {
+  table: 'Table',
+  chair: 'Chair',
+  staff: 'Staff member',
+  bay: 'Bay',
+  room: 'Room',
+}
+
+export default function BookingsSetupPage() {
+  const merchantId = useOrgId()
+  const [resources, setResources] = useState<Resource[]>([])
+  const [services, setServices] = useState<Service[]>([])
+  const [hours, setHours] = useState<HoursRow[]>([])
+  const [connections, setConnections] = useState<Connection[]>([])
+  const [available, setAvailable] = useState<AvailableProvider[]>([])
+  const [unavailable, setUnavailable] = useState<UnavailableTool[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  const load = useCallback(async () => {
+    if (!merchantId) return
+    setLoading(true)
+    try {
+      const [r, s, h, i] = await Promise.all([
+        bookingsApi.listResources(merchantId),
+        bookingsApi.listServices(merchantId),
+        bookingsApi.listHours(merchantId),
+        bookingsApi.integrations(merchantId),
+      ])
+      setResources(r)
+      setServices(s)
+      setHours(h)
+      setConnections(i.connections)
+      setAvailable(i.available)
+      setUnavailable(i.unavailable)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not load booking setup')
+    } finally {
+      setLoading(false)
+    }
+  }, [merchantId])
+
+  useEffect(() => { load() }, [load])
+
+  if (loading) {
+    return (
+      <div className="space-y-3">
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="h-32 animate-pulse rounded-lg border border-[#1F1F23] bg-[#111113]" />
+        ))}
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      <header>
+        <h1 className="text-xl font-semibold tracking-tight text-[#F5F5F7]">
+          Booking setup
+        </h1>
+        <p className="mt-0.5 text-sm text-[#A1A1A8]">
+          Tell us what you can hold and when you're open. The phone agent will
+          only ever offer times that fit.
+        </p>
+      </header>
+
+      {error && (
+        <div className="flex items-start gap-2 rounded-lg border border-[#E5484D]/30 bg-[#E5484D]/10 px-3 py-2.5 text-sm text-[#E5484D]">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      <ResourcesCard
+        merchantId={merchantId}
+        resources={resources}
+        onChanged={load}
+      />
+      <ServicesCard
+        merchantId={merchantId}
+        services={services}
+        onChanged={load}
+      />
+      <HoursCard merchantId={merchantId} hours={hours} onChanged={load} />
+      <IntegrationsCard
+        merchantId={merchantId}
+        connections={connections}
+        available={available}
+        unavailable={unavailable}
+        onChanged={load}
+      />
+    </div>
+  )
+}
+
+function Card({ title, subtitle, icon: Icon, children }: {
+  title: string
+  subtitle?: string
+  icon: typeof Armchair
+  children: React.ReactNode
+}) {
+  return (
+    <section className="rounded-xl border border-[#1F1F23] bg-[#111113] p-5">
+      <div className="mb-4 flex items-start gap-3">
+        <Icon className="mt-0.5 h-4 w-4 shrink-0 text-[#1A8FD6]" />
+        <div className="min-w-0">
+          <h2 className="text-sm font-semibold text-[#F5F5F7]">{title}</h2>
+          {subtitle && (
+            <p className="mt-0.5 text-sm text-[#A1A1A8]">{subtitle}</p>
+          )}
+        </div>
+      </div>
+      {children}
+    </section>
+  )
+}
+
+function ResourcesCard({ merchantId, resources, onChanged }: {
+  merchantId: string
+  resources: Resource[]
+  onChanged: () => void
+}) {
+  const [name, setName] = useState('')
+  const [kind, setKind] = useState<ResourceKind>('table')
+  const [seats, setSeats] = useState(2)
+  const [busy, setBusy] = useState(false)
+
+  const add = async () => {
+    if (!name.trim()) return
+    setBusy(true)
+    try {
+      await bookingsApi.createResource({
+        merchantId, name: name.trim(), kind,
+        seats: kind === 'table' || kind === 'room' ? seats : 1,
+      })
+      setName('')
+      onChanged()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Card
+      title="What can be booked"
+      subtitle="A table, a chair, a bay, a person — anything that can hold one booking at a time. Two bookings can never land on the same one."
+      icon={Armchair}
+    >
+      {resources.length > 0 && (
+        <ul className="mb-4 divide-y divide-[#1F1F23] rounded-lg border border-[#1F1F23]">
+          {resources.map((r) => (
+            <li key={r.id} className="flex items-center justify-between px-3 py-2.5">
+              <div className="min-w-0">
+                <span className="text-sm text-[#F5F5F7]">{r.name}</span>
+                <span className="ml-2 text-xs text-[#A1A1A8]">
+                  {KIND_LABEL[r.kind]}
+                  {r.seats > 1 ? ` · seats ${r.seats}` : ''}
+                </span>
+              </div>
+              <button
+                onClick={async () => {
+                  await bookingsApi.updateResource(r.id, { active: false })
+                  onChanged()
+                }}
+                aria-label={`Remove ${r.name}`}
+                className="p-1 text-[#A1A1A8] transition-colors hover:text-[#E5484D]"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="flex-1 min-w-[10rem] space-y-1">
+          <span className="text-xs uppercase tracking-wide text-[#A1A1A8]">Name</span>
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Table 4"
+            className="w-full rounded-lg border border-[#1F1F23] bg-[#0A0A0B] px-3 py-2 text-sm text-[#F5F5F7] outline-none focus:border-[#1A8FD6]/50"
+          />
+        </label>
+        <label className="space-y-1">
+          <span className="text-xs uppercase tracking-wide text-[#A1A1A8]">Type</span>
+          <select
+            value={kind}
+            onChange={(e) => setKind(e.target.value as ResourceKind)}
+            className="rounded-lg border border-[#1F1F23] bg-[#0A0A0B] px-3 py-2 text-sm text-[#F5F5F7] outline-none focus:border-[#1A8FD6]/50"
+          >
+            {Object.entries(KIND_LABEL).map(([k, label]) => (
+              <option key={k} value={k}>{label}</option>
+            ))}
+          </select>
+        </label>
+        {(kind === 'table' || kind === 'room') && (
+          <label className="space-y-1">
+            <span className="text-xs uppercase tracking-wide text-[#A1A1A8]">Seats</span>
+            <input
+              type="number"
+              min={1}
+              max={100}
+              value={seats}
+              onChange={(e) => setSeats(Math.max(1, Number(e.target.value) || 1))}
+              className="w-20 rounded-lg border border-[#1F1F23] bg-[#0A0A0B] px-3 py-2 text-sm text-[#F5F5F7] outline-none focus:border-[#1A8FD6]/50"
+            />
+          </label>
+        )}
+        <button
+          onClick={add}
+          disabled={busy || !name.trim()}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-[#1A8FD6] px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-[#1A8FD6]/90 disabled:opacity-40"
+        >
+          <Plus className="h-4 w-4" />
+          Add
+        </button>
+      </div>
+    </Card>
+  )
+}
+
+function ServicesCard({ merchantId, services, onChanged }: {
+  merchantId: string
+  services: Service[]
+  onChanged: () => void
+}) {
+  const [name, setName] = useState('')
+  const [duration, setDuration] = useState(30)
+  const [maxParty, setMaxParty] = useState(1)
+  const [busy, setBusy] = useState(false)
+
+  const add = async () => {
+    if (!name.trim()) return
+    setBusy(true)
+    try {
+      await bookingsApi.createService({
+        merchantId, name: name.trim(),
+        durationMinutes: duration, minParty: 1, maxParty,
+      })
+      setName('')
+      onChanged()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Card
+      title="How long a booking takes"
+      subtitle="For a salon or a detailer this is your service list. For a restaurant, add one line per party size — “Table for 1–4, 90 minutes” — and we'll pick the right one."
+      icon={Calendar}
+    >
+      {services.length > 0 && (
+        <ul className="mb-4 divide-y divide-[#1F1F23] rounded-lg border border-[#1F1F23]">
+          {services.map((s) => (
+            <li key={s.id} className="px-3 py-2.5">
+              <span className="text-sm text-[#F5F5F7]">{s.name}</span>
+              <span className="ml-2 text-xs text-[#A1A1A8]">
+                {s.durationMinutes} min
+                {s.bufferMinutes ? ` + ${s.bufferMinutes} min turnaround` : ''}
+                {s.maxParty > 1 ? ` · parties ${s.minParty}–${s.maxParty}` : ''}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="min-w-[10rem] flex-1 space-y-1">
+          <span className="text-xs uppercase tracking-wide text-[#A1A1A8]">Name</span>
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Haircut"
+            className="w-full rounded-lg border border-[#1F1F23] bg-[#0A0A0B] px-3 py-2 text-sm text-[#F5F5F7] outline-none focus:border-[#1A8FD6]/50"
+          />
+        </label>
+        <label className="space-y-1">
+          <span className="text-xs uppercase tracking-wide text-[#A1A1A8]">Minutes</span>
+          <input
+            type="number"
+            min={5}
+            max={1440}
+            step={5}
+            value={duration}
+            onChange={(e) => setDuration(Math.max(5, Number(e.target.value) || 30))}
+            className="w-24 rounded-lg border border-[#1F1F23] bg-[#0A0A0B] px-3 py-2 text-sm text-[#F5F5F7] outline-none focus:border-[#1A8FD6]/50"
+          />
+        </label>
+        <label className="space-y-1">
+          <span className="text-xs uppercase tracking-wide text-[#A1A1A8]">Max party</span>
+          <input
+            type="number"
+            min={1}
+            max={100}
+            value={maxParty}
+            onChange={(e) => setMaxParty(Math.max(1, Number(e.target.value) || 1))}
+            className="w-24 rounded-lg border border-[#1F1F23] bg-[#0A0A0B] px-3 py-2 text-sm text-[#F5F5F7] outline-none focus:border-[#1A8FD6]/50"
+          />
+        </label>
+        <button
+          onClick={add}
+          disabled={busy || !name.trim()}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-[#1A8FD6] px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-[#1A8FD6]/90 disabled:opacity-40"
+        >
+          <Plus className="h-4 w-4" />
+          Add
+        </button>
+      </div>
+    </Card>
+  )
+}
+
+function HoursCard({ merchantId, hours, onChanged }: {
+  merchantId: string
+  hours: HoursRow[]
+  onChanged: () => void
+}) {
+  const [rows, setRows] = useState<Record<number, HoursRow | null>>(() => {
+    const map: Record<number, HoursRow | null> = {}
+    for (let d = 0; d < 7; d++) map[d] = hours.find((h) => h.weekday === d) || null
+    return map
+  })
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+
+  const set = (d: number, patch: Partial<HoursRow> | null) => {
+    setSaved(false)
+    setRows((prev) => ({
+      ...prev,
+      [d]: patch === null
+        ? null
+        : { weekday: d, opensAt: '09:00', closesAt: '17:00', slotMinutes: 15,
+            ...(prev[d] || {}), ...patch },
+    }))
+  }
+
+  const save = async () => {
+    setSaving(true)
+    try {
+      await bookingsApi.replaceHours(
+        merchantId,
+        Object.values(rows).filter(Boolean) as HoursRow[],
+      )
+      setSaved(true)
+      onChanged()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Card
+      title="When you take bookings"
+      subtitle="Bookings can start any time inside these hours, and must finish before you close."
+      icon={Calendar}
+    >
+      <div className="space-y-1.5">
+        {DAYS.map((label, d) => {
+          const row = rows[d]
+          return (
+            <div key={d} className="flex flex-wrap items-center gap-2">
+              <label className="flex w-32 shrink-0 items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={!!row}
+                  onChange={(e) => set(d, e.target.checked ? {} : null)}
+                  className="accent-[#1A8FD6]"
+                />
+                <span className="text-sm text-[#F5F5F7]">{label}</span>
+              </label>
+              {row ? (
+                <>
+                  <input
+                    type="time"
+                    value={row.opensAt}
+                    onChange={(e) => set(d, { opensAt: e.target.value })}
+                    className="rounded-lg border border-[#1F1F23] bg-[#0A0A0B] px-2 py-1.5 text-sm text-[#F5F5F7] outline-none focus:border-[#1A8FD6]/50"
+                  />
+                  <span className="text-xs text-[#A1A1A8]">to</span>
+                  <input
+                    type="time"
+                    value={row.closesAt}
+                    onChange={(e) => set(d, { closesAt: e.target.value })}
+                    className="rounded-lg border border-[#1F1F23] bg-[#0A0A0B] px-2 py-1.5 text-sm text-[#F5F5F7] outline-none focus:border-[#1A8FD6]/50"
+                  />
+                </>
+              ) : (
+                <span className="text-sm text-[#A1A1A8]">Closed</span>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      <p className="mt-3 flex items-start gap-1.5 text-xs text-[#A1A1A8]">
+        <Info className="mt-0.5 h-3 w-3 shrink-0" />
+        Open past midnight? Add the late hours to the following day — a 1 AM
+        booking belongs to that day.
+      </p>
+
+      <button
+        onClick={save}
+        disabled={saving}
+        className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-[#1A8FD6] px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-[#1A8FD6]/90 disabled:opacity-40"
+      >
+        {saved ? <Check className="h-4 w-4" /> : null}
+        {saving ? 'Saving…' : saved ? 'Saved' : 'Save hours'}
+      </button>
+    </Card>
+  )
+}
+
+function IntegrationsCard({
+  merchantId, connections, available, unavailable, onChanged,
+}: {
+  merchantId: string
+  connections: Connection[]
+  available: AvailableProvider[]
+  unavailable: UnavailableTool[]
+  onChanged: () => void
+}) {
+  const [feedUrl, setFeedUrl] = useState('')
+  const [icsUrl, setIcsUrl] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const [error, setError] = useState('')
+
+  const connectIcs = async () => {
+    if (!icsUrl.trim()) return
+    setBusy(true)
+    setError('')
+    try {
+      const r = await bookingsApi.connectIcsFeed(merchantId, icsUrl.trim())
+      if (!r.sync?.ok) {
+        setError(r.sync?.error || 'Connected, but we could not read that feed yet.')
+      }
+      setIcsUrl('')
+      onChanged()
+    } catch {
+      setError('That feed could not be reached. Check the link and try again.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Card
+      title="Works with what you already use"
+      subtitle="Connect your existing calendar so the phone agent never books over something you've already committed to."
+      icon={Link2}
+    >
+      {connections.length > 0 && (
+        <ul className="mb-4 divide-y divide-[#1F1F23] rounded-lg border border-[#1F1F23]">
+          {connections.map((c) => (
+            <li key={c.id} className="flex items-center justify-between px-3 py-2.5">
+              <div className="min-w-0">
+                <span className="text-sm text-[#F5F5F7]">
+                  {available.find((a) => a.key === c.provider)?.label || c.provider}
+                </span>
+                {c.lastError && (
+                  <p className="mt-0.5 text-xs text-[#E5484D]">{c.lastError}</p>
+                )}
+              </div>
+              <span
+                className={`rounded border px-2 py-0.5 text-[11px] ${
+                  c.status === 'connected'
+                    ? 'border-[#17C5B0]/30 bg-[#17C5B0]/10 text-[#17C5B0]'
+                    : 'border-[#E5484D]/30 bg-[#E5484D]/10 text-[#E5484D]'
+                }`}
+              >
+                {c.status === 'connected' ? 'Connected' : 'Needs attention'}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <div className="space-y-2">
+        <label className="block text-xs uppercase tracking-wide text-[#A1A1A8]">
+          Paste a calendar link (.ics)
+        </label>
+        <div className="flex flex-wrap gap-2">
+          <input
+            value={icsUrl}
+            onChange={(e) => setIcsUrl(e.target.value)}
+            placeholder="https://calendar.google.com/…/basic.ics"
+            className="min-w-[14rem] flex-1 rounded-lg border border-[#1F1F23] bg-[#0A0A0B] px-3 py-2 text-sm text-[#F5F5F7] outline-none focus:border-[#1A8FD6]/50"
+          />
+          <button
+            onClick={connectIcs}
+            disabled={busy || !icsUrl.trim()}
+            className="rounded-lg border border-[#1F1F23] px-3 py-2 text-sm text-[#F5F5F7] transition-colors hover:border-[#1A8FD6]/40 disabled:opacity-40"
+          >
+            {busy ? 'Checking…' : 'Connect'}
+          </button>
+        </div>
+        <p className="text-xs text-[#A1A1A8]">
+          Read-only. We block out the times on it and never write to it.
+        </p>
+        {error && (
+          <p className="flex items-start gap-1.5 text-xs text-[#E5484D]">
+            <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" />
+            {error}
+          </p>
+        )}
+      </div>
+
+      <div className="mt-5 border-t border-[#1F1F23] pt-4">
+        <p className="text-sm font-medium text-[#F5F5F7]">
+          See bookings in your own calendar
+        </p>
+        <p className="mt-0.5 text-xs text-[#A1A1A8]">
+          Get a private link and subscribe to it in Google, Outlook or Apple
+          Calendar. Your calendar decides how often it refreshes — usually a few
+          hours, so treat this page as the live view.
+        </p>
+        {feedUrl ? (
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <code className="min-w-0 flex-1 truncate rounded-lg border border-[#1F1F23] bg-[#0A0A0B] px-3 py-2 text-xs text-[#A1A1A8]">
+              {feedUrl}
+            </code>
+            <button
+              onClick={() => {
+                navigator.clipboard?.writeText(feedUrl)
+                setCopied(true)
+                setTimeout(() => setCopied(false), 1500)
+              }}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-[#1F1F23] px-3 py-2 text-sm text-[#F5F5F7] transition-colors hover:border-[#1A8FD6]/40"
+            >
+              {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+              {copied ? 'Copied' : 'Copy'}
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={async () => setFeedUrl(await bookingsApi.enableFeed(merchantId))}
+            className="mt-2 rounded-lg border border-[#1F1F23] px-3 py-2 text-sm text-[#F5F5F7] transition-colors hover:border-[#1A8FD6]/40"
+          >
+            Get my calendar link
+          </button>
+        )}
+      </div>
+
+      {unavailable.length > 0 && (
+        <details className="mt-5 border-t border-[#1F1F23] pt-4">
+          <summary className="cursor-pointer text-sm text-[#A1A1A8] transition-colors hover:text-[#F5F5F7]">
+            Using OpenTable, Resy, Booksy or something else?
+          </summary>
+          <ul className="mt-3 space-y-3">
+            {unavailable.map((t) => (
+              <li key={t.key}>
+                <p className="text-sm text-[#F5F5F7]">{t.label}</p>
+                <p className="mt-0.5 text-xs text-[#A1A1A8]">{t.reason}</p>
+                <p className="mt-0.5 text-xs text-[#17C5B0]">{t.workaround}</p>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </Card>
+  )
+}

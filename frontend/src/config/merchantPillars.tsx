@@ -1,7 +1,7 @@
 import type { ComponentType, LazyExoticComponent } from 'react'
 import {
   LayoutDashboard, Zap, Layers, Users, Phone, Video, Settings, Receipt,
-  Contact, Lightbulb, Globe,
+  Contact, Lightbulb, Globe, CalendarClock,
 } from 'lucide-react'
 import { lazyRetry } from '@/components/ErrorBoundary'
 import type { ModuleFlags } from '@/config/moduleFlags'
@@ -36,6 +36,8 @@ const TimeClockPage = lazyRetry(() => import('@/pages/team/TimeClockPage'))
 const TeamChatPage = lazyRetry(() => import('@/pages/team/TeamChatPage'))
 const ChatbotConfigPage = lazyRetry(() => import('@/pages/team/ChatbotConfigPage'))
 const PhoneOrdersPage = lazyRetry(() => import('@/pages/PhoneOrdersPage'))
+const BookingsPage = lazyRetry(() => import('@/pages/BookingsPage'))
+const BookingsSetupPage = lazyRetry(() => import('@/pages/BookingsSetupPage'))
 const PhoneSetupWizard = lazyRetry(() => import('@/pages/canada/merchant/PhoneSetupWizard'))
 const CPAHandoffPage = lazyRetry(() => import('@/pages/canada/merchant/CPAHandoffPage'))
 // Point to the in-app analytics view, NOT the SEO marketing page.
@@ -132,6 +134,17 @@ export const merchantPillars: Pillar[] = [
     segments: [
       { view: 'orders', label: 'Phone Orders', Component: PhoneOrdersPage },
       { view: 'setup', label: 'Set up', Component: PhoneSetupWizard },
+    ],
+  },
+  {
+    // Reservations and appointments. Sits next to Phone Calls because that is
+    // where most of them come from — the agent books straight into this book.
+    path: 'bookings',
+    label: 'Bookings',
+    icon: CalendarClock,
+    segments: [
+      { view: 'book', label: "Today's Book", Component: BookingsPage },
+      { view: 'setup', label: 'Set up', Component: BookingsSetupPage },
     ],
   },
   {
