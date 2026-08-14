@@ -295,3 +295,119 @@ async def test_orders_are_marked_paid_even_when_posting_fails(monkeypatch):
     patches = [c[1]["json"] for c in calls["patch"]]
     assert any(p.get("payment_status") == "paid" for p in patches)
     assert any(p.get("status") == "failed" for p in patches)
+
+
+# ── The endpoint the rep portals actually call ───────────────────────────────
+#
+# Both create-customer pages POST here once per toggled service at close. If
+# this contract breaks, a rep closes a deal and the adder is never recorded —
+# silently, because the portal only surfaces the error inline.
+
+import src.api.routes.setup_services as ss_route  # noqa: E402
+from fastapi import FastAPI  # noqa: E402
+from fastapi.testclient import TestClient  # noqa: E402
+
+from src.api import auth as auth_mod  # noqa: E402
+
+REP = {"id": "rep-1", "email": "rep@acme.test"}
+AUTHED = {"Authorization": "Bearer usertoken"}
+
+ORDER_BODY = {
+    "serviceKind": "website",
+    "market": "us",
+    "businessName": "Acme Diner",
+    "priceCents": 50000,
+    "brief": {"goals": "Take pickup orders online", "pages": ["Home", "Menu"]},
+    "orgId": "22222222-2222-2222-2222-222222222222",
+    "contactEmail": "owner@acme.test",
+}
+
+
+@pytest.fixture
+def route_client():
+    app = FastAPI()
+    app.include_router(ss_route.router)
+    return TestClient(app, raise_server_exceptions=False)
+
+
+def _signed_in(monkeypatch, user=REP):
+    async def _verify(_token):
+        return user
+
+    monkeypatch.setattr(auth_mod, "_verify_supabase_token", _verify)
+
+
+@pytest.mark.parametrize("method,path", [
+    ("post", "/api/setup-services/order"),
+    ("get", "/api/setup-services"),
+    ("get", "/api/setup-services/catalog"),
+    ("post", "/api/setup-services/aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa/post"),
+])
+def test_endpoints_require_a_session(route_client, method, path):
+    kwargs = {"json": {}} if method == "post" else {}
+    assert getattr(route_client, method)(path, **kwargs).status_code == 401
+
+
+def test_recording_returns_the_order_and_says_when_it_posts(route_client, monkeypatch):
+    _signed_in(monkeypatch)
+    captured = {}
+
+    async def _record(**kw):
+        captured.update(kw)
+        return {"id": "wo-1", "service_kind": "website", "status": "awaiting_payment"}
+
+    monkeypatch.setattr(ss_route, "record_work_order", _record)
+
+    res = route_client.post("/api/setup-services/order", headers=AUTHED, json=ORDER_BODY)
+
+    assert res.status_code == 200
+    body = res.json()
+    assert body["orderId"] == "wo-1"
+    # The portal shows this to the rep — it must not imply the board has it yet.
+    assert body["postsOn"] == "payment"
+    assert body["status"] == "awaiting_payment"
+    assert captured["service_kind"] == "website"
+    assert captured["brief"]["goals"] == "Take pickup orders online"
+
+
+def test_a_service_that_could_not_be_recorded_is_never_a_silent_200(route_client, monkeypatch):
+    """A sold adder that was not recorded must reach the rep, not vanish."""
+    _signed_in(monkeypatch)
+
+    async def _none(**_kw):
+        return None
+
+    monkeypatch.setattr(ss_route, "record_work_order", _none)
+
+    res = route_client.post("/api/setup-services/order", headers=AUTHED, json=ORDER_BODY)
+    assert res.status_code == 409
+    assert "already be live" in res.json()["detail"]
+
+
+@pytest.mark.parametrize("bad", [
+    {"market": "uk"},
+    {"serviceKind": "  "},
+    {"businessName": ""},
+    {"priceCents": -1},
+])
+def test_bad_orders_are_refused(route_client, monkeypatch, bad):
+    _signed_in(monkeypatch)
+    res = route_client.post("/api/setup-services/order", headers=AUTHED, json={**ORDER_BODY, **bad})
+    assert res.status_code == 422
+
+
+def test_manual_posting_is_admin_only(route_client, monkeypatch):
+    """The ops override puts real work in front of developers against a deal
+    the payment webhook has not confirmed — a rep cannot pull that trigger."""
+    _signed_in(monkeypatch)
+    res = route_client.post(
+        "/api/setup-services/aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa/post", headers=AUTHED
+    )
+    assert res.status_code == 403
+
+
+def test_catalog_lists_the_sellable_adders(route_client, monkeypatch):
+    _signed_in(monkeypatch)
+    body = route_client.get("/api/setup-services/catalog", headers=AUTHED).json()
+    kinds = {s["kind"] for s in body["services"]}
+    assert kinds == {"website", "ad_spot", "crm"}
