@@ -29,9 +29,12 @@ CREATE TABLE IF NOT EXISTS setup_service_orders (
     created_at        timestamptz NOT NULL DEFAULT now(),
     updated_at        timestamptz NOT NULL DEFAULT now(),
 
-    -- Who bought it. org_id is nullable: a service can be sold against a lead
-    -- that has not been provisioned into an org yet.
-    org_id            uuid,
+    -- org_id is the APP's org id, which is businesses.id — TEXT, not a uuid
+    -- (verified against the live schema 2026-08-14; the CPA migration once
+    -- declared uuid→organizations and died on `text = uuid`). Nullable and
+    -- deliberately NOT a foreign key: a service can be sold against a lead
+    -- before the org is ever provisioned.
+    org_id            text,
     market            text NOT NULL CHECK (market IN ('us', 'ca')),
     lead_id           uuid,
     rep_id            text,
