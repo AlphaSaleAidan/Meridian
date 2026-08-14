@@ -36,6 +36,7 @@ import logging
 import os
 import re
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Optional
 
 import httpx
@@ -198,7 +199,52 @@ class AdSpotDeliverRequest(BaseModel):
 
 # ── Storyboard ───────────────────────────────────────────────────────────────
 
-STORYBOARD_SYSTEM = f"""You are Meridian's Commercial Director boarding a {SHOT_COUNT * SHOT_SECONDS}-second
+_VO_RULES_MARKERS = ("<!-- VO-RULES:START -->", "<!-- VO-RULES:END -->")
+
+_vo_rules_cache: str | None = None
+
+
+def _load_vo_rules() -> str:
+    """The house rules for writing the read, pulled from the standards doc.
+
+    docs/ad-creative-standards.md is the recreation template for a spot, and
+    its voiceover rules block is the method that actually produced usable
+    reads. Loading it here rather than restating it means the doc and the
+    prompt cannot drift apart — edit the doc, the scripts change.
+
+    The Commercial Director only ever sees the first 3,000 characters of that
+    file (see commercial_director._enhance_with_llm), and the voiceover section
+    sits well past that cut, so this loader is the only path by which these
+    rules reach an LLM at all.
+    """
+    global _vo_rules_cache
+    if _vo_rules_cache is not None:
+        return _vo_rules_cache
+
+    start, end = _VO_RULES_MARKERS
+    path = Path(__file__).resolve().parents[3] / "docs" / "ad-creative-standards.md"
+    try:
+        text = path.read_text()
+        block = text.split(start, 1)[1].split(end, 1)[0].strip()
+        _vo_rules_cache = block
+        logger.info("Loaded voiceover rules from ad-creative-standards.md (%d chars)", len(block))
+    except (OSError, IndexError):
+        # Never fail an order over a missing doc — fall back to the short form.
+        logger.warning("Could not load the voiceover rules block — using the inline fallback")
+        _vo_rules_cache = (
+            "- One line per shot, under 14 words — it is spoken over a single shot.\n"
+            "- Write for performance: ellipsis for a breath, em-dash for the pivot, "
+            "ONE stressed word in caps.\n"
+            "- Say numbers the way a person says them (\"forty-three hundred\").\n"
+            "- The lines must read as one continuous script.\n"
+            "- Let the picture carry the detail; the read carries the idea.\n"
+            "- Never write a claim the business cannot stand behind."
+        )
+    return _vo_rules_cache
+
+
+def _storyboard_system() -> str:
+    return f"""You are Meridian's Commercial Director boarding a {SHOT_COUNT * SHOT_SECONDS}-second
 television-quality advertisement for a small business.
 
 The finished spot is cut from exactly {SHOT_COUNT} shots of {SHOT_SECONDS} seconds each.
@@ -207,15 +253,17 @@ open on a hook that stops the scroll, establish the business, show the product o
 service doing its job, land one proof or benefit, state the offer, close on the
 call to action.
 
-RULES:
+SHOT RULES:
 1. Every shot must be filmable as a single continuous {SHOT_SECONDS}-second take — one
    subject, one camera move. Never describe a cut inside a shot.
 2. Describe only what the camera SEES. No text overlays, no logos, no captions
    (those are added in the finishing cut).
 3. Shots must be visually distinct from one another — vary subject, scale and angle.
-4. `voiceover` is the line read over that shot: plain spoken English, under 14 words,
-   and the {SHOT_COUNT} lines together must read as one continuous script.
-5. Respond with valid JSON only."""
+4. Respond with valid JSON only.
+
+VOICEOVER RULES — `voiceover` is the line read aloud over that shot. These are the
+house rules and they are what make the read usable:
+{_load_vo_rules()}"""
 
 
 def _storyboard_user_content(req: AdSpotOrderRequest) -> str:
@@ -263,7 +311,7 @@ async def _board_spot(req: AdSpotOrderRequest) -> list[dict]:
     messages = [
         {
             "role": "system",
-            "content": STORYBOARD_SYSTEM + (
+            "content": _storyboard_system() + (
                 '\n\nRespond with ONLY: {"shots": [{"shot": 1, "beat": "...", "voiceover": "..."}, ...]}'
                 f"\nExactly {SHOT_COUNT} shots, numbered 1..{SHOT_COUNT}."
             ),
@@ -534,6 +582,7 @@ async def create_ad_spot_order(req: AdSpotOrderRequest, user: dict = Depends(req
     logger.info("ad-spot order %s created for %s (%s)", order_id, req.businessName, req.market)
 
     asyncio.create_task(_run_order(order_id, req))
+    asyncio.create_task(_open_foundry_contest(order_id, req))
 
     return {
         "ok": True,
@@ -590,6 +639,62 @@ async def list_ad_spot_orders(repId: Optional[str] = None, user: dict = Depends(
         resp = await client.get(f"{url}/rest/v1/ad_spot_orders?{query}", headers=_sb_headers(key))
 
     return {"ok": True, "orders": resp.json() if resp.status_code == 200 else []}
+
+
+async def _open_foundry_contest(order_id: str, req: AdSpotOrderRequest) -> None:
+    """Record the sold spot as a work order on the shared Setup Services path.
+
+    Every adder follows one rule (Aidan 2026-08-14): the merchant pays, a work
+    order is created, it goes on the Foundry board, developers submit real work
+    and the owner picks. The spot used to post its own contest straight from
+    here at close; that is now recorded as a work order and posted when the
+    payment lands (src/services/setup_services.py).
+
+    The house cut still generates immediately — the merchant paid for a
+    finished spot, not for a contest — so what changes is only WHEN creators
+    get to compete for it.
+
+    Best-effort: a recording failure is logged onto the order rather than
+    raised, because the spot itself is already generating.
+    """
+    try:
+        from ...services.setup_services import record_work_order
+        row = await record_work_order(
+            service_kind="ad_spot",
+            market=req.market,
+            business_name=req.businessName,
+            business_type=req.businessType,
+            price_cents=req.priceCents,
+            org_id=req.orgId,
+            lead_id=req.leadId,
+            rep_id=req.repId,
+            rep_name=req.repName,
+            contact_email=req.contactEmail,
+            brief={
+                "goal": req.goal,
+                "highlights": req.highlights or "",
+                "brandNotes": req.brandNotes or "",
+                "placement": req.placement,
+                "audio": req.audio,
+                "durationSeconds": SHOT_COUNT * SHOT_SECONDS,
+            },
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("order=%s work order not recorded: %s", order_id, exc)
+        await _sb_patch("ad_spot_orders", order_id, {
+            "foundry_detail": f"work order not recorded: {exc}"[:300],
+        })
+        return
+
+    if row:
+        await _sb_patch("ad_spot_orders", order_id, {
+            "foundry_detail": "work order recorded — posts to the board when payment lands",
+        })
+        logger.info("order=%s work order %s recorded", order_id, row["id"])
+    else:
+        await _sb_patch("ad_spot_orders", order_id, {
+            "foundry_detail": "work order not recorded (one may already be live)",
+        })
 
 
 async def _fetch_order(client: httpx.AsyncClient, url: str, key: str, order_id: str) -> dict:

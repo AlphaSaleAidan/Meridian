@@ -208,6 +208,17 @@ export default function AdSpotConsole({
                 {order.status_detail && (
                   <p className={`text-[11px] mt-3 pt-3 border-t ${theme.border} ${theme.faint}`}>{order.status_detail}</p>
                 )}
+                {order.foundry_job_id ? (
+                  <a
+                    href={`https://foundry.meridian.tips/agency/jobs/${order.foundry_job_id}`}
+                    target="_blank" rel="noopener noreferrer"
+                    className={`inline-flex items-center gap-1.5 mt-2 text-[11px] ${theme.accent} hover:underline`}
+                  >
+                    <Film size={12} /> Creator contest is live on Foundry — the owner can pick from those cuts too
+                  </a>
+                ) : order.foundry_detail ? (
+                  <p className={`text-[11px] mt-2 ${theme.faint}`}>Foundry contest: {order.foundry_detail}</p>
+                ) : null}
               </div>
 
               {/* Shots */}

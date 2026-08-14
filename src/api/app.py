@@ -104,6 +104,7 @@ from .routes.inventory_docs import router as inventory_docs_router
 from .routes.analytics import router as analytics_router
 from .routes.content import router as content_router
 from .routes.ad_spot import router as ad_spot_router
+from .routes.setup_services import router as setup_services_router
 from .routes.portal import router as portal_router
 from .routes.quote import router as quote_router
 from .routes.settings import router as settings_router
@@ -414,6 +415,7 @@ app.include_router(inventory_docs_router)
 app.include_router(analytics_router)
 app.include_router(content_router)
 app.include_router(ad_spot_router)
+app.include_router(setup_services_router)
 app.include_router(portal_router)
 app.include_router(quote_router)
 app.include_router(settings_router)

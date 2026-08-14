@@ -70,7 +70,15 @@ CREATE TABLE IF NOT EXISTS ad_spot_orders (
     assembled_at      timestamptz,
     assembly_notes    jsonb,
     delivered_url     text,
-    delivered_at      timestamptz
+    delivered_at      timestamptz,
+
+    -- Foundry Spot Sprint: every sold spot also opens a public 48-hour contest
+    -- on the Foundry board, so the owner chooses between the house cut and
+    -- creator entries instead of accepting whatever the queue produced.
+    -- NULL job id + a detail line = the contest did not open (Foundry down,
+    -- no contact email, or one already running); the spot still generates.
+    foundry_job_id    text,
+    foundry_detail    text
 );
 
 CREATE INDEX IF NOT EXISTS ad_spot_orders_org_idx    ON ad_spot_orders (org_id);

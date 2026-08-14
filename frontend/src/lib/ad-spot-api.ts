@@ -61,6 +61,10 @@ export interface AdSpotOrder {
   } | null
   delivered_url?: string | null
   delivered_at?: string | null
+  /** Foundry Spot Sprint opened for this order — creators enter cuts there and
+   *  the owner picks. Null with a detail line means no contest opened. */
+  foundry_job_id?: string | null
+  foundry_detail?: string | null
 }
 
 export interface AdSpotShot {

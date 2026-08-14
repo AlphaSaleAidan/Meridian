@@ -39,8 +39,6 @@ const API_URL = import.meta.env.VITE_API_URL || ''
 // Website Buildout is sold as modular line items (WEBSITE_MODULES) — the
 // one-time modules sum into the setup fee; the build runs as a 48-hour
 // contest on Meridian Foundry, fired when the customer is created.
-const FOUNDRY_ORDER_URL = 'https://foundry.meridian.tips/agency/api/sites/order'
-const FOUNDRY_JOB_BASE = 'https://foundry.meridian.tips/agency/jobs'
 
 /* ─── Proposal Slide Overlay ─── */
 function ProposalOverlay({
@@ -707,41 +705,68 @@ export default function USPortalCreateCustomerPage() {
   // (our own build marketplace — the intake the rep filled becomes the public
   // brief). Best-effort: a Foundry hiccup must never block the customer
   // creation the rep just closed; the outcome shows on the confirm screen.
-  async function launchWebsiteSprint() {
+  // Every adder follows one rule (Aidan 2026-08-14): closing RECORDS a work
+  // order; the marketplace posting happens when the merchant's payment lands.
+  // Developers should never do spec work against a deal that never paid.
+  // The Website Buildout used to fire its Foundry contest straight from here.
+  async function recordSetupService(serviceKind: string, priceCents: number, brief: Record<string, unknown>, leadId: string | null) {
+    const headers = await getAuthHeaders()
+    const res = await fetch(`${API_URL}/api/setup-services/order`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        serviceKind,
+        market: 'us',
+        orgId,
+        leadId,
+        repId: rep?.rep_id || null,
+        repName: rep?.name || null,
+        businessName: form.businessName,
+        businessType: form.vertical || 'retail',
+        contactName: form.ownerName,
+        contactEmail: form.email,
+        priceCents,
+        brief,
+      }),
+    })
+    if (!res.ok) {
+      const data = await res.json().catch(() => null)
+      throw new Error(typeof data?.detail === 'string' ? data.detail : `Could not record ${serviceKind} (${res.status})`)
+    }
+    return res.json()
+  }
+
+  async function launchWebsiteSprint(leadId: string | null) {
     try {
       const rawUrl = form.websiteCurrentUrl.trim()
-      const res = await fetch(FOUNDRY_ORDER_URL, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          company: form.businessName,
-          contactName: form.ownerName,
-          email: form.email,
-          currentUrl: rawUrl ? (/^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`) : '',
-          goals: form.websiteGoals.trim(),
-          pages: form.websitePages.split(',').map(p => p.trim()).filter(Boolean).slice(0, 12),
-          brandNotes: [form.websiteBrand.trim(), `Modules sold: ${WEBSITE_MODULES.filter(m => websiteModules.includes(m.id) || (m.monthly && monthlyFree)).map(m => m.label).join(', ')}.`, `Sold with Meridian ${selectedPlan.label} (US) by rep ${rep?.name || 'unknown'}.`].filter(Boolean).join(' '),
-          contentReady: form.websiteContent,
-          repEmail: '',
-        }),
-      })
-      const data = await res.json().catch(() => null)
-      if ((res.ok || res.status === 409) && data?.jobId) {
-        // 409 = a sprint is already live for this business (e.g. a retry)
-        setWebsiteContestUrl(`${FOUNDRY_JOB_BASE}/${data.jobId}`)
-      } else {
-        setWebsiteContestError(typeof data?.error === 'string' ? data.error : `Contest launch failed (${res.status})`)
-      }
-    } catch {
-      setWebsiteContestError('Could not reach the Foundry — start the sprint manually at foundry.meridian.tips/agency/website')
+      await recordSetupService('website', websiteOneTime * 100, {
+        currentUrl: rawUrl,
+        goals: form.websiteGoals.trim(),
+        pages: form.websitePages.split(',').map(p => p.trim()).filter(Boolean).slice(0, 12),
+        brandNotes: [form.websiteBrand.trim(), `Modules sold: ${WEBSITE_MODULES.filter(m => websiteModules.includes(m.id) || (m.monthly && monthlyFree)).map(m => m.label).join(', ')}.`, `Sold with Meridian ${selectedPlan.label} by rep ${rep?.name || 'unknown'}.`].filter(Boolean).join(' '),
+        contentReady: form.websiteContent,
+      }, leadId)
+      setWebsiteContestUrl('recorded')
+    } catch (e) {
+      setWebsiteContestError(e instanceof Error ? e.message : 'Could not record the website buildout')
     }
   }
 
-  // 30-second spot sold → hand the brief to the generation pipeline. It boards
-  // the spot into six 5-second shots and generates each one; the finishing cut
-  // (voiceover, music, captions) happens on top of the shots that land. Like
-  // the website sprint this is best-effort — a pipeline hiccup must never
-  // block the customer the rep just closed.
+  async function recordCrmBuild(leadId: string | null) {
+    try {
+      await recordSetupService('crm', crmOneTime * 100, {
+        scope: form.notes.trim() || `${CUSTOM_CRM_SERVICE.label} for ${form.businessName}`,
+        acceptance: '',
+      }, leadId)
+    } catch (e) {
+      setCrmRecordError(e instanceof Error ? e.message : 'Could not record the CRM build')
+    }
+  }
+
+  // The spot is different from the other adders in one way: the merchant paid
+  // for a finished commercial, so the house cut starts generating immediately.
+  // The creator contest for it still waits for payment, like everything else —
+  // the ad-spot route records that work order on this call.
   async function launchAdSpot(leadId: string | null) {
     try {
       const adHeaders = await getAuthHeaders()
@@ -898,7 +923,8 @@ export default function USPortalCreateCustomerPage() {
       // Reflect actual backend email delivery status. SMS is rep-initiated via the OS handler — no auto-send.
       setAutoSendStatus(s => ({ ...s, email: !!provData.welcome_email_sent }))
 
-      if (form.website) await launchWebsiteSprint()
+      if (form.website) await launchWebsiteSprint(leadId)
+      if (form.crm) await recordCrmBuild(leadId)
       if (form.adSpot) await launchAdSpot(leadId)
 
       setStep('confirm')
@@ -1335,7 +1361,7 @@ export default function USPortalCreateCustomerPage() {
                         onChange={e => update('websiteBrand', e.target.value)}
                         className="w-full px-3 py-2.5 text-[13px] rounded-lg bg-[#111113] border border-[#1F1F23] text-white focus:border-[#17C5B0]/50 focus:outline-none" />
                     </div>
-                    <p className="text-[10px] text-[#17C5B0]/60">When you create the customer, a 48-hour build contest goes live — the owner picks their site from real, clickable previews.</p>
+                    <p className="text-[10px] text-[#17C5B0]/60">Creating the customer records the buildout. The 48-hour build contest opens the moment their payment lands — then the owner picks their site from real, clickable previews.</p>
                   </div>
                 )}
                 {/* Custom CRM build — same setup fee, rep-priced: the build is
@@ -1813,8 +1839,9 @@ export default function USPortalCreateCustomerPage() {
                 { label: 'Checkout/payment link generated', done: !!checkoutUrl },
                 { label: 'Proposal shown to customer', done: proposalGenerated },
                 { label: 'POS system selected', done: !!form.pos },
-                { label: '48-hour website contest launched', done: !!websiteContestUrl, skip: !form.website },
+                { label: 'Website buildout recorded (posts to builders on payment)', done: !!websiteContestUrl, skip: !form.website },
                 { label: '30-second spot boarded and generating', done: !!adSpotOrderId, skip: !form.adSpot },
+                { label: 'CRM build recorded (posts to developers on payment)', done: !crmRecordError, skip: !form.crm },
               ].filter(item => !('skip' in item && item.skip)).map(item => (
                 <div key={item.label} className="flex items-center gap-3 py-2 px-3 rounded-lg bg-[#0A0A0B] border border-[#1F1F23]">
                   <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${
@@ -1833,29 +1860,25 @@ export default function USPortalCreateCustomerPage() {
             <div className="bg-[#111113] rounded-xl p-6 border border-[#17C5B0]/20">
               <div className="flex items-center gap-2 mb-2">
                 <Globe size={16} className="text-[#17C5B0]" />
-                <p className="text-[11px] font-mono text-[#17C5B0] tracking-wider">48-HOUR WEBSITE CONTEST — LIVE</p>
+                <p className="text-[11px] font-mono text-[#17C5B0] tracking-wider">WEBSITE BUILDOUT — RECORDED</p>
               </div>
               <p className="text-[11px] text-[#A1A1A8] mb-3">
-                Builders are on the clock. In 48 hours {form.ownerName.split(' ')[0]} picks their site from
-                real, clickable previews — watch entries arrive here:
+                Recorded and priced into the setup fee. The 48-hour build contest opens on the
+                Foundry board the moment {form.ownerName.split(' ')[0]}&rsquo;s payment lands — then they pick
+                their site from real, clickable previews.
               </p>
-              <div className="flex gap-2">
-                <input type="text" value={websiteContestUrl} readOnly
-                  className="flex-1 px-3 py-2.5 text-xs rounded-lg bg-[#0A0A0B] border border-[#1F1F23] text-white font-mono truncate" />
-                <a href={websiteContestUrl} target="_blank" rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium rounded-lg border border-[#17C5B0]/30 bg-[#17C5B0]/10 text-[#17C5B0] hover:bg-[#17C5B0]/20 transition-colors">
-                  <ExternalLink size={14} /> Open
-                </a>
-              </div>
+              <p className="text-[10px] text-[#4a5550]">
+                Track it on the Setup Services board — the posting appears there once payment clears.
+              </p>
             </div>
           )}
           {form.website && websiteContestError && (
             <div className="bg-[#F59E0B]/10 rounded-xl p-4 border border-[#F59E0B]/20">
-              <p className="text-sm font-semibold text-[#F59E0B]">Website contest not launched</p>
+              <p className="text-sm font-semibold text-[#F59E0B]">Website buildout not recorded</p>
               <p className="text-[12px] text-[#F59E0B]/70 mt-1">
-                The customer account was created and the website fee is in their setup fee, but the build
-                contest didn&rsquo;t start ({websiteContestError}). Start it manually at
-                foundry.meridian.tips/agency/website with the same details.
+                The customer account was created and the website fee is in their setup fee, but the
+                work order didn&rsquo;t save ({websiteContestError}) — so nothing will reach the
+                builders when they pay. Flag it before the walkthrough.
               </p>
             </div>
           )}

@@ -243,6 +243,69 @@ def test_deliver_defaults_to_the_assembled_master(client, monkeypatch):
     assert patched["delivered_url"] == master
 
 
+# ── Work order (the shared Setup Services path) ──────────────────────────────
+
+def _patch_capture(monkeypatch):
+    patched = {}
+
+    async def _patch(_table, _row_id, patch):
+        patched.update(patch)
+
+    monkeypatch.setattr(ad_spot, "_sb_patch", _patch)
+    return patched
+
+
+async def test_sold_spot_is_recorded_as_a_work_order(monkeypatch):
+    """Every adder follows one rule: the sale records a work order, and the
+    work order reaches the dev marketplace when the payment lands. The spot
+    must carry its real brief and its real runtime into that record."""
+    captured = {}
+
+    async def _record(**kw):
+        captured.update(kw)
+        return {"id": "wo-1"}
+
+    monkeypatch.setattr("src.services.setup_services.record_work_order", _record)
+    patched = _patch_capture(monkeypatch)
+
+    await ad_spot._open_foundry_contest(ORDER_ID, _req(contactEmail="owner@bistro.test"))
+
+    assert captured["service_kind"] == "ad_spot"
+    assert captured["brief"]["goal"] == BRIEF["goal"]
+    assert captured["brief"]["placement"] == "instagram_reel"
+    assert captured["brief"]["durationSeconds"] == ad_spot.SHOT_COUNT * ad_spot.SHOT_SECONDS
+    assert captured["price_cents"] == BRIEF["priceCents"]
+    assert "posts to the board when payment lands" in patched["foundry_detail"]
+
+
+async def test_work_order_failure_never_breaks_a_paid_order(monkeypatch):
+    """The spot is already generating — a recording failure is a note on the
+    order, never an exception into the close."""
+    async def _boom(**_kw):
+        raise RuntimeError("supabase down")
+
+    monkeypatch.setattr("src.services.setup_services.record_work_order", _boom)
+    patched = _patch_capture(monkeypatch)
+
+    await ad_spot._open_foundry_contest(ORDER_ID, _req())
+
+    assert "not recorded" in patched["foundry_detail"]
+
+
+async def test_duplicate_work_order_is_reported_not_retried(monkeypatch):
+    """record_work_order returns None when one is already live — a re-close,
+    not a second purchase."""
+    async def _none(**_kw):
+        return None
+
+    monkeypatch.setattr("src.services.setup_services.record_work_order", _none)
+    patched = _patch_capture(monkeypatch)
+
+    await ad_spot._open_foundry_contest(ORDER_ID, _req())
+
+    assert "may already be live" in patched["foundry_detail"] or "already be live" in patched["foundry_detail"]
+
+
 def test_assemble_refuses_before_any_shot_lands(client, monkeypatch):
     """Nothing to cut → 409 with the order left where it was, not a failed
     order and not an empty master."""

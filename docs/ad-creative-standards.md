@@ -211,6 +211,82 @@ Professional [PRODUCT/SCENE DESCRIPTION], [COMPOSITION STYLE],
 
 ---
 
+<!-- VOICEOVER:START -->
+## Voiceover & Audio
+
+The recreation template for the read on a sold 30-second spot. Implemented in
+`src/media/spot_assembly.py`; the rules block below is loaded verbatim into the
+storyboard prompt (`src/api/routes/ad_spot.py`), so editing it here changes how
+scripts are actually written. Keep the START/END markers intact.
+
+### Writing the read
+
+<!-- VO-RULES:START -->
+- **One line per shot, under 14 words.** Each line is spoken over its own
+  5-second shot, so a longer line gets clipped and every later line drifts off
+  its picture. Short is not a style preference here, it is the timing.
+- **Write for performance, not for print.** Ellipsis for a breath, em-dash for
+  the pivot, exactly ONE stressed word in caps per line:
+  `"Meanwhile— money leaks. All day... which is exactly why nobody CATCHES it."`
+- **Say numbers the way a person says them** — "forty-three hundred", never
+  "four thousand three hundred". Same for prices: "nineteen dollars".
+- **The lines must read as one continuous script**, not six captions. Read all
+  six aloud in order; if they do not join up, rewrite.
+- **Let the picture carry the detail; the read carries the idea.** Narrating
+  what is already on screen is the single most common way these run long and
+  read flat.
+- **Never write a line the business cannot stand behind** — no invented claims,
+  awards, ratings or "best in town". The merchant runs this as their own ad.
+<!-- VO-RULES:END -->
+
+### The audio chain
+
+Voice is **Telnyx TTS** (`POST /v2/text-to-speech/speech`, `output_type:
+binary_output` → MP3), voice `AD_SPOT_VOICE`, default
+`Telnyx.KokoroTTS.af_bella`. Same account and key as the phone agent — the ad
+and the phone line then sound like the same business, and the product takes on
+no new vendor.
+
+1. **One TTS request per shot line**, never one request for the whole script.
+   Per-line rendering is what locks the read to the picture it describes.
+2. **Each line is padded to its shot slot, then hard-cut**
+   (`apad=whole_dur=<shot>` then `-t <shot>`). A short line sits at the head of
+   its slot; a long one is clipped rather than pushing every later line out of
+   sync.
+3. **Slots concatenate into one continuous VO track** at 48 kHz.
+4. **Bed at −16 dB**, looped and trimmed to the spot's runtime.
+5. **Duck the bed under the read**: `asplit` the VO into a mix copy and a
+   sidechain key, then
+   `sidechaincompress=threshold=0.05:ratio=6:attack=20:release=300`, then
+   `amix`. A filter label can only be consumed once — the `asplit` is why this
+   graph works.
+6. **Mux to AAC 192k** against the picture.
+
+### Rules that are not negotiable
+
+- **Clip audio is dropped.** Generated shots carry model-invented ambience; six
+  of them butted together sound like six different rooms.
+- **Music is never invented.** The bed comes from `AD_SPOT_MUSIC_DIR`, a
+  directory of tracks cleared for commercial use. No directory means no bed —
+  the master still ships and the omission is reported in `assembly_notes`.
+  CC-BY tracks carry an attribution obligation; treat it as a licence
+  condition, not a nicety.
+- **Anything skipped is said out loud.** No read, no bed, no font, a shot that
+  never landed — it goes in `assembly_notes` and shows in the rep console. A
+  merchant is never quietly handed less than they bought.
+
+### Not this
+
+Meridian's own marketing films use a different recipe — ElevenLabs presets via
+Higgsfield (Mabel and the Captains cast), scripted by hand and the film retimed
+to the read. That is hand production on Aidan's tooling; **Higgsfield is not
+wired into the product at all.** Do not reach for it here, and do not retime a
+sold spot to its read: the merchant bought 30 seconds.
+
+<!-- VOICEOVER:END -->
+
+---
+
 ## Common Mistakes
 
 1. Wrong aspect ratio (16:9 on Reels/TikTok)
