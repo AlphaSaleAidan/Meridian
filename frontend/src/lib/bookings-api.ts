@@ -127,6 +127,42 @@ export interface AvailableProvider {
   webhooks: boolean
 }
 
+export type WaitlistStatus =
+  | 'waiting' | 'offered' | 'booked' | 'declined' | 'expired' | 'cancelled'
+
+export interface WaitlistEntry {
+  id: string
+  customerName: string
+  customerPhone: string
+  partySize: number
+  windowStart: string
+  windowEnd: string
+  status: WaitlistStatus
+  notes?: string | null
+  offeredAt?: string | null
+  offerExpiresAt?: string | null
+  offerCount: number
+  /** Plain-English record of why this guest was ranked where they were. */
+  rankReason?: string | null
+  createdAt: string
+}
+
+const waitlistEntry = (w: any): WaitlistEntry => ({
+  id: w.id,
+  customerName: w.customer_name ?? '',
+  customerPhone: w.customer_phone ?? '',
+  partySize: w.party_size ?? 1,
+  windowStart: w.window_start,
+  windowEnd: w.window_end,
+  status: w.status,
+  notes: w.notes ?? null,
+  offeredAt: w.offered_at ?? null,
+  offerExpiresAt: w.offer_expires_at ?? null,
+  offerCount: w.offer_count ?? 0,
+  rankReason: w.rank_reason ?? null,
+  createdAt: w.created_at,
+})
+
 export interface SquareService {
   serviceVariationId: string
   serviceVariationVersion: number
@@ -376,6 +412,44 @@ export const bookingsApi = {
       },
     })
     return booking(r.booking)
+  },
+
+  async listWaitlist(merchantId: string, status = 'waiting'): Promise<WaitlistEntry[]> {
+    const r = await call<{ waitlist: any[] }>(`/waitlist/${merchantId}`, {
+      params: { status },
+    })
+    return (r.waitlist || []).map(waitlistEntry)
+  },
+
+  async addToWaitlist(input: {
+    merchantId: string; customerName: string; customerPhone: string
+    partySize: number; windowStart: string; windowEnd: string
+    minNoticeMinutes?: number; notes?: string
+  }): Promise<WaitlistEntry> {
+    const r = await call<{ entry: any }>('/waitlist', {
+      method: 'POST',
+      body: {
+        merchant_id: input.merchantId,
+        customer_name: input.customerName,
+        customer_phone: input.customerPhone,
+        party_size: input.partySize,
+        window_start: input.windowStart,
+        window_end: input.windowEnd,
+        min_notice_minutes: input.minNoticeMinutes ?? 60,
+        notes: input.notes || null,
+      },
+    })
+    return waitlistEntry(r.entry)
+  },
+
+  async removeFromWaitlist(entryId: string) {
+    return call(`/waitlist/${entryId}`, { method: 'DELETE' })
+  },
+
+  /** Offer a freed slot to the waitlist by hand — e.g. after a no-show. */
+  async recoverSlot(merchantId: string, bookingId: string) {
+    return call<{ offered: boolean; reason: string; candidates?: number }>(
+      `/waitlist/${merchantId}/recover/${bookingId}`, { method: 'POST' })
   },
 
   async integrations(merchantId: string): Promise<{

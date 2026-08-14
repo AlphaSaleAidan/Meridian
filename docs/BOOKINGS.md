@@ -152,6 +152,74 @@ about Booksy assumes we haven't got round to it.
 with Google Calendar? If they do, the Google path already reaches them and the
 roadmap shortens. Test in trial accounts.
 
+## Square Appointments (built)
+
+The only major booking platform in this space with a self-serve API. Square
+splits it in two, and the split decides what we can promise:
+
+| Level | Scopes | Plan needed | What it grants |
+|---|---|---|---|
+| Buyer | `APPOINTMENTS_READ` + `APPOINTMENTS_WRITE` | **any, incl. free** | SearchAvailability, CreateBooking, CancelBooking — the whole loop |
+| Seller | `APPOINTMENTS_ALL_READ` + `APPOINTMENTS_ALL_WRITE` | Appointments Plus/Premium | reading bookings taken elsewhere (busy import) |
+
+So "Square booking needs a paid plan" is **wrong**. A free-plan barbershop gets
+the entire booking loop; the paid plan only adds our ability to see their other
+bookings. `detect_access_level()` probes with a one-row ListBookings and the
+portal states which they have.
+
+Booking scopes are requested through a **separate** OAuth flow
+(`/api/bookings/square/authorize`), never bolted onto the POS connection —
+`src/config.py:232` keeps the POS scopes read-only and that promise is kept.
+
+Square gotchas encoded in the adapter: `service_variation_version` is required
+and must be fresh; cancel re-reads `version` first (optimistic concurrency);
+idempotency key is our own booking id; terminal Square statuses are not
+imported as busy; the availability window clamps to 31 days.
+
+### booking_mode = 'provider'
+
+Their system owns the calendar; we search and write into it and keep a local
+mirror row for reminders and today's book. **Who is authoritative decides what
+a failure means:** a mirror collision or database failure must not become an
+apology, because Square already accepted and the booking stands. But if *Square*
+is unreachable we do **not** quietly fall back to our own calendar for the
+write — a booking their staff never see is not a booking. Availability reads do
+fall back, because stale slots beat refusing a live caller, and the write
+reconciles.
+
+## Cancellation recovery — the differentiator
+
+Competitive research (2026-08-15) found every incumbent's waitlist is **a list a
+human works**. Boulevard's "waitlist notifications" notify staff. Vagaro and
+SevenRooms document waitlist *management*. Consumer versions are first-come
+"notify me" blasts. When a 7pm cancels at 4pm on a Friday, nobody acts, and the
+table goes empty.
+
+The same research killed a comfortable assumption: **answering the phone is no
+longer a differentiator.** SevenRooms Voice AI, Fresha AI Concierge
+($99.95/loc + $0.60/min), Mindbody, Slang.ai ($399–599/loc) and Loman all book
+by phone today. Every one of them is *inbound*. They answer a call; they do not
+place one. Acting on a cancellation is the half nobody automates.
+
+How ours works:
+
+- **One guest at a time, and the slot is really held.** The hold is a real
+  `bookings` row in `offered` status, so the exclusion constraint protects it
+  like a confirmed booking — the phone agent physically cannot sell it out from
+  under someone still reading the text. Verified on PG 17.
+- **Ranked by value, but only where value is known.** Settled POS spend and
+  real no-show history decide the order where they exist; arrival time where
+  they don't. `rank_reason` records which applied, so "why did they get it?"
+  has an answer. A no-show outweighs a big spend — turning up beats spending.
+- **A cooldown**, found by test rather than by reasoning: the first version
+  released an expired hold and immediately re-offered the same slot to the
+  person who had just ignored it.
+- **A failed notification releases the hold.** Holding a table for someone we
+  could not reach serves nobody.
+- **Outbound voice is written but env-gated off.** This Telnyx account has no
+  outbound voice profile, so automated calls cannot originate. SMS is the live
+  channel and the portal says so.
+
 ## Reminders
 
 Celery beat, every 15 minutes, two passes at T-24h and T-2h. Idempotent by

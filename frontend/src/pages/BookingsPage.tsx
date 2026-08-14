@@ -18,7 +18,7 @@ import {
 import { useOrgId } from '@/hooks/useOrg'
 import {
   bookingsApi, BookingsApiError,
-  type Booking, type BookingStatus, type Resource,
+  type Booking, type BookingStatus, type Resource, type WaitlistEntry,
 } from '@/lib/bookings-api'
 
 const STATUS_STYLES: Record<BookingStatus, string> = {
@@ -307,6 +307,8 @@ export default function BookingsPage() {
         </ul>
       )}
 
+      <WaitlistPanel merchantId={merchantId} timezone={timezone} />
+
       {showAdd && (
         <AddBookingDialog
           merchantId={merchantId}
@@ -316,6 +318,106 @@ export default function BookingsPage() {
         />
       )}
     </div>
+  )
+}
+
+/**
+ * Who's waiting, and who we've already offered a freed slot to.
+ *
+ * The `rankReason` is shown deliberately. A host who sees "offered to Dana —
+ * 3 past visits, $240 spent before" can agree or overrule; a host who just
+ * sees "offered to Dana" has to trust a black box, and won't.
+ */
+function WaitlistPanel({ merchantId, timezone }: {
+  merchantId: string
+  timezone: string
+}) {
+  const [waiting, setWaiting] = useState<WaitlistEntry[]>([])
+  const [offered, setOffered] = useState<WaitlistEntry[]>([])
+  const [open, setOpen] = useState(false)
+
+  useEffect(() => {
+    if (!merchantId) return
+    Promise.all([
+      bookingsApi.listWaitlist(merchantId, 'waiting').catch(() => []),
+      bookingsApi.listWaitlist(merchantId, 'offered').catch(() => []),
+    ]).then(([w, o]) => { setWaiting(w); setOffered(o) })
+  }, [merchantId])
+
+  if (waiting.length === 0 && offered.length === 0) return null
+
+  const window = (e: WaitlistEntry) => {
+    try {
+      const f = new Intl.DateTimeFormat('en-CA', {
+        weekday: 'short', hour: 'numeric', minute: '2-digit', hour12: true,
+        timeZone: timezone || undefined,
+      })
+      return `${f.format(new Date(e.windowStart))} – ${new Intl.DateTimeFormat('en-CA', {
+        hour: 'numeric', minute: '2-digit', hour12: true,
+        timeZone: timezone || undefined,
+      }).format(new Date(e.windowEnd))}`
+    } catch {
+      return ''
+    }
+  }
+
+  return (
+    <section className="rounded-xl border border-[#1F1F23] bg-[#111113] p-4">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between gap-3 text-left"
+      >
+        <div className="min-w-0">
+          <h2 className="text-sm font-semibold text-[#F5F5F7]">Waiting list</h2>
+          <p className="mt-0.5 text-xs text-[#A1A1A8]">
+            {waiting.length} waiting
+            {offered.length > 0 && ` · ${offered.length} holding a spot right now`}
+            {' · '}we text the best match the moment something frees up
+          </p>
+        </div>
+        <ChevronRight
+          className={`h-4 w-4 shrink-0 text-[#A1A1A8] transition-transform ${open ? 'rotate-90' : ''}`}
+        />
+      </button>
+
+      {open && (
+        <ul className="mt-3 divide-y divide-[#1F1F23] border-t border-[#1F1F23] pt-1">
+          {[...offered, ...waiting].map((e) => (
+            <li key={e.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5">
+              <span className="text-sm text-[#F5F5F7]">{e.customerName}</span>
+              {e.partySize > 1 && (
+                <span className="inline-flex items-center gap-1 text-xs text-[#A1A1A8]">
+                  <Users className="h-3 w-3" />{e.partySize}
+                </span>
+              )}
+              <span className="text-xs text-[#A1A1A8]">{window(e)}</span>
+              {e.status === 'offered' ? (
+                <span className="rounded border border-[#D9A441]/30 bg-[#D9A441]/10 px-2 py-0.5 text-[11px] text-[#D9A441]">
+                  Holding a spot
+                </span>
+              ) : (
+                <span className="text-[11px] text-[#A1A1A8]">Waiting</span>
+              )}
+              {e.rankReason && (
+                <span className="w-full text-[11px] italic text-[#A1A1A8]">
+                  Chosen because: {e.rankReason}
+                </span>
+              )}
+              <button
+                onClick={async () => {
+                  await bookingsApi.removeFromWaitlist(e.id)
+                  setWaiting((prev) => prev.filter((x) => x.id !== e.id))
+                  setOffered((prev) => prev.filter((x) => x.id !== e.id))
+                }}
+                className="ml-auto text-xs text-[#A1A1A8] transition-colors hover:text-[#E5484D]"
+              >
+                Remove
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   )
 }
 

@@ -459,6 +459,85 @@ async def update_booking(booking_id: str, body: BookingUpdate,
     return {"booking": row}
 
 
+# ─── Waitlist / cancellation recovery ─────────────────────────
+
+class WaitlistCreate(BaseModel):
+    merchant_id: str
+    customer_name: str = Field(min_length=1, max_length=200)
+    customer_phone: str = Field(min_length=5, max_length=32)
+    party_size: int = Field(default=1, ge=1, le=100)
+    window_start: datetime
+    window_end: datetime
+    min_notice_minutes: int = Field(default=60, ge=0, le=10080)
+    notes: str | None = Field(default=None, max_length=1000)
+    service_id: str | None = None
+
+
+@router.get("/waitlist/{merchant_id}")
+async def list_waitlist(merchant_id: str, status: str = "waiting",
+                        principal=Depends(require_service_auth)):
+    _validate_merchant(merchant_id)
+    await enforce_service_member(principal, merchant_id)
+    if status not in ("waiting", "offered", "booked", "declined",
+                      "expired", "cancelled", ""):
+        raise HTTPException(400, "unknown status")
+    rows = await get_booking_store().list_waitlist(merchant_id, status=status)
+    return {"waitlist": rows, "total": len(rows)}
+
+
+@router.post("/waitlist")
+async def add_to_waitlist(body: WaitlistCreate,
+                          principal=Depends(require_service_auth)):
+    _validate_merchant(body.merchant_id)
+    await enforce_service_member(principal, body.merchant_id)
+    if body.window_end <= body.window_start:
+        raise HTTPException(400, "window_end must be after window_start")
+    row = await get_booking_store().create_waitlist_entry({
+        "merchant_id": body.merchant_id,
+        "customer_name": body.customer_name,
+        "customer_phone": body.customer_phone,
+        "party_size": body.party_size,
+        "window_start": body.window_start.isoformat(),
+        "window_end": body.window_end.isoformat(),
+        "min_notice_minutes": body.min_notice_minutes,
+        "notes": body.notes,
+        "service_id": body.service_id,
+        "status": "waiting",
+        "source": "portal",
+    })
+    return {"entry": row}
+
+
+@router.delete("/waitlist/{entry_id}")
+async def remove_from_waitlist(entry_id: str,
+                               principal=Depends(require_service_auth)):
+    _validate_uuid(entry_id, "entry_id")
+    await _enforce_row_member(principal, "booking_waitlist", entry_id)
+    row = await get_booking_store().update_waitlist(entry_id, {"status": "cancelled"})
+    return {"entry": row}
+
+
+@router.post("/waitlist/{merchant_id}/recover/{booking_id}")
+async def recover_now(merchant_id: str, booking_id: str,
+                      principal=Depends(require_service_auth)):
+    """Offer a freed slot to the waitlist by hand.
+
+    The automatic path fires on cancellation; this exists for the case a host
+    actually has — a no-show at 7:20 that frees the table for the rest of the
+    evening, which no cancellation event ever announced.
+    """
+    from src.services.booking_waitlist import recover_slot
+
+    _validate_merchant(merchant_id)
+    _validate_uuid(booking_id, "booking_id")
+    await enforce_service_member(principal, merchant_id)
+
+    booking = await get_booking_store().get_booking(booking_id)
+    if not booking or booking.get("merchant_id") != merchant_id:
+        raise HTTPException(404, "booking not found")
+    return await recover_slot(merchant_id, booking)
+
+
 # ─── Integrations ─────────────────────────────────────────────
 
 @router.get("/integrations/{merchant_id}")
