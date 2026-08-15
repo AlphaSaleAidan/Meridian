@@ -16,6 +16,7 @@ import { AuthProvider } from '@/lib/auth'
 import BookingsPage from '@/pages/BookingsPage'
 import BookingsSetupPage from '@/pages/BookingsSetupPage'
 import BookingsWizard from '@/pages/BookingsWizard'
+import TradeVersions from './TradeVersions'
 import { installFixtureApi, resetToNewMerchant } from './fixtureApi'
 import '@/index.css'
 
@@ -23,12 +24,13 @@ installFixtureApi()
 
 const MERCHANT = import.meta.env.VITE_ORG_ID || 'preview-bookings'
 
-type TabKey = 'book' | 'setup' | 'firstrun'
+type TabKey = 'book' | 'setup' | 'firstrun' | 'versions'
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: 'book', label: "Today's Book" },
   { key: 'setup', label: 'Set up' },
   { key: 'firstrun', label: 'First run' },
+  { key: 'versions', label: 'Trade versions' },
 ]
 
 function Shell() {
@@ -89,6 +91,14 @@ function Shell() {
           </span>
         </div>
       </div>
+      {tab === 'versions' && (
+        <div className="border-b border-white/10 bg-[#0E0E11]">
+          <div className="mx-auto max-w-6xl px-6 py-2.5 text-xs text-white/45">
+            Computed live from the pack config — the same functions the real portal
+            calls to decide what a merchant sees. Not screenshots.
+          </div>
+        </div>
+      )}
       {tab === 'firstrun' && (
         <div className="border-b border-white/10 bg-[#0E0E11]">
           <div className="mx-auto max-w-6xl px-6 py-2.5 text-xs text-white/45">
@@ -101,6 +111,7 @@ function Shell() {
       <main className="mx-auto max-w-6xl px-6 py-8">
         {tab === 'book' && <BookingsPage />}
         {tab === 'setup' && <BookingsSetupPage />}
+        {tab === 'versions' && <TradeVersions />}
         {tab === 'firstrun' && (
           <BookingsWizard
             key={runKey}
