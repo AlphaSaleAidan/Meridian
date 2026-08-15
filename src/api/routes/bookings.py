@@ -701,6 +701,122 @@ async def list_busy(
     return {"busy": rows}
 
 
+class WizardResource(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    kind: str = "table"
+    seats: int = Field(default=1, ge=1, le=100)
+    sort_order: int = 0
+
+
+class WizardService(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    duration_minutes: int = Field(ge=5, le=1440)
+    buffer_minutes: int = Field(default=0, ge=0, le=240)
+    min_party: int = Field(default=1, ge=1, le=100)
+    max_party: int = Field(default=1, ge=1, le=100)
+    resource_kind: str | None = None
+
+
+class WizardSetup(BaseModel):
+    merchant_id: str
+    mode: str = "native"
+    noun: str = Field(default="reservation", min_length=1, max_length=40)
+    link_url: str = Field("", max_length=500)
+    resources: list[WizardResource] = Field(default_factory=list, max_length=200)
+    services: list[WizardService] = Field(default_factory=list, max_length=50)
+    hours: list[HoursRow] = Field(default_factory=list, max_length=14)
+
+    @field_validator("mode")
+    @classmethod
+    def _mode(cls, v: str) -> str:
+        if v not in ("native", "provider", "external_link"):
+            raise ValueError("unknown booking mode")
+        return v
+
+
+@router.post("/setup")
+async def wizard_setup(req: WizardSetup, principal=Depends(require_service_auth)):
+    """Apply a whole booking setup in one call — what the wizard commits.
+
+    THE ORDER HERE IS THE SAFETY PROPERTY. booking_mode is written LAST, after
+    the resources, services and hours it depends on exist. A merchant who is
+    switched on before their tables are created has a phone agent offering
+    times against an empty calendar; doing it in this order means a failure
+    part-way through leaves them exactly as they were — off — rather than
+    live and broken.
+
+    Re-runnable. Resources and services are matched by name and skipped if
+    they already exist, so a merchant who walks back through the wizard ends
+    up with one set of tables rather than two.
+    """
+    _validate_merchant(req.merchant_id)
+    await enforce_service_member(principal, req.merchant_id)
+
+    link_url = (req.link_url or "").strip()
+    if req.mode == "external_link":
+        if not link_url:
+            raise HTTPException(400, "a booking link is required for that mode")
+        if not re.match(r"^(https?://)?[\w.-]+\.[a-z]{2,}(/\S*)?$", link_url, re.I):
+            raise HTTPException(400, "that does not look like a web address")
+        if not link_url.startswith(("http://", "https://")):
+            link_url = f"https://{link_url}"
+
+    store = get_booking_store()
+    created = {"resources": 0, "services": 0, "hours": 0}
+
+    existing_resources = {
+        (r.get("name") or "").strip().lower()
+        for r in await store.list_resources(req.merchant_id, active_only=False)
+    }
+    for r in req.resources:
+        if r.name.strip().lower() in existing_resources:
+            continue
+        if r.kind not in ("table", "staff", "chair", "bay", "room"):
+            raise HTTPException(400, f"unknown resource kind: {r.kind}")
+        await store.create_resource({
+            "merchant_id": req.merchant_id, "name": r.name.strip(),
+            "kind": r.kind, "seats": r.seats, "sort_order": r.sort_order,
+        })
+        created["resources"] += 1
+
+    existing_services = {
+        (s.get("name") or "").strip().lower()
+        for s in await store.list_services(req.merchant_id, active_only=False)
+    }
+    for s in req.services:
+        if s.name.strip().lower() in existing_services:
+            continue
+        if s.max_party < s.min_party:
+            raise HTTPException(400, "a service cannot have max party below min")
+        await store.create_service({
+            "merchant_id": req.merchant_id, "name": s.name.strip(),
+            "duration_minutes": s.duration_minutes,
+            "buffer_minutes": s.buffer_minutes,
+            "min_party": s.min_party, "max_party": s.max_party,
+            "resource_kind": s.resource_kind,
+        })
+        created["services"] += 1
+
+    if req.hours:
+        rows = [
+            {"merchant_id": req.merchant_id, "weekday": h.weekday,
+             "opens_at": h.opens_at, "closes_at": h.closes_at,
+             "slot_minutes": h.slot_minutes}
+            for h in req.hours
+        ]
+        await store.replace_hours(req.merchant_id, rows)
+        created["hours"] = len(rows)
+
+    # LAST. Everything above has to exist before the agent is told it can book.
+    config: dict = {"booking_mode": req.mode, "booking_noun": req.noun.strip()}
+    if req.mode == "external_link":
+        config["booking_link_url"] = link_url
+    await get_db().update("phone_agent_config", config,
+                          {"merchant_id": f"eq.{req.merchant_id}"})
+
+    return {"ok": True, "mode": req.mode, "created": created}
+
+
 class BookingLinkRequest(BaseModel):
     url: str = Field("", max_length=500)
 

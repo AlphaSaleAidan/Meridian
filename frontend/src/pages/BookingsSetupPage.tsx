@@ -13,6 +13,7 @@ import {
   MessageSquare, Plus, Trash2,
 } from 'lucide-react'
 import { Select } from '@/components/ui/Select'
+import BookingsWizard from '@/pages/BookingsWizard'
 import { useOrgId } from '@/hooks/useOrg'
 import {
   bookingsApi,
@@ -41,6 +42,8 @@ export default function BookingsSetupPage() {
   const [unavailable, setUnavailable] = useState<UnavailableTool[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  /** Set once the wizard is finished or skipped, so the forms take over. */
+  const [manual, setManual] = useState(false)
 
   const load = useCallback(async () => {
     if (!merchantId) return
@@ -74,6 +77,20 @@ export default function BookingsSetupPage() {
           <div key={i} className="h-32 animate-pulse rounded-lg border border-[#1F1F23] bg-[#111113]" />
         ))}
       </div>
+    )
+  }
+
+  // A merchant who has never set anything up gets asked questions, not shown
+  // four empty forms. Configured merchants never see this — the wizard is for
+  // the first five minutes, and `manual` is the way out of it at any point.
+  const unconfigured = resources.length === 0 && services.length === 0
+  if (unconfigured && !manual) {
+    return (
+      <BookingsWizard
+        merchantId={merchantId}
+        onDone={() => { setManual(true); load() }}
+        onSkip={() => setManual(true)}
+      />
     )
   }
 

@@ -41,6 +41,9 @@ BOOKING = "33333333-3333-3333-3333-333333333333"
 class StubDB:
     """Only the reads the router itself performs (tenancy + config lookup)."""
 
+    async def update(self, table, fields, filters):
+        return []
+
     async def select(self, table, columns="*", filters=None, order=None,
                      limit=None, offset=None):
         f = filters or {}
@@ -443,3 +446,89 @@ def test_unseating_a_guest_does_not_duplicate_them_in_square(client, monkeypatch
     r = client.patch(f"/api/bookings/{BOOKING}", json={"status": "confirmed"})
     assert r.status_code == 200
     assert pushed == []
+
+
+# ─── The wizard's commit ──────────────────────────────────────
+
+def test_wizard_writes_booking_mode_last(client, monkeypatch):
+    """THE ordering guarantee. If booking_mode is switched on before the
+    tables and hours exist, the phone agent starts offering times against an
+    empty calendar. Writing it last means a failure part-way through leaves
+    the merchant OFF rather than live and broken."""
+    order: list[str] = []
+    monkeypatch.setattr(br, "enforce_service_member", lambda *a, **kw: _noop())
+
+    async def _create_resource(fields):
+        order.append("resource")
+        return fields
+
+    async def _create_service(fields):
+        order.append("service")
+        return fields
+
+    async def _replace_hours(merchant_id, rows):
+        order.append("hours")
+        return rows
+
+    client.store.create_resource = _create_resource  # type: ignore[assignment]
+    client.store.create_service = _create_service  # type: ignore[assignment]
+    client.store.replace_hours = _replace_hours  # type: ignore[assignment]
+
+    class TrackingDB(StubDB):
+        async def update(self, table, fields, filters):
+            order.append(f"config:{fields.get('booking_mode')}")
+            return []
+
+    monkeypatch.setattr(br, "get_db", lambda: TrackingDB())
+
+    r = client.post("/api/bookings/setup", json={
+        "merchant_id": MERCHANT, "mode": "native", "noun": "table",
+        "resources": [{"name": "Table 9", "kind": "table", "seats": 4}],
+        "services": [{"name": "Dinner sitting", "duration_minutes": 90}],
+        "hours": [{"weekday": 5, "opens_at": "17:00", "closes_at": "22:00"}],
+    })
+    assert r.status_code == 200
+    assert order[-1] == "config:native"
+    assert order.index("resource") < order.index("config:native")
+    assert order.index("hours") < order.index("config:native")
+
+
+def test_wizard_is_re_runnable_without_duplicating_tables(client, monkeypatch):
+    """A merchant who walks back through the wizard should end up with one set
+    of tables, not two. StubStore already reports a resource named T1 and a
+    service named Dinner."""
+    monkeypatch.setattr(br, "enforce_service_member", lambda *a, **kw: _noop())
+    created: list[str] = []
+
+    async def _create_resource(fields):
+        created.append(fields["name"])
+        return fields
+
+    client.store.create_resource = _create_resource  # type: ignore[assignment]
+
+    r = client.post("/api/bookings/setup", json={
+        "merchant_id": MERCHANT, "mode": "native", "noun": "table",
+        "resources": [{"name": "t1", "kind": "table", "seats": 4},
+                      {"name": "Table 2", "kind": "table", "seats": 2}],
+    })
+    assert r.status_code == 200
+    # "t1" matched the existing "T1" case-insensitively and was skipped.
+    assert created == ["Table 2"]
+
+
+def test_wizard_refuses_link_mode_without_a_link(client, monkeypatch):
+    """An external_link merchant with no destination is an agent promising a
+    text it cannot send."""
+    monkeypatch.setattr(br, "enforce_service_member", lambda *a, **kw: _noop())
+    r = client.post("/api/bookings/setup", json={
+        "merchant_id": MERCHANT, "mode": "external_link", "noun": "table",
+    })
+    assert r.status_code == 400
+
+
+def test_wizard_rejects_an_unknown_mode(client, monkeypatch):
+    monkeypatch.setattr(br, "enforce_service_member", lambda *a, **kw: _noop())
+    r = client.post("/api/bookings/setup", json={
+        "merchant_id": MERCHANT, "mode": "whatever", "noun": "table",
+    })
+    assert r.status_code == 422

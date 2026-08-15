@@ -571,6 +571,45 @@ export const bookingsApi = {
     }))
   },
 
+  /** The wizard's single commit. booking_mode is written server-side LAST,
+   *  after everything it depends on exists. */
+  async applySetup(input: {
+    merchantId: string
+    mode: 'native' | 'provider' | 'external_link'
+    noun: string
+    linkUrl?: string
+    resources: { name: string; kind: ResourceKind; seats: number; sortOrder: number }[]
+    services: {
+      name: string; durationMinutes: number; bufferMinutes: number
+      minParty: number; maxParty: number
+    }[]
+    hours: HoursRow[]
+  }): Promise<{ ok: boolean; mode: string }> {
+    return call('/setup', {
+      method: 'POST',
+      body: {
+        merchant_id: input.merchantId,
+        mode: input.mode,
+        noun: input.noun,
+        link_url: input.linkUrl || '',
+        resources: input.resources.map((r) => ({
+          name: r.name, kind: r.kind, seats: r.seats, sort_order: r.sortOrder,
+        })),
+        services: input.services.map((s) => ({
+          name: s.name,
+          duration_minutes: s.durationMinutes,
+          buffer_minutes: s.bufferMinutes,
+          min_party: s.minParty,
+          max_party: s.maxParty,
+        })),
+        hours: input.hours.map((h) => ({
+          weekday: h.weekday, opens_at: h.opensAt,
+          closes_at: h.closesAt, slot_minutes: h.slotMinutes,
+        })),
+      },
+    })
+  },
+
   async bookingLink(merchantId: string): Promise<BookingLink> {
     const r = await call<any>(`/link/${merchantId}`)
     return {

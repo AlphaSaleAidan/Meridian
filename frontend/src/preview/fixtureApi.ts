@@ -612,6 +612,48 @@ async function route(url: URL, init: RequestInit): Promise<Response> {
     return json({ connection: c, sync: { imported: 12, removed: 0 } })
   }
 
+  // — the wizard's commit —
+  if (path === '/setup' && method === 'POST') {
+    if (body.mode === 'external_link' && !String(body.link_url || '').trim()) {
+      return json({ detail: 'a booking link is required for that mode' }, 400)
+    }
+    const have = new Set(RESOURCES.map((r) => r.name.toLowerCase()))
+    for (const r of body.resources || []) {
+      if (have.has(String(r.name).toLowerCase())) continue
+      RESOURCES.push({
+        id: uid('r'), name: r.name, kind: r.kind,
+        seats: r.seats ?? 1, sort_order: r.sort_order ?? 0, active: true,
+      } as any)
+    }
+    const haveSvc = new Set(SERVICES.map((s) => s.name.toLowerCase()))
+    for (const s of body.services || []) {
+      if (haveSvc.has(String(s.name).toLowerCase())) continue
+      SERVICES.push({
+        id: uid('s'), name: s.name, description: null,
+        duration_minutes: s.duration_minutes, buffer_minutes: s.buffer_minutes ?? 0,
+        price_cents: null, min_party: s.min_party ?? 1, max_party: s.max_party ?? 1,
+        active: true,
+      } as any)
+    }
+    if ((body.hours || []).length) {
+      HOURS.length = 0
+      for (const h of body.hours) {
+        HOURS.push({
+          weekday: h.weekday,
+          opens_at: `${h.opens_at}:00`.slice(0, 8),
+          closes_at: `${h.closes_at}:00`.slice(0, 8),
+          slot_minutes: h.slot_minutes ?? 15,
+        })
+      }
+    }
+    if (body.mode === 'external_link') {
+      linkState.url = String(body.link_url).startsWith('http')
+        ? body.link_url : `https://${body.link_url}`
+      linkState.inherited = false
+    }
+    return json({ ok: true, mode: body.mode })
+  }
+
   // — the texted booking link —
   if (seg[0] === 'link' && method === 'GET') {
     return json({
@@ -696,6 +738,17 @@ async function route(url: URL, init: RequestInit): Promise<Response> {
 }
 
 export function installFixtureApi() {
+  // ?wizard empties the fixture merchant so the Set-up tab shows the first-run
+  // wizard instead of the forms. Without it there is no way to see the screen
+  // a brand new merchant actually meets.
+  if (typeof window !== 'undefined' && window.location.search.includes('wizard')) {
+    RESOURCES.length = 0
+    SERVICES.length = 0
+    HOURS.length = 0
+    linkState.url = ''
+    linkState.inherited = false
+  }
+
   const real = window.fetch.bind(window)
   window.fetch = async (input: any, init: any = {}) => {
     const raw = typeof input === 'string' ? input : input.url
