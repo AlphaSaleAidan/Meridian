@@ -333,6 +333,28 @@ async def test_claiming_converts_the_hold_into_a_confirmed_booking(wired):
 
 
 @pytest.mark.asyncio
+async def test_claiming_puts_the_booking_in_the_merchants_own_calendar(wired, monkeypatch):
+    """The recovery is worthless to a merchant who cannot see it.
+
+    The table frees up, we text the next guest, they take it — and if this
+    push is missing, the shop's Square calendar still shows 7pm empty and
+    nobody sets that table. The HOLD is deliberately not pushed (see claim());
+    the claim is the moment it becomes a real booking.
+    """
+    pushed: list[tuple[str, str]] = []
+    import src.services.booking_agent as ba
+    monkeypatch.setattr(ba, "_spawn_push",
+                        lambda m, row: pushed.append((m, row.get("status"))))
+
+    store = wired([_entry("a", "Dana", "+15551234567")])
+    await wl.recover_slot("m1", _cancelled(), now=NOW)
+    assert pushed == [], "a held offer must not reach their calendar"
+
+    await wl.claim("m1", store.entries[0]["claim_code"])
+    assert pushed == [("m1", "confirmed")]
+
+
+@pytest.mark.asyncio
 async def test_an_expired_code_cannot_be_claimed(wired):
     store = wired([_entry("a", "Dana", "+15551234567",
                           status="offered", claim_code="WX7Y",

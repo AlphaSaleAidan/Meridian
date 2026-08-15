@@ -395,6 +395,23 @@ async def claim(merchant_id: str, claim_code: str) -> dict | None:
     await store.update_waitlist(str(entry["id"]), {
         "status": "booked", "claim_code": None,
     })
+
+    # NOW it goes into the merchant's own calendar.
+    #
+    # The hold itself is deliberately never pushed: an 'offered' row is a slot
+    # reserved for someone who has not answered yet, and mirroring every offer
+    # out — then withdrawing it fifteen minutes later when it expires — would
+    # churn the shop's calendar with guests who never existed. A claim is the
+    # moment it becomes a real booking, so this is the moment it belongs on
+    # their screen. Without this the whole recovery is invisible to them: the
+    # table frees up, a new guest is coming at 7pm, and their Square calendar
+    # still shows the slot empty.
+    #
+    # Fire-and-forget, and imported here rather than at module scope because
+    # booking_agent imports this module.
+    from src.services.booking_agent import _spawn_push
+    _spawn_push(merchant_id, booking)
+
     return booking
 
 

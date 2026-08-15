@@ -438,6 +438,17 @@ async def update_booking(booking_id: str, body: BookingUpdate,
         _validate_uuid(body.resource_id, "resource_id")
 
     store = get_booking_store()
+
+    # Undo. Bringing a booking back from cancelled/no_show has to put it back
+    # on the merchant's calendar as well, because marking it took it off — and
+    # a mis-tapped no-show that leaves the guest missing from Square is worse
+    # than no undo at all. Only a REVIVAL re-pushes: seated -> confirmed never
+    # left their calendar, and pushing again would duplicate the booking.
+    revived = False
+    if body.status == "confirmed":
+        before = await store.get_booking(booking_id)
+        revived = bool(before and before.get("status") in ("cancelled", "no_show"))
+
     if body.starts_at is not None:
         # Moving a booking must move its END too, or the row would keep the
         # old duration and quietly overlap the next one.
@@ -462,6 +473,10 @@ async def update_booking(booking_id: str, body: BookingUpdate,
         row = await store.update_booking(booking_id, fields)
     except SlotTaken:
         raise HTTPException(409, "that time is already taken on this resource")
+
+    if revived:
+        from src.services.booking_agent import _spawn_push
+        _spawn_push(row.get("merchant_id") or "", row)
 
     if body.status in ("cancelled", "no_show"):
         merchant_id = row.get("merchant_id") or ""

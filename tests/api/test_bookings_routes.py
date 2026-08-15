@@ -408,3 +408,38 @@ def test_seating_a_guest_does_neither(client, monkeypatch):
     r = client.patch(f"/api/bookings/{BOOKING}", json={"status": "seated"})
     assert r.status_code == 200
     assert called == []
+
+
+def test_undoing_a_no_show_puts_it_back_on_their_calendar(client, monkeypatch):
+    """Marking the no-show took the booking OFF the merchant's calendar, so
+    undoing has to put it back. A mis-tap that leaves the guest missing from
+    Square is worse than having no undo at all."""
+    pushed: list[str] = []
+    import src.services.booking_agent as ba
+    monkeypatch.setattr(ba, "_spawn_push", lambda m, row: pushed.append(row["id"]))
+    monkeypatch.setattr(br, "enforce_service_member", lambda *a, **kw: _noop())
+
+    async def _get(booking_id):
+        return {"id": booking_id, "merchant_id": MERCHANT, "status": "no_show"}
+
+    client.store.get_booking = _get  # type: ignore[assignment]
+    r = client.patch(f"/api/bookings/{BOOKING}", json={"status": "confirmed"})
+    assert r.status_code == 200
+    assert pushed == [BOOKING]
+
+
+def test_unseating_a_guest_does_not_duplicate_them_in_square(client, monkeypatch):
+    """seated -> confirmed never left their calendar, so re-pushing would
+    create a SECOND booking for the same guest."""
+    pushed: list[str] = []
+    import src.services.booking_agent as ba
+    monkeypatch.setattr(ba, "_spawn_push", lambda m, row: pushed.append(row["id"]))
+    monkeypatch.setattr(br, "enforce_service_member", lambda *a, **kw: _noop())
+
+    async def _get(booking_id):
+        return {"id": booking_id, "merchant_id": MERCHANT, "status": "seated"}
+
+    client.store.get_booking = _get  # type: ignore[assignment]
+    r = client.patch(f"/api/bookings/{BOOKING}", json={"status": "confirmed"})
+    assert r.status_code == 200
+    assert pushed == []
