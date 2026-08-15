@@ -71,32 +71,12 @@ interface WaitRow {
   created_at: string
 }
 
-const RESOURCES = [
-  { id: 'r1', name: 'Table 1', kind: 'table' as Kind, seats: 2, sort_order: 0, active: true },
-  { id: 'r2', name: 'Table 2', kind: 'table' as Kind, seats: 2, sort_order: 1, active: true },
-  { id: 'r3', name: 'Table 3', kind: 'table' as Kind, seats: 4, sort_order: 2, active: true },
-  { id: 'r4', name: 'Table 4', kind: 'table' as Kind, seats: 4, sort_order: 3, active: true },
-  { id: 'r5', name: 'Booth 5', kind: 'table' as Kind, seats: 6, sort_order: 4, active: true },
-  { id: 'r6', name: 'Patio 1', kind: 'table' as Kind, seats: 4, sort_order: 9, active: true },
-]
+/** Filled by configureForTrade(). Empty until a trade is chosen. */
+const RESOURCES: any[] = []
 
-const SERVICES = [
-  {
-    id: 's1', name: 'Table for 1–4', description: 'Standard turn',
-    duration_minutes: 90, buffer_minutes: 15, price_cents: null,
-    min_party: 1, max_party: 4, active: true,
-  },
-  {
-    id: 's2', name: 'Table for 5–8', description: 'Longer turn for a larger party',
-    duration_minutes: 120, buffer_minutes: 15, price_cents: null,
-    min_party: 5, max_party: 8, active: true,
-  },
-]
+const SERVICES: any[] = []
 
-// Tue–Sun dinner service. Monday closed, which is why the book is empty there.
-const HOURS = [0, 2, 3, 4, 5, 6].map((weekday) => ({
-  weekday, opens_at: '17:00:00', closes_at: '22:00:00', slot_minutes: 15,
-}))
+const HOURS: any[] = []
 
 const CODES = 'ABCDEFGHJKLMNPQRTUVWXY2346789'
 let seq = 0
@@ -151,12 +131,22 @@ function zoneOffsetMs(at: Date): number {
   return at.getTime() - asUtc
 }
 
+/** Long enough that a full restaurant Friday never repeats a name — a book
+ *  with the same guest twice at different tables is the first thing anyone
+ *  notices in a demo. */
 const NAMES = [
   ['Priya Raman', '+1 604 555 0143'], ['Marcus Webb', '+1 604 555 0119'],
   ['Chen Wei', '+1 778 555 0188'], ['Sofia Duarte', '+1 604 555 0171'],
   ['Tom Ellery', '+1 236 555 0102'], ['Nadia Khoury', '+1 604 555 0166'],
   ['Ben Osei', '+1 778 555 0134'], ['Hannah Lindqvist', '+1 604 555 0155'],
   ['Diego Marquez', '+1 604 555 0127'], ['Ayesha Malik', '+1 778 555 0198'],
+  ['Grace Okafor', '+1 604 555 0181'], ['Liam Doherty', '+1 778 555 0146'],
+  ['Yuki Tanaka', '+1 604 555 0192'], ['Omar Haddad', '+1 236 555 0158'],
+  ['Elena Rossi', '+1 604 555 0173'], ['Jamal Carter', '+1 778 555 0129'],
+  ['Freya Nilsen', '+1 604 555 0104'], ['Andre Silva', '+1 604 555 0167'],
+  ['Mei Lin', '+1 778 555 0115'], ['Caleb Osborne', '+1 604 555 0138'],
+  ['Ines Moreau', '+1 236 555 0149'], ['Ravi Chandra', '+1 604 555 0121'],
+  ['Tessa Blackwood', '+1 778 555 0175'], ['Noah Whitfield', '+1 604 555 0186'],
 ]
 
 const bookings: Row[] = []
@@ -190,8 +180,9 @@ function freeResource(startMs: number, endMs: number, party: number): string | n
 function makeBooking(input: {
   startsAt: Date; party: number; name: string; phone: string | null
   source: string; notes?: string | null; status?: string; rand?: () => number
+  service?: any
 }): Row | null {
-  const svc = serviceFor(input.party)
+  const svc = input.service || serviceFor(input.party)
   const startMs = input.startsAt.getTime()
   const endMs = startMs + (svc.duration_minutes + svc.buffer_minutes) * 60_000
   const resourceId = freeResource(startMs, endMs, input.party)
@@ -220,32 +211,59 @@ function makeBooking(input: {
 function seedDay(dayKey: string) {
   if (seededDays.has(dayKey)) return
   seededDays.add(dayKey)
+  if (!trade || !trade.booksAtAll || RESOURCES.length === 0) return
+
   const rand = seeded(dayKey)
   const [, , d] = dayKey.split('-').map(Number)
   const weekday = atLocal(dayKey, 12, 0).getUTCDay()
-  if (weekday === 1) return // Monday: closed, and the empty state is worth seeing
+  // Closed days come from the trade's own hours, so a barbershop's Monday is
+  // empty and a restaurant's is too, for their own reasons.
+  if (!trade.days.includes(weekday)) return
 
-  const times = [17, 17.5, 18, 18.25, 18.75, 19, 19.25, 19.5, 20, 20.5]
-  const count = 6 + Math.floor(rand() * 4)
-  const chosen = times.slice(0, count)
-  chosen.forEach((t, i) => {
-    const hour = Math.floor(t)
-    const minute = Math.round((t - hour) * 60)
-    const [name, phone] = NAMES[(i + d) % NAMES.length]
-    const party = 2 + Math.floor(rand() * 4)
-    const r = rand()
-    const status = r > 0.86 ? 'completed' : r > 0.78 ? 'seated' : 'confirmed'
-    makeBooking({
-      startsAt: atLocal(dayKey, hour, minute),
-      party,
-      name,
-      phone,
-      source: rand() > 0.45 ? 'phone' : 'portal',
-      notes: rand() > 0.82 ? 'Window seat if possible' : null,
-      status,
-      rand,
-    })
-  })
+  // Start times walk the trade's opening hours at its own rhythm: a barber
+  // fills 30-minute slots all day, a restaurant clusters around a dinner
+  // service, a detailer fits two or three long jobs in.
+  const [openH, openM] = trade.opens.split(':').map(Number)
+  const [closeH] = trade.closes.split(':').map(Number)
+  const lengths = trade.services.map((x: any) => x.duration + x.buffer)
+  const shortest = Math.min(...lengths)
+  // Snapped to the quarter hour. Nobody books a car in at 9:46.
+  const step = Math.max(30, Math.round(shortest / 2 / 15) * 15)
+  const slots: number[] = []
+  for (let m = openH * 60 + openM; m + shortest <= closeH * 60; m += step) slots.push(m)
+
+  // Roughly two thirds full — busy enough to look like a real day, empty
+  // enough that the gaps the calendar exists to show are actually visible.
+  const target = Math.max(1, Math.round(slots.length * RESOURCES.length * 0.42))
+  let made = 0
+  for (const minute of slots) {
+    for (let n = 0; n < RESOURCES.length && made < target; n++) {
+      if (rand() > 0.55) continue
+      const [name, phone] = NAMES[(made + d) % NAMES.length]
+      const party = trade.partyBanded ? 2 + Math.floor(rand() * 4) : 1
+      const r = rand()
+      const status = r > 0.88 ? 'completed' : r > 0.8 ? 'seated' : 'confirmed'
+      // Weighted to the shorter services: every shop sells more haircuts than
+      // ceramic coatings, and a day made of only the flagship job is a day
+      // nobody recognises.
+      const pick = SERVICES[Math.min(
+        SERVICES.length - 1,
+        Math.floor(rand() * rand() * SERVICES.length),
+      )]
+      const row = makeBooking({
+        startsAt: atLocal(dayKey, Math.floor(minute / 60), minute % 60),
+        party,
+        service: trade.partyBanded ? undefined : pick,
+        name,
+        phone,
+        source: rand() > 0.45 ? 'phone' : 'portal',
+        notes: rand() > 0.85 ? (NOTE_EXAMPLE[trade.key] || null) : null,
+        status,
+        rand,
+      })
+      if (row) made++
+    }
+  }
 }
 
 // ── Waitlist ────────────────────────────────────────────────────────────
@@ -258,35 +276,7 @@ const todayKey = (() => {
   return `${g('year')}-${g('month')}-${g('day')}`
 })()
 
-const waitlist: WaitRow[] = [
-  {
-    id: uid('wl'), customer_name: 'Rebecca Tan', customer_phone: '+1 604 555 0164',
-    party_size: 2, window_start: atLocal(todayKey, 18, 0).toISOString(),
-    window_end: atLocal(todayKey, 20, 30).toISOString(),
-    status: 'waiting', notes: 'Anniversary',
-    offered_at: null, offer_expires_at: null, offer_count: 0,
-    rank_reason: '4 previous visits, no no-shows, average spend $88',
-    created_at: new Date(Date.now() - 3 * 3600_000).toISOString(),
-  },
-  {
-    id: uid('wl'), customer_name: 'Julian Ferreira', customer_phone: '+1 778 555 0110',
-    party_size: 4, window_start: atLocal(todayKey, 19, 0).toISOString(),
-    window_end: atLocal(todayKey, 21, 0).toISOString(),
-    status: 'waiting', notes: null,
-    offered_at: null, offer_expires_at: null, offer_count: 0,
-    rank_reason: 'No history — ranked by arrival order',
-    created_at: new Date(Date.now() - 2 * 3600_000).toISOString(),
-  },
-  {
-    id: uid('wl'), customer_name: 'Greg Mullen', customer_phone: '+1 604 555 0177',
-    party_size: 2, window_start: atLocal(todayKey, 18, 30).toISOString(),
-    window_end: atLocal(todayKey, 21, 30).toISOString(),
-    status: 'waiting', notes: null,
-    offered_at: null, offer_expires_at: null, offer_count: 1,
-    rank_reason: '2 no-shows on record — ranked last despite $140 average spend',
-    created_at: new Date(Date.now() - 90 * 60_000).toISOString(),
-  },
-]
+const waitlist: WaitRow[] = []
 
 function rankScore(w: WaitRow): number {
   const r = w.rank_reason || ''
@@ -386,29 +376,136 @@ let feedToken: string | null = null
 // The merchant in this fixture already answered the onboarding questionnaire,
 // so the card opens showing an inherited URL waiting to be confirmed — which
 // is the state most real merchants will meet it in.
-const linkState = {
-  url: 'https://mapletandoor.ca/reservations',
-  inherited: true,
-  sent: 31,
-  opened: 22,
-  failed: 2,
-}
+const linkState = { url: '', inherited: false, sent: 0, opened: 0, failed: 0 }
 
 // Two blocks imported from the merchant's Square calendar: a private event
 // and a staff meeting. Neither is our booking, and both have to show up or
 // the book is only half the evening.
-const busyBlocks = [
-  {
-    id: uid('busy'), starts_at: atLocal(todayKey, 16, 0).toISOString(),
-    ends_at: atLocal(todayKey, 17, 0).toISOString(),
-    summary: 'Staff briefing', provider: 'square_appointments',
-  },
-  {
-    id: uid('busy'), starts_at: atLocal(todayKey, 21, 0).toISOString(),
-    ends_at: atLocal(todayKey, 23, 0).toISOString(),
-    summary: 'Private event — Booth 5', provider: 'square_appointments',
-  },
+const busyBlocks: any[] = []
+
+// ── Trade configuration ─────────────────────────────────────────────────
+/**
+ * Rebuild the whole fixture merchant as a shop of this trade.
+ *
+ * This is what makes the per-trade demos real rather than a relabelled
+ * restaurant: the chairs are chairs, the services are the ones that trade
+ * sells, the hours are its hours, and the day fills at its own rhythm. The
+ * PACK is the source — the same config the product ships — so a demo cannot
+ * drift from what a merchant of that trade would actually get.
+ */
+export function configureForTrade(pack: any) {
+  trade = pack
+
+  bookings.length = 0
+  seededDays.clear()
+  waitlist.length = 0
+  busyBlocks.length = 0
+  RESOURCES.length = 0
+  SERVICES.length = 0
+  HOURS.length = 0
+
+  linkState.url = ''
+  linkState.inherited = false
+  linkState.sent = 0
+  linkState.opened = 0
+  linkState.failed = 0
+
+  if (!pack.booksAtAll) return
+
+  const base = RESOURCE_NAME[pack.resourceKind] || 'Station'
+  for (let i = 0; i < pack.defaultCount; i++) {
+    RESOURCES.push({
+      id: uid('r'),
+      // Staff are people, not numbered stations — a nail studio with
+      // "Staff 1" through "Staff 4" reads as a spreadsheet, not a shop.
+      name: pack.resourceKind === 'staff' ? STAFF_NAMES[i % STAFF_NAMES.length] : `${base} ${i + 1}`,
+      kind: pack.resourceKind,
+      seats: pack.resourceKind === 'table' ? (i < 2 ? 2 : i > 4 ? 6 : 4) : 1,
+      sort_order: i,
+      active: true,
+    })
+  }
+
+  for (const svc of pack.services) {
+    SERVICES.push({
+      id: uid('s'), name: svc.name, description: null,
+      duration_minutes: svc.duration, buffer_minutes: svc.buffer,
+      price_cents: null, min_party: svc.min, max_party: svc.max, active: true,
+    })
+  }
+
+  for (const weekday of pack.days) {
+    HOURS.push({
+      weekday,
+      opens_at: `${pack.opens}:00`.slice(0, 8),
+      closes_at: `${pack.closes}:00`.slice(0, 8),
+      slot_minutes: 15,
+    })
+  }
+
+  // A waiting list only exists where people actually wait for a slot.
+  const [wStartH] = pack.opens.split(':').map(Number)
+  const [wEndH] = pack.closes.split(':').map(Number)
+  const mid = Math.floor((wStartH + wEndH) / 2)
+  WAITING.forEach(([name, phone, reason], i) => {
+    waitlist.push({
+      id: uid('wl'), customer_name: name, customer_phone: phone,
+      party_size: pack.partyBanded ? 2 + i : 1,
+      window_start: atLocal(todayKey, Math.max(wStartH, mid - 1), 0).toISOString(),
+      window_end: atLocal(todayKey, Math.min(wEndH, mid + 3), 0).toISOString(),
+      status: 'waiting', notes: null,
+      offered_at: null, offer_expires_at: null, offer_count: 0,
+      rank_reason: reason,
+      created_at: new Date(Date.now() - (i + 1) * 3600_000).toISOString(),
+    })
+  })
+
+  // Two commitments imported from the shop's own calendar, so the book is
+  // visibly one book rather than only what we took.
+  for (const [label, startH, endH] of (BUSY[pack.key] || [])) {
+    busyBlocks.push({
+      id: uid('busy'),
+      starts_at: atLocal(todayKey, startH, 0).toISOString(),
+      ends_at: atLocal(todayKey, endH, 0).toISOString(),
+      summary: label, provider: 'square_appointments',
+    })
+  }
+}
+
+const RESOURCE_NAME: Record<string, string> = {
+  table: 'Table', chair: 'Chair', bay: 'Bay', room: 'Room', staff: 'Staff',
+}
+
+const STAFF_NAMES = ['Mia', 'Jordan', 'Alexis', 'Sam', 'Rae', 'Kit']
+
+/** Demo colour, deliberately kept OUT of the shipped pack config — a note a
+ *  guest leaves is a property of this fixture, not of the trade. */
+const NOTE_EXAMPLE: Record<string, string> = {
+  restaurant: 'Window seat if possible',
+  barbershop: 'Same barber as last time',
+  nails: 'Allergic to acetone',
+  detailing: 'Black SUV, pet hair',
+  medspa: 'First visit — consult first',
+  other: 'Called ahead',
+}
+
+/** Time already committed in the shop's own calendar. */
+const BUSY: Record<string, [string, number, number][]> = {
+  restaurant: [['Staff briefing', 16, 17], ['Private event — Booth 5', 21, 23]],
+  barbershop: [['Barber training', 12, 13]],
+  nails: [['Supplier visit', 13, 14]],
+  detailing: [['Equipment service', 12, 13]],
+  medspa: [['Clinical meeting', 12, 13]],
+  other: [],
+}
+
+const WAITING: [string, string, string][] = [
+  ['Rebecca Tan', '+1 604 555 0164', '4 previous visits, no no-shows, average spend $88'],
+  ['Julian Ferreira', '+1 778 555 0110', 'No history — ranked by arrival order'],
+  ['Greg Mullen', '+1 604 555 0177', '2 no-shows on record — ranked last despite $140 average spend'],
 ]
+
+let trade: any = null
 
 // ── Router ──────────────────────────────────────────────────────────────
 const json = (body: unknown, status = 200) =>
