@@ -32,6 +32,7 @@ import ForecastChart, { type ForecastPoint } from '@/components/ForecastChart'
 import PeakHoursHeatmap, { type HeatmapCell } from '@/components/PeakHoursHeatmap'
 import InsightCard from '@/components/InsightCard'
 import type { Insight } from '@/lib/api'
+import { formatCentsCompact } from '@/lib/format'
 import {
   CalendarCheck, Car, Clock, DollarSign, Navigation, PhoneCall,
   Receipt, Sparkles, Users, type LucideIcon,
@@ -66,10 +67,15 @@ export interface WorkspaceData {
   fortnight?: Booking[]
 }
 
-const money = (cents: number): string =>
-  cents >= 100_000
-    ? `$${(cents / 100_000).toFixed(1)}k`.replace('.0k', 'k')
-    : `$${Math.round(cents / 100).toLocaleString()}`
+/**
+ * The portal's own compact formatter, not a local one.
+ *
+ * It is locale-aware: under /canada it renders CA$ and en-CA, everywhere else
+ * plain $. A hand-rolled `$${n}` — which is what was here — would have printed
+ * US dollars on the Canadian portal, which is not a formatting slip but a
+ * price quoted in the wrong currency.
+ */
+const money = (cents: number): string => formatCentsCompact(cents)
 
 /**
  * What a day's bookings are worth.
@@ -513,7 +519,7 @@ function computeTiles(
     case 'quickservice':
       return [
         { label: 'Orders by phone', value: '86', sub: 'taken by the agent', icon: PhoneCall },
-        { label: 'Avg ticket', value: '$28', icon: Receipt },
+        { label: 'Avg ticket', value: money(2800), icon: Receipt },
         { label: 'Busiest hour', value: '7pm', sub: '22 orders' },
         { label: 'Missed calls', value: '0', tone: 'good', sub: 'nobody hung up' },
       ]
