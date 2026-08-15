@@ -27,7 +27,7 @@ import type { Booking, BusyBlock, Resource, Service } from '@/lib/bookings-api'
 import type { NichePack } from '@/config/niches'
 import BookingCalendar from '@/components/BookingCalendar'
 import StatCard from '@/components/StatCard'
-import RevenueChart from '@/components/RevenueChart'
+import ForecastChart, { type ForecastPoint } from '@/components/ForecastChart'
 import PeakHoursHeatmap, { type HeatmapCell } from '@/components/PeakHoursHeatmap'
 import InsightCard from '@/components/InsightCard'
 import type { Insight } from '@/lib/api'
@@ -218,14 +218,43 @@ export default function TradeWorkspace(data: WorkspaceData) {
     })
   }, [data.fortnight, pack.key, timezone])
 
+  /**
+   * History and forecast as ONE series, which is what makes the curve read as
+   * the same line continuing rather than two separate claims. The joining
+   * point carries both values so the solid and dashed strokes meet instead of
+   * leaving a gap.
+   */
   const forecast = useMemo(() => {
     const days = data.forecasts || []
+    const hist = history || []
+    const series: ForecastPoint[] = hist.map((h, i) => ({
+      date: h.day,
+      actual: h.cents / 100,
+      predicted: i === hist.length - 1 ? h.cents / 100 : null,
+      lower: null,
+      upper: null,
+    }))
+    // Only what comes AFTER the history. The forecast endpoint projects from
+    // today, but the workspace can be looking at any day — without this the
+    // axis ran Aug 18, Aug 17, Aug 18 and the curve doubled back on itself.
+    const lastActual = hist.length ? hist[hist.length - 1].day : ''
+    for (const f of days.filter((x) => x.period_start > lastActual)) {
+      series.push({
+        date: f.period_start,
+        actual: null,
+        predicted: f.predicted_cents / 100,
+        lower: f.lower_bound_cents != null ? f.lower_bound_cents / 100 : null,
+        upper: f.upper_bound_cents != null ? f.upper_bound_cents / 100 : null,
+      })
+    }
     return {
       days,
-      total: days.reduce((s, f) => s + f.predicted_cents, 0),
-      peak: Math.max(1, ...days.map((f) => f.predicted_cents)),
+      series,
+      total: days
+        .filter((f) => !hist.length || f.period_start > hist[hist.length - 1].day)
+        .reduce((s, f) => s + f.predicted_cents, 0),
     }
-  }, [data.forecasts])
+  }, [data.forecasts, history])
 
   const dayLabel = new Date(`${day}T12:00:00`).toLocaleDateString('en-CA', {
     weekday: 'long', month: 'long', day: 'numeric',
@@ -311,19 +340,6 @@ export default function TradeWorkspace(data: WorkspaceData) {
         ))}
       </div>
 
-      {history && history.length > 3 && (
-        <section className="rounded-xl border border-[#1F1F23] bg-[#111113] p-5">
-          <h2 className="text-sm font-semibold text-[#F5F5F7]">Booked revenue, last fortnight</h2>
-          <p className="mb-2 mt-0.5 text-sm text-[#A1A1A8]">
-            The portal's own revenue chart, on booking value.
-          </p>
-          <RevenueChart
-            height={260}
-            data={history.map((h) => ({ date: h.day, revenue_cents: h.cents } as any))}
-          />
-        </section>
-      )}
-
       {peakCells.length > 0 && (
         <PeakHoursHeatmap
           cells={peakCells}
@@ -336,11 +352,11 @@ export default function TradeWorkspace(data: WorkspaceData) {
         <section className="rounded-xl border border-[#1F1F23] bg-[#111113] p-5">
           <div className="flex flex-wrap items-baseline justify-between gap-3">
             <div>
-              <h2 className="text-sm font-semibold text-[#F5F5F7]">The week ahead</h2>
+              <h2 className="text-sm font-semibold text-[#F5F5F7]">Revenue: actual against forecast</h2>
               <p className="mt-0.5 text-sm text-[#A1A1A8]">
-                Projected from what this shop normally takes on each day of the
-                week — not a flat average, which would forecast money on the days
-                you are shut.
+                Solid is what happened; dashed is projected from what this shop
+                normally takes on each day of the week — not a flat average,
+                which would forecast money on the days you are shut.
               </p>
             </div>
             <div className="text-right">
@@ -353,27 +369,12 @@ export default function TradeWorkspace(data: WorkspaceData) {
             </div>
           </div>
 
-          <div className="mt-4 flex items-end gap-2">
-            {forecast.days.map((f) => (
-              <div key={f.period_start} className="flex flex-1 flex-col items-center gap-1.5">
-                <span className="font-mono text-[10px] text-[#A1A1A8]">
-                  {f.predicted_cents > 0 ? money(f.predicted_cents) : '—'}
-                </span>
-                <div className="flex h-24 w-full items-end">
-                  <div
-                    className="w-full rounded-t bg-[#1A8FD6]/50"
-                    style={{
-                      height: `${forecast.peak > 0 ? (f.predicted_cents / forecast.peak) * 100 : 0}%`,
-                      minHeight: f.predicted_cents > 0 ? 3 : 0,
-                    }}
-                    title={`${f.period_start} — ${money(f.predicted_cents)} projected`}
-                  />
-                </div>
-                <span className="text-[10px] text-[#6B6B73]">
-                  {new Date(`${f.period_start}T12:00:00`).toLocaleDateString('en-CA', { weekday: 'short' })}
-                </span>
-              </div>
-            ))}
+          <div className="mt-4">
+            <ForecastChart
+              data={forecast.series}
+              height={240}
+              gradientId="workspace-forecast"
+            />
           </div>
         </section>
       )}
