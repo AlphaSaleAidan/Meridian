@@ -419,6 +419,7 @@ async def reserve(
     service_id: str | None = None,
     source: str = "phone",
     vapi_call_id: str | None = None,
+    extra: dict | None = None,
 ) -> dict:
     """Hold a specific time. The only function here that promises anything.
 
@@ -433,6 +434,15 @@ async def reserve(
     end_utc = start_utc + timedelta(minutes=duration + buffer_min)
 
     resources = _eligible_resources(setup, party_size, service)
+
+    # A caller may pin the resource — a standing appointment with the barber
+    # the customer actually books for. Filtering here rather than skipping the
+    # engine keeps opening hours, closures and the exclusion constraint in
+    # force; the only thing that changes is which resources are eligible.
+    pinned = (extra or {}).get("resource_id")
+    if pinned:
+        resources = [r for r in resources if str(r["id"]) == str(pinned)]
+
     if not resources:
         raise NoAvailability("no resource can seat this party")
 
@@ -487,6 +497,12 @@ async def reserve(
             "confirmation_code": generate_confirmation_code(),
             "vapi_call_id": vapi_call_id,
         }
+        # Callers may attach their own columns (series_id, deposit fields).
+        # resource_id is filtered out: it selects a resource above rather than
+        # overriding the one this iteration proved is free.
+        for key, value in (extra or {}).items():
+            if key != "resource_id":
+                row[key] = value
         try:
             created = await store.create_booking(row)
         except SlotTaken:
