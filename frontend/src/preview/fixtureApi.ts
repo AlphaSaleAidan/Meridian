@@ -737,16 +737,26 @@ async function route(url: URL, init: RequestInit): Promise<Response> {
   return json({ detail: `preview: no fixture for ${method} ${path}` }, 404)
 }
 
+/**
+ * Empty the fixture merchant so the screens behave like a shop that signed up
+ * ninety seconds ago. Used by the preview's "First run" tab and by ?wizard.
+ */
+export function resetToNewMerchant() {
+  RESOURCES.length = 0
+  SERVICES.length = 0
+  HOURS.length = 0
+  bookings.length = 0
+  seededDays.clear()
+  linkState.url = ''
+  linkState.inherited = false
+  linkState.sent = 0
+  linkState.opened = 0
+  linkState.failed = 0
+}
+
 export function installFixtureApi() {
-  // ?wizard empties the fixture merchant so the Set-up tab shows the first-run
-  // wizard instead of the forms. Without it there is no way to see the screen
-  // a brand new merchant actually meets.
   if (typeof window !== 'undefined' && window.location.search.includes('wizard')) {
-    RESOURCES.length = 0
-    SERVICES.length = 0
-    HOURS.length = 0
-    linkState.url = ''
-    linkState.inherited = false
+    resetToNewMerchant()
   }
 
   const real = window.fetch.bind(window)

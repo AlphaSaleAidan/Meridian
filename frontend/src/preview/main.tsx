@@ -15,19 +15,37 @@ import { BrowserRouter } from 'react-router-dom'
 import { AuthProvider } from '@/lib/auth'
 import BookingsPage from '@/pages/BookingsPage'
 import BookingsSetupPage from '@/pages/BookingsSetupPage'
-import { installFixtureApi } from './fixtureApi'
+import BookingsWizard from '@/pages/BookingsWizard'
+import { installFixtureApi, resetToNewMerchant } from './fixtureApi'
 import '@/index.css'
 
 installFixtureApi()
 
-const TABS = [
-  { key: 'book', label: "Today's Book", Component: BookingsPage },
-  { key: 'setup', label: 'Set up', Component: BookingsSetupPage },
-] as const
+const MERCHANT = import.meta.env.VITE_ORG_ID || 'preview-bookings'
+
+type TabKey = 'book' | 'setup' | 'firstrun'
+
+const TABS: { key: TabKey; label: string }[] = [
+  { key: 'book', label: "Today's Book" },
+  { key: 'setup', label: 'Set up' },
+  { key: 'firstrun', label: 'First run' },
+]
 
 function Shell() {
-  const [tab, setTab] = useState<'book' | 'setup'>('book')
-  const Active = TABS.find((t) => t.key === tab)!.Component
+  const [tab, setTab] = useState<TabKey>('book')
+  // Remounts the wizard on each visit so it always starts at step one rather
+  // than wherever it was left.
+  const [runKey, setRunKey] = useState(0)
+
+  const select = (key: TabKey) => {
+    if (key === 'firstrun') {
+      // Empty the fixture merchant, so this tab shows what a shop that signed
+      // up ninety seconds ago actually meets — not a shop with eight tables.
+      resetToNewMerchant()
+      setRunKey((n) => n + 1)
+    }
+    setTab(key)
+  }
 
   return (
     <div className="min-h-screen bg-[#0B0B0F] text-white">
@@ -43,7 +61,7 @@ function Shell() {
             {TABS.map((t) => (
               <button
                 key={t.key}
-                onClick={() => setTab(t.key)}
+                onClick={() => select(t.key)}
                 className={
                   'rounded-md px-4 py-1.5 text-sm transition-colors ' +
                   (tab === t.key
@@ -71,8 +89,26 @@ function Shell() {
           </span>
         </div>
       </div>
+      {tab === 'firstrun' && (
+        <div className="border-b border-white/10 bg-[#0E0E11]">
+          <div className="mx-auto max-w-6xl px-6 py-2.5 text-xs text-white/45">
+            What a merchant sees the moment they sign up — no tables, no hours,
+            nothing configured. Finishing it drops you on the Set up page with
+            everything created.
+          </div>
+        </div>
+      )}
       <main className="mx-auto max-w-6xl px-6 py-8">
-        <Active />
+        {tab === 'book' && <BookingsPage />}
+        {tab === 'setup' && <BookingsSetupPage />}
+        {tab === 'firstrun' && (
+          <BookingsWizard
+            key={runKey}
+            merchantId={MERCHANT}
+            onDone={() => setTab('setup')}
+            onSkip={() => setTab('setup')}
+          />
+        )}
       </main>
     </div>
   )
