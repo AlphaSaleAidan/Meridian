@@ -18,6 +18,7 @@
  * deliberately generous rather than precise, and the copy never claims a
  * number it cannot stand behind.
  */
+import { useState } from 'react'
 import { AlertTriangle, Car, MapPin, Navigation } from 'lucide-react'
 import type { Booking } from '@/lib/bookings-api'
 import RouteMap from '@/components/RouteMap'
@@ -76,6 +77,11 @@ export default function RouteDay({
   timezone: string
   onSelect?: (booking: Booking) => void
 }) {
+  // Pointing at a stop in either place highlights it in the other. On a map
+  // with four pins in one suburb, "which of these is the 2pm" is the question
+  // being asked constantly.
+  const [hover, setHover] = useState<number | null>(null)
+
   const ordered = [...stops].sort((a, b) =>
     a.booking.startsAt.localeCompare(b.booking.startsAt))
 
@@ -141,9 +147,13 @@ export default function RouteDay({
         />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)]">
+      {/* Side by side only where there is genuinely room for both. Below that
+          the map takes the full width and the list sits under it — a 250px map
+          is worse than no map, and squeezing one in beside a 460px list is how
+          you get one. */}
+      <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
         <RouteMap
-          height={340}
+          height={380}
           origin={{ lat: origin.lat, lng: origin.lng, label: origin.label }}
           stops={ordered.map((s) => ({
             lat: s.lat,
@@ -151,6 +161,9 @@ export default function RouteDay({
             label: s.booking.customerName,
             sub: `${fmt(s.booking.startsAt)} · ${s.address}`,
           }))}
+          tightLegs={legs.map((l, i) => (l.tight ? i : -1)).filter((i) => i >= 0)}
+          activeIndex={hover}
+          onHover={setHover}
         />
 
         <ol className="space-y-0">
@@ -183,9 +196,19 @@ export default function RouteDay({
 
               <button
                 onClick={() => onSelect?.(stop.booking)}
-                className="flex w-full items-start gap-3 rounded-lg border border-[#1F1F23] bg-[#111113] p-3 text-left transition-colors hover:border-[#1A8FD6]/40"
+                onMouseEnter={() => setHover(i)}
+                onMouseLeave={() => setHover(null)}
+                className={`flex w-full items-start gap-3 rounded-lg border bg-[#111113] p-3 text-left transition-colors ${
+                  hover === i
+                    ? 'border-[#1A8FD6]/60 bg-[#1A8FD6]/5'
+                    : 'border-[#1F1F23] hover:border-[#1A8FD6]/40'
+                }`}
               >
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-[#1A8FD6]/40 bg-[#1A8FD6]/10 font-mono text-[10px] text-[#1A8FD6]">
+                <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border font-mono text-[10px] ${
+                  legs[i].tight
+                    ? 'border-[#E5484D]/50 bg-[#E5484D]/15 text-[#E5484D]'
+                    : 'border-[#1A8FD6]/40 bg-[#1A8FD6]/10 text-[#1A8FD6]'
+                }`}>
                   {i + 1}
                 </span>
                 <span className="min-w-0 flex-1">

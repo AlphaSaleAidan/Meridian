@@ -42,20 +42,28 @@ const ATTRIBUTION =
  * divIcon avoids that entirely AND lets the stop number live inside the pin,
  * which is what ties the map to the list beside it.
  */
-function pin(n: number | string, tone: 'stop' | 'origin' = 'stop'): L.DivIcon {
-  const bg = tone === 'origin' ? '#0E0E11' : '#1A8FD6'
-  const border = tone === 'origin' ? '#A1A1A8' : '#1A8FD6'
+function pin(
+  n: number | string,
+  tone: 'stop' | 'origin' | 'tight' = 'stop',
+  active = false,
+): L.DivIcon {
+  const bg = tone === 'origin' ? '#0E0E11' : tone === 'tight' ? '#E5484D' : '#1A8FD6'
+  const border = tone === 'origin' ? '#A1A1A8' : bg
   const color = tone === 'origin' ? '#A1A1A8' : '#FFFFFF'
+  const size = active ? 34 : 26
+  // A ring rather than a size jump alone: the pin has to stay where it is on
+  // the map while it highlights, or the eye reads it as a different stop.
+  const ring = active ? 'box-shadow:0 0 0 4px rgba(255,255,255,.22),0 2px 10px rgba(0,0,0,.6);' : 'box-shadow:0 2px 8px rgba(0,0,0,.5);'
   return L.divIcon({
     className: '',
     html: `<div style="
-      width:26px;height:26px;border-radius:50%;
+      width:${size}px;height:${size}px;border-radius:50%;
       background:${bg};border:2px solid ${border};
-      color:${color};font:600 11px ui-monospace,monospace;
+      color:${color};font:600 ${active ? 13 : 11}px ui-monospace,monospace;
       display:flex;align-items:center;justify-content:center;
-      box-shadow:0 2px 8px rgba(0,0,0,.5)">${n}</div>`,
-    iconSize: [26, 26],
-    iconAnchor: [13, 13],
+      transition:width .12s,height .12s;${ring}">${n}</div>`,
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
   })
 }
 
@@ -77,16 +85,33 @@ function FitBounds({ points }: { points: MapPoint[] }) {
 }
 
 export default function RouteMap({
-  origin, stops, height = 320,
+  origin, stops, height = 320, tightLegs = [], activeIndex = null, onHover,
 }: {
   origin: MapPoint
   stops: MapPoint[]
   height?: number
+  /** Index of each leg (0 = origin→stop 1) the clock does not allow. The map
+   *  has to show the problem, not just the shape — a run drawn all in one
+   *  colour hides the only thing on this screen worth acting on. */
+  tightLegs?: number[]
+  /** Stop the operator is pointing at in the list, so the two stay in sync. */
+  activeIndex?: number | null
+  onHover?: (index: number | null) => void
 }) {
   const all = useMemo(() => [origin, ...stops], [origin, stops])
-  const line = useMemo(
-    () => all.map((p) => [p.lat, p.lng] as [number, number]),
-    [all],
+
+  /** One polyline PER LEG rather than a single line through every stop, so a
+   *  leg that will not make it can be drawn differently from one that will. */
+  const legs = useMemo(
+    () => all.slice(0, -1).map((from, i) => ({
+      index: i,
+      tight: tightLegs.includes(i),
+      positions: [
+        [from.lat, from.lng] as [number, number],
+        [all[i + 1].lat, all[i + 1].lng] as [number, number],
+      ],
+    })),
+    [all, tightLegs],
   )
 
   if (stops.length === 0) return null
@@ -108,17 +133,33 @@ export default function RouteMap({
 
         {/* Dashed, because it is the ORDER of the stops, not the roads taken.
             A solid line would imply a route we have not actually computed. */}
-        <Polyline
-          positions={line}
-          pathOptions={{ color: '#1A8FD6', weight: 2, opacity: 0.85, dashArray: '6 5' }}
-        />
+        {legs.map((leg) => (
+          <Polyline
+            key={leg.index}
+            positions={leg.positions}
+            pathOptions={{
+              color: leg.tight ? '#E5484D' : '#1A8FD6',
+              weight: leg.tight ? 3 : 2,
+              opacity: leg.tight ? 0.95 : 0.8,
+              dashArray: '6 5',
+            }}
+          />
+        ))}
 
         <Marker position={[origin.lat, origin.lng]} icon={pin('◆', 'origin')}>
           <Popup>{origin.label}</Popup>
         </Marker>
 
         {stops.map((s, i) => (
-          <Marker key={`${s.lat}-${s.lng}-${i}`} position={[s.lat, s.lng]} icon={pin(i + 1)}>
+          <Marker
+            key={`${s.lat}-${s.lng}-${i}`}
+            position={[s.lat, s.lng]}
+            icon={pin(i + 1, tightLegs.includes(i) ? 'tight' : 'stop', activeIndex === i)}
+            eventHandlers={{
+              mouseover: () => onHover?.(i),
+              mouseout: () => onHover?.(null),
+            }}
+          >
             <Popup>
               <strong>{s.label}</strong>
               {s.sub && <div>{s.sub}</div>}
