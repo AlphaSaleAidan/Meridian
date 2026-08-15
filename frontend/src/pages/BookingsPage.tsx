@@ -19,8 +19,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   AlertCircle, CalendarDays, CheckCircle2, ChevronLeft,
-  ChevronRight, Clock, Phone, Plus, UserX, Users,
+  ChevronRight, Clock, Phone, Plus, Rows3, UserX, Users,
 } from 'lucide-react'
+import BookingCalendar from '@/components/BookingCalendar'
 import { useOrgId } from '@/hooks/useOrg'
 import {
   bookingsApi, BookingsApiError,
@@ -173,6 +174,7 @@ export default function BookingsPage() {
   const [showAdd, setShowAdd] = useState(false)
   /** Bumped whenever a table is freed, so the waitlist panel refetches. */
   const [freed, setFreed] = useState(0)
+  const [view, setView] = useState<'list' | 'grid'>('list')
 
   const load = useCallback(async () => {
     if (!merchantId) return
@@ -338,6 +340,26 @@ export default function BookingsPage() {
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
+          {/* The list answers "who is next"; the grid answers "where are the
+              gaps". Both are the same day — this only changes how it is drawn. */}
+          <div className="flex rounded-lg border border-[#1F1F23] p-0.5">
+            {([['list', 'List', Rows3], ['grid', 'Calendar', CalendarDays]] as const).map(
+              ([key, text, Icon]) => (
+                <button
+                  key={key}
+                  onClick={() => setView(key)}
+                  aria-pressed={view === key}
+                  className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs transition-colors ${
+                    view === key
+                      ? 'bg-[#1A8FD6]/15 text-[#1A8FD6]'
+                      : 'text-[#A1A1A8] hover:text-[#F5F5F7]'
+                  }`}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  {text}
+                </button>
+              ))}
+          </div>
           <button
             onClick={() => setShowAdd(true)}
             className="inline-flex items-center gap-1.5 rounded-lg bg-[#1A8FD6] px-3 py-2 text-sm font-medium text-white hover:bg-[#1A8FD6]/90 transition-colors"
@@ -366,6 +388,14 @@ export default function BookingsPage() {
         </div>
       ) : timeline.length === 0 ? (
         <EmptyDay onAdd={() => setShowAdd(true)} />
+      ) : view === 'grid' ? (
+        <BookingCalendar
+          bookings={dayBookings}
+          resources={resources}
+          busy={busy.filter((x) => timeline.some(
+            (t) => t.kind === 'busy' && t.block.id === x.id))}
+          timezone={timezone}
+        />
       ) : (
         <ul className="space-y-2">
           {timeline.map((item) => item.kind === 'busy' ? (
