@@ -80,6 +80,24 @@ export interface Pillar {
   flag?: keyof ModuleFlags
 }
 
+/**
+ * Reorder a pillar list for a trade.
+ *
+ * A barbershop's Meridian should open on the book, not on inventory it does
+ * not keep. Anything the pack does not name keeps its natural position after
+ * the ones it does, so a new pillar added here later cannot vanish from a
+ * trade's portal just because nobody updated the pack.
+ */
+export function orderPillars(pillars: Pillar[], order?: string[]): Pillar[] {
+  if (!order || order.length === 0) return pillars
+  const rank = new Map(order.map((path, i) => [path, i]))
+  return [...pillars].sort((a, b) => {
+    const ra = rank.has(a.path) ? rank.get(a.path)! : order.length + pillars.indexOf(a)
+    const rb = rank.has(b.path) ? rank.get(b.path)! : order.length + pillars.indexOf(b)
+    return ra - rb
+  })
+}
+
 export const merchantPillars: Pillar[] = [
   {
     path: '',
@@ -109,6 +127,7 @@ export const merchantPillars: Pillar[] = [
       { view: 'menu', label: 'Menu Matrix', Component: MenuEngineeringPage, desktopOnly: true },
       { view: 'anomalies', label: 'Anomalies', Component: AnomaliesPage },
     ],
+    flag: 'inventory',
   },
   {
     // Renamed from "Schedule" → the owner's control center for scheduling AND
@@ -126,6 +145,7 @@ export const merchantPillars: Pillar[] = [
       { view: 'chat', label: 'Chat', Component: TeamChatPage },
       { view: 'chatbot', label: 'Customer Bot', Component: ChatbotConfigPage },
     ],
+    flag: 'schedule',
   },
   {
     path: 'phone',
@@ -135,6 +155,7 @@ export const merchantPillars: Pillar[] = [
       { view: 'orders', label: 'Phone Orders', Component: PhoneOrdersPage },
       { view: 'setup', label: 'Set up', Component: PhoneSetupWizard },
     ],
+    flag: 'phoneCalls',
   },
   {
     // Reservations and appointments. Sits next to Phone Calls because that is
@@ -146,6 +167,7 @@ export const merchantPillars: Pillar[] = [
       { view: 'book', label: "Today's Book", Component: BookingsPage },
       { view: 'setup', label: 'Set up', Component: BookingsSetupPage },
     ],
+    flag: 'bookings',
   },
   {
     path: 'tax',
@@ -163,6 +185,7 @@ export const merchantPillars: Pillar[] = [
       { view: 'live', label: 'Live', Component: LiveCamerasPage },
       { view: 'intelligence', label: 'Analytics', Component: CameraIntelligencePage },
     ],
+    flag: 'camera',
   },
   {
     path: 'settings',

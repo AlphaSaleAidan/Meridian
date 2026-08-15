@@ -4,7 +4,9 @@ import { clsx } from 'clsx'
 import { Menu, MapPin } from 'lucide-react'
 import { MeridianEmblem, MeridianWordmark } from './MeridianLogo'
 import { useUnreadNotifications } from '@/hooks/useUnreadNotifications'
-import { merchantPillars, comingSoonPillars, MERCHANT_BASE_PATH, type Pillar } from '@/config/merchantPillars'
+import { merchantPillars, comingSoonPillars, orderPillars, MERCHANT_BASE_PATH, type Pillar } from '@/config/merchantPillars'
+import { packFor } from '@/config/niches'
+import { useAuth } from '@/lib/auth'
 import { useModuleFlags } from '@/config/moduleFlags'
 
 function PillarLink({ pillar, basePath, onNavigate }: { pillar: Pillar; basePath: string; onNavigate: () => void }) {
@@ -40,6 +42,7 @@ export default function MerchantLayout({ basePath = MERCHANT_BASE_PATH }: { base
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const closeSidebar = () => setSidebarOpen(false)
   const flags = useModuleFlags()
+  const { org } = useAuth()
   // Same chrome serves both regions: /canada/* keeps its existing branding,
   // the US mounts (/us/merchant, /demo) show no region chip at all.
   const isCanada = useLocation().pathname.startsWith('/canada')
@@ -48,8 +51,14 @@ export default function MerchantLayout({ basePath = MERCHANT_BASE_PATH }: { base
   // tab, Camera included) — real merchant portals keep the hamburger.
   const isDemo = basePath === '/demo' || basePath === '/canada/demo'
 
-  // Filter pillars by their optional flag — disabled-never-delete pattern.
-  const visiblePillars = merchantPillars.filter(p => !p.flag || flags[p.flag])
+  // Filter pillars by their optional flag — disabled-never-delete pattern —
+  // then put them in the order this merchant's TRADE cares about. A barber
+  // opens on the book; a takeout shop opens on the phone.
+  const pack = packFor(org?.business_type)
+  const visiblePillars = orderPillars(
+    merchantPillars.filter(p => !p.flag || flags[p.flag]),
+    pack.pillarOrder,
+  )
   const moneyPillars = visiblePillars.filter(p => !p.secondary && p.path !== 'settings')
   const secondaryPillars = visiblePillars.filter(p => p.secondary)
   const settingsPillar = visiblePillars.find(p => p.path === 'settings')

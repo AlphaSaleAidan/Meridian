@@ -24,6 +24,7 @@
  * change it later. It is a starting point, not a cage — a detailer who also
  * rents a bay by the hour must not be locked out of doing that.
  */
+import type { ModuleFlags } from '@/config/moduleFlags'
 import type { ResourceKind } from '@/lib/bookings-api'
 
 export interface PackService {
@@ -70,6 +71,28 @@ export interface NichePack {
   opens: string
   closes: string
 
+  // ── What this trade's Meridian actually contains ──────────────────────
+  /**
+   * Modules this trade never sees. TURNING OFF ONLY — flagsForMerchant applies
+   * these with AND, so a pack can never resurrect a module its market cut.
+   *
+   * Camera is off for every trade below and that is not an oversight: it is
+   * core to none of them. A module nobody's trade needs is a module in the way.
+   */
+  modules?: Partial<ModuleFlags>
+  /**
+   * Pillar paths in the order this trade should meet them, most valuable
+   * first. Anything unlisted keeps its natural position after these.
+   * '' is Overview.
+   */
+  pillarOrder?: string[]
+  /**
+   * The number that leads the home screen. This is the test of whether a pack
+   * is real: if a trade's Meridian opens on the same figure as every other
+   * trade's, it is a theme, not a version.
+   */
+  homeMetric: { label: string; help: string }
+
   /** True when the work happens at the customer's address, which changes what
    *  a booking needs to carry (where, and how long to get there). Not yet
    *  implemented — see docs; declared here because the packs that need it are
@@ -104,6 +127,10 @@ export const NICHE_PACKS: NichePack[] = [
     days: [2, 3, 4, 5, 6],
     opens: '09:00',
     closes: '18:00',
+    modules: { inventory: false, camera: false, taxExpenses: false, topActions: false },
+    pillarOrder: ['bookings', 'phone', '', 'schedule'],
+    homeMetric: { label: 'Chair hours filled today',
+                  help: 'Booked minutes against the hours your chairs are open.' },
   },
   {
     key: 'nails',
@@ -127,6 +154,10 @@ export const NICHE_PACKS: NichePack[] = [
     days: [1, 2, 3, 4, 5, 6],
     opens: '09:00',
     closes: '19:00',
+    modules: { inventory: false, camera: false, taxExpenses: false, topActions: false },
+    pillarOrder: ['bookings', 'phone', '', 'schedule'],
+    homeMetric: { label: 'Clients rebooked before they left',
+                  help: 'The cheapest appointment you will ever sell is the next one.' },
   },
   {
     key: 'detailing',
@@ -150,6 +181,10 @@ export const NICHE_PACKS: NichePack[] = [
     days: [1, 2, 3, 4, 5, 6],
     opens: '08:00',
     closes: '17:00',
+    modules: { inventory: false, camera: false, schedule: false, taxExpenses: false, topActions: false },
+    pillarOrder: ['bookings', 'phone', ''],
+    homeMetric: { label: 'Bay hours sold today',
+                  help: 'A bay standing empty is the only thing that costs you money.' },
     travels: true,
   },
   {
@@ -172,6 +207,10 @@ export const NICHE_PACKS: NichePack[] = [
     days: [0, 2, 3, 4, 5, 6],
     opens: '17:00',
     closes: '22:00',
+    modules: { camera: false },
+    pillarOrder: ['bookings', 'phone', '', 'inventory', 'schedule'],
+    homeMetric: { label: 'Covers booked tonight',
+                  help: 'Guests expected, not tables — a four-top and a two-top are not the same night.' },
   },
   {
     key: 'quickservice',
@@ -193,6 +232,10 @@ export const NICHE_PACKS: NichePack[] = [
     days: [0, 1, 2, 3, 4, 5, 6],
     opens: '11:00',
     closes: '22:00',
+    modules: { bookings: false, camera: false, schedule: false },
+    pillarOrder: ['phone', '', 'inventory'],
+    homeMetric: { label: 'Orders taken by phone',
+                  help: 'Orders the agent took while the line was busy — the ones you would have lost.' },
   },
   {
     key: 'medspa',
@@ -216,6 +259,10 @@ export const NICHE_PACKS: NichePack[] = [
     days: [1, 2, 3, 4, 5],
     opens: '09:00',
     closes: '18:00',
+    modules: { inventory: false, camera: false, taxExpenses: false, topActions: false },
+    pillarOrder: ['bookings', 'phone', '', 'schedule'],
+    homeMetric: { label: 'Consultations booked this week',
+                  help: 'A consultation is the start of a treatment plan, not a single sale.' },
   },
 ]
 
@@ -238,6 +285,10 @@ export const GENERIC_PACK: NichePack = {
   days: [1, 2, 3, 4, 5],
   opens: '09:00',
   closes: '17:00',
+  // Deliberately empty. Every merchant in production today has no trade set,
+  // and they must keep exactly the portal they had this morning.
+  modules: {},
+  homeMetric: { label: 'Bookings today', help: 'What is on the book for today.' },
 }
 
 export const ALL_PACKS = [...NICHE_PACKS, GENERIC_PACK]
