@@ -42,8 +42,18 @@ interface Preset {
   Icon: typeof UtensilsCrossed
   noun: string
   kind: ResourceKind
-  /** What one unit of capacity is called, singular, for the count question. */
+  /** What one unit of capacity is called, singular, for review copy. */
   unitLabel: string
+  /**
+   * The count question, written out per vertical rather than assembled from
+   * the unit label. "How many people take appointments?" is not a template of
+   * "How many <unit>s do you have?", and an earlier version that tried to
+   * generate it produced "How many tables can be booked at once?" — which
+   * reads as a limit on the guest rather than a count of what the shop owns.
+   */
+  countTitle: string
+  /** Field label above the number box. */
+  countLabel: string
   defaultCount: number
   defaultSeats: number
   /** Restaurants band by party size; everyone else books a named service. */
@@ -67,6 +77,7 @@ const PRESETS: Preset[] = [
     blurb: 'Tables, party sizes, turn times',
     Icon: UtensilsCrossed,
     noun: 'table', kind: 'table', unitLabel: 'table',
+    countTitle: 'How many tables do you have?', countLabel: 'Tables',
     defaultCount: 8, defaultSeats: 4, partyBanded: true,
     services: [
       { name: 'Table for 1–4', duration: 90, buffer: 15, min: 1, max: 4 },
@@ -80,6 +91,7 @@ const PRESETS: Preset[] = [
     blurb: 'Chairs, named services, back to back',
     Icon: Scissors,
     noun: 'appointment', kind: 'chair', unitLabel: 'chair',
+    countTitle: 'How many chairs do you have?', countLabel: 'Chairs',
     defaultCount: 3, defaultSeats: 1, partyBanded: false,
     services: [
       { name: 'Haircut', duration: 30, buffer: 5, min: 1, max: 1 },
@@ -93,6 +105,7 @@ const PRESETS: Preset[] = [
     blurb: 'Bays, long jobs, one car at a time',
     Icon: Car,
     noun: 'appointment', kind: 'bay', unitLabel: 'bay',
+    countTitle: 'How many bays do you have?', countLabel: 'Bays',
     defaultCount: 2, defaultSeats: 1, partyBanded: false,
     services: [
       { name: 'Interior and exterior', duration: 120, buffer: 15, min: 1, max: 1 },
@@ -106,6 +119,7 @@ const PRESETS: Preset[] = [
     blurb: 'People and appointments',
     Icon: Building2,
     noun: 'appointment', kind: 'staff', unitLabel: 'person',
+    countTitle: 'How many people take appointments?', countLabel: 'People',
     defaultCount: 2, defaultSeats: 1, partyBanded: false,
     services: [{ name: 'Appointment', duration: 60, buffer: 0, min: 1, max: 1 }],
     days: [1, 2, 3, 4, 5], opens: '09:00', closes: '17:00',
@@ -309,13 +323,15 @@ export default function BookingsWizard({ merchantId, onDone, onSkip }: {
 
         {step === 'resources' && (
           <Question
-            title={`How many ${preset.unitLabel}s can be booked at once?`}
-            hint={`We'll create them as ${resourceNames[0]}, ${resourceNames[1] || '…'} and so on. Rename them any time.`}
+            title={preset.countTitle}
+            hint={count > 1
+              ? `We'll add them as ${resourceNames[0]} through to ${resourceNames[count - 1]}. Rename or resize any of them straight after.`
+              : `We'll add it as ${resourceNames[0]}. You can rename it straight after.`}
           >
             <div className="flex flex-wrap items-end gap-4">
               <label className="space-y-1">
                 <span className="block text-xs uppercase tracking-wide text-[#A1A1A8]">
-                  {preset.unitLabel}s
+                  {preset.countLabel}
                 </span>
                 <input
                   type="number" min={1} max={200} value={count}
@@ -325,21 +341,27 @@ export default function BookingsWizard({ merchantId, onDone, onSkip }: {
               </label>
               {preset.kind === 'table' && (
                 <label className="space-y-1">
+                  {/* "Most tables seat" rather than "Seats each": no restaurant
+                      has identical tables, and a label that claims they do
+                      makes an owner stop and correct us instead of moving on. */}
                   <span className="block text-xs uppercase tracking-wide text-[#A1A1A8]">
-                    Seats each
+                    Most tables seat
                   </span>
-                  <input
-                    type="number" min={1} max={100} value={seats}
-                    onChange={(e) => setSeats(Math.min(100, Math.max(1, Number(e.target.value) || 1)))}
-                    className="w-24 rounded-lg border border-[#1F1F23] bg-[#0A0A0B] px-3 py-2 text-sm text-[#F5F5F7] outline-none focus:border-[#1A8FD6]/50"
-                  />
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number" min={1} max={100} value={seats}
+                      onChange={(e) => setSeats(Math.min(100, Math.max(1, Number(e.target.value) || 1)))}
+                      className="w-20 rounded-lg border border-[#1F1F23] bg-[#0A0A0B] px-3 py-2 text-sm text-[#F5F5F7] outline-none focus:border-[#1A8FD6]/50"
+                    />
+                    <span className="text-sm text-[#A1A1A8]">people</span>
+                  </div>
                 </label>
               )}
             </div>
             {preset.kind === 'table' && (
               <p className="mt-3 text-xs text-[#6B6B73]">
-                Mixed table sizes are normal — set them all to your most common
-                size now and edit the odd ones later.
+                Got a two-top and a big booth? Set the common size now and
+                change the odd ones on the next screen.
               </p>
             )}
           </Question>
@@ -451,8 +473,8 @@ export default function BookingsWizard({ merchantId, onDone, onSkip }: {
               {mode === 'external_link' && <Row label="Link">{linkUrl}</Row>}
               {mode === 'native' && (
                 <>
-                  <Row label={`${preset.unitLabel[0].toUpperCase()}${preset.unitLabel.slice(1)}s`}>
-                    {count}{preset.kind === 'table' ? ` · ${seats} seats each` : ''}
+                  <Row label={preset.countLabel}>
+                    {count}{preset.kind === 'table' ? ` · mostly ${seats} seats` : ''}
                   </Row>
                   <Row label="Bookable">
                     {services.map((s) => `${s.name} (${s.duration} min)`).join(', ')}
