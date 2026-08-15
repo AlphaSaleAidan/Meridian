@@ -27,7 +27,7 @@
 import { useState } from 'react'
 import {
   ArrowLeft, ArrowRight, Armchair, Building2, Car, Check, Loader2,
-  MessageSquare, Phone, Scissors, UtensilsCrossed,
+  MessageSquare, Phone, Plus, Scissors, Trash2, UtensilsCrossed,
 } from 'lucide-react'
 import { Select } from '@/components/ui/Select'
 import { bookingsApi, type HoursRow, type ResourceKind } from '@/lib/bookings-api'
@@ -128,6 +128,10 @@ const PRESETS: Preset[] = [
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
+/** Up to a full day: a full detail is a 4-hour job and a wedding party books
+ *  a room for the evening. */
+const DURATIONS = [15, 30, 45, 60, 90, 120, 180, 240, 300, 360, 480]
+
 export default function BookingsWizard({ merchantId, onDone, onSkip }: {
   merchantId: string
   onDone: () => void
@@ -213,8 +217,15 @@ export default function BookingsWizard({ merchantId, onDone, onSkip }: {
     }
   }
 
+  const servicesValid = services.length > 0
+    && services.every((s) => s.name.trim() && s.max >= s.min)
+
   const canAdvance =
-    step !== 'link' || /^(https?:\/\/)?[\w.-]+\.[a-z]{2,}/i.test(linkUrl.trim())
+    step === 'link'
+      ? /^(https?:\/\/)?[\w.-]+\.[a-z]{2,}/i.test(linkUrl.trim())
+      : step === 'services'
+        ? servicesValid
+        : true
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -372,42 +383,108 @@ export default function BookingsWizard({ merchantId, onDone, onSkip }: {
             title={preset.partyBanded ? 'How long does a table turn?' : 'What do you book, and for how long?'}
             hint={preset.partyBanded
               ? 'The agent picks the right one from the party size. Turnaround is held after they leave, and never quoted to the guest.'
-              : 'Turnaround is the gap you need afterwards. It blocks the chair without being part of their appointment.'}
+              : `Turnaround is the gap you need afterwards. It holds the ${preset.unitLabel} without being part of what the customer is quoted.`}
           >
             <div className="space-y-2">
               {services.map((s, i) => (
                 <div key={i} className="flex flex-wrap items-center gap-2 rounded-lg border border-[#1F1F23] p-2.5">
                   <input
                     value={s.name}
+                    placeholder={preset.partyBanded ? 'Table for 9–12' : 'What is it called?'}
                     onChange={(e) => setServices(services.map((x, j) =>
                       j === i ? { ...x, name: e.target.value } : x))}
-                    className="min-w-[8rem] flex-1 rounded-md border border-[#1F1F23] bg-[#0A0A0B] px-2.5 py-1.5 text-sm text-[#F5F5F7] outline-none focus:border-[#1A8FD6]/50"
+                    className="min-w-[7rem] flex-1 rounded-md border border-[#1F1F23] bg-[#0A0A0B] px-2.5 py-1.5 text-sm text-[#F5F5F7] outline-none focus:border-[#1A8FD6]/50"
                   />
+                  {/* A restaurant's "services" ARE party bands, so a new row
+                      has to carry its range — a band added without one would
+                      silently match nothing and the agent would say a party of
+                      nine cannot be seated at all. */}
+                  {preset.partyBanded && (
+                    <span className="flex items-center gap-1 text-xs text-[#A1A1A8]">
+                      parties
+                      <input
+                        type="number" min={1} max={100} value={s.min}
+                        aria-label={`Smallest party for ${s.name || 'this option'}`}
+                        onChange={(e) => setServices(services.map((x, j) =>
+                          j === i ? { ...x, min: Math.max(1, Number(e.target.value) || 1) } : x))}
+                        className="w-12 rounded-md border border-[#1F1F23] bg-[#0A0A0B] px-1.5 py-1.5 text-center text-sm text-[#F5F5F7] outline-none focus:border-[#1A8FD6]/50"
+                      />
+                      to
+                      <input
+                        type="number" min={1} max={100} value={s.max}
+                        aria-label={`Largest party for ${s.name || 'this option'}`}
+                        onChange={(e) => setServices(services.map((x, j) =>
+                          j === i ? { ...x, max: Math.max(1, Number(e.target.value) || 1) } : x))}
+                        className="w-12 rounded-md border border-[#1F1F23] bg-[#0A0A0B] px-1.5 py-1.5 text-center text-sm text-[#F5F5F7] outline-none focus:border-[#1A8FD6]/50"
+                      />
+                    </span>
+                  )}
                   <Select
-                    className="w-32"
-                    ariaLabel={`How long ${s.name} takes`}
+                    className="w-28"
+                    ariaLabel={`How long ${s.name || 'this option'} takes`}
                     value={String(s.duration)}
                     onChange={(v) => setServices(services.map((x, j) =>
                       j === i ? { ...x, duration: Number(v) } : x))}
-                    options={[15, 30, 45, 60, 90, 120, 180, 240].map((m) => ({
+                    options={DURATIONS.map((m) => ({
                       value: String(m),
                       label: m >= 60 ? `${m / 60} hr${m > 60 ? 's' : ''}` : `${m} min`,
                     }))}
                   />
                   <Select
-                    className="w-36"
-                    ariaLabel={`Turnaround after ${s.name}`}
+                    className={preset.partyBanded ? 'w-32' : 'w-40'}
+                    ariaLabel={`Turnaround after ${s.name || 'this option'}`}
                     value={String(s.buffer)}
                     onChange={(v) => setServices(services.map((x, j) =>
                       j === i ? { ...x, buffer: Number(v) } : x))}
-                    options={[0, 5, 10, 15, 30].map((m) => ({
+                    options={[0, 5, 10, 15, 30, 60].map((m) => ({
                       value: String(m),
-                      label: m === 0 ? 'No turnaround' : `+${m} min after`,
+                      label: m === 0
+                        ? (preset.partyBanded ? 'No gap' : 'No turnaround')
+                        : `+${m} min${preset.partyBanded ? '' : ' after'}`,
                     }))}
                   />
+                  <button
+                    onClick={() => setServices(services.filter((_, j) => j !== i))}
+                    disabled={services.length === 1}
+                    // The last one cannot go: a merchant with no services has
+                    // nothing for the agent to work out a duration from.
+                    title={services.length === 1
+                      ? 'Keep at least one — it is what sets how long a booking lasts.'
+                      : `Remove ${s.name || 'this one'}`}
+                    aria-label={`Remove ${s.name || 'this one'}`}
+                    className="rounded-md p-1.5 text-[#6B6B73] transition-colors hover:text-[#E5484D] disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:text-[#6B6B73]"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
                 </div>
               ))}
             </div>
+
+            <button
+              onClick={() => setServices([...services, {
+                name: '',
+                // Longest of what they already have, since a merchant adding
+                // a row is usually adding a bigger package rather than a
+                // shorter one.
+                duration: Math.max(...services.map((s) => s.duration), 30),
+                buffer: services[services.length - 1]?.buffer ?? 0,
+                min: preset.partyBanded
+                  ? Math.max(...services.map((s) => s.max)) + 1 : 1,
+                max: preset.partyBanded
+                  ? Math.max(...services.map((s) => s.max)) + 4 : 1,
+              }])}
+              disabled={services.length >= 20}
+              className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-dashed border-[#1F1F23] px-3 py-2 text-xs text-[#A1A1A8] transition-colors hover:border-[#1A8FD6]/40 hover:text-[#F5F5F7] disabled:opacity-40"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              {preset.partyBanded ? 'Add another party size' : 'Add another'}
+            </button>
+
+            {services.some((s) => !s.name.trim()) && (
+              <p className="mt-2 text-xs text-[#6B6B73]">
+                Give every line a name — it is what the agent says out loud.
+              </p>
+            )}
           </Question>
         )}
 
