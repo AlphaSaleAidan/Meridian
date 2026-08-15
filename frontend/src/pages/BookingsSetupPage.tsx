@@ -600,6 +600,8 @@ function IntegrationsCard({
   const [copied, setCopied] = useState(false)
   const [error, setError] = useState('')
 
+  const otherConnections = connections.filter((c) => c.provider !== 'square_appointments')
+
   const connectIcs = async () => {
     if (!icsUrl.trim()) return
     setBusy(true)
@@ -624,9 +626,12 @@ function IntegrationsCard({
       subtitle="Connect your existing calendar so the phone agent never books over something you've already committed to."
       icon={Link2}
     >
-      {connections.length > 0 && (
+      {/* Square is deliberately excluded: SquarePanel below renders its own
+          status row with the service mapping, so listing it here too showed
+          the merchant "Square Appointments — Connected" twice in a row. */}
+      {otherConnections.length > 0 && (
         <ul className="mb-4 divide-y divide-[#1F1F23] rounded-lg border border-[#1F1F23]">
-          {connections.map((c) => (
+          {otherConnections.map((c) => (
             <li key={c.id} className="flex items-center justify-between px-3 py-2.5">
               <div className="min-w-0">
                 <span className="text-sm text-[#F5F5F7]">
