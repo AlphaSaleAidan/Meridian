@@ -20,6 +20,7 @@
  */
 import { AlertTriangle, Car, MapPin, Navigation } from 'lucide-react'
 import type { Booking } from '@/lib/bookings-api'
+import RouteMap from '@/components/RouteMap'
 
 export interface Stop {
   booking: Booking
@@ -140,8 +141,17 @@ export default function RouteDay({
         />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)]">
-        <RouteMap stops={ordered} origin={origin} />
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)]">
+        <RouteMap
+          height={340}
+          origin={{ lat: origin.lat, lng: origin.lng, label: origin.label }}
+          stops={ordered.map((s) => ({
+            lat: s.lat,
+            lng: s.lng,
+            label: s.booking.customerName,
+            sub: `${fmt(s.booking.startsAt)} · ${s.address}`,
+          }))}
+        />
 
         <ol className="space-y-0">
           <li className="flex items-center gap-3 py-1.5">
@@ -202,82 +212,6 @@ export default function RouteDay({
         tight leg as tighter than it looks. Connecting a routing provider
         replaces these with real ones.
       </p>
-    </div>
-  )
-}
-
-/**
- * The stops plotted against each other, normalised to their own bounding box.
- *
- * No map tiles on purpose: the shape of the run is what an owner reads at a
- * glance — a tight cluster or a hopeless zigzag — and that survives without
- * streets, without a network request, and without a maps bill.
- */
-function RouteMap({ stops, origin }: { stops: Stop[]; origin: RouteOrigin }) {
-  const points = [origin, ...stops]
-  const lats = points.map((p) => p.lat)
-  const lngs = points.map((p) => p.lng)
-  const minLat = Math.min(...lats)
-  const maxLat = Math.max(...lats)
-  const minLng = Math.min(...lngs)
-  const maxLng = Math.max(...lngs)
-  const spanLat = Math.max(maxLat - minLat, 0.004)
-  const spanLng = Math.max(maxLng - minLng, 0.004)
-  const pad = 26
-  const W = 340
-  const H = 300
-
-  const x = (lng: number) => pad + ((lng - minLng) / spanLng) * (W - pad * 2)
-  // Latitude increases northward; SVG y increases downward.
-  const y = (lat: number) => H - pad - ((lat - minLat) / spanLat) * (H - pad * 2)
-
-  const path = points.map((p, i) =>
-    `${i === 0 ? 'M' : 'L'} ${x(p.lng).toFixed(1)} ${y(p.lat).toFixed(1)}`).join(' ')
-
-  return (
-    <div className="rounded-lg border border-[#1F1F23] bg-[#0E0E11] p-2">
-      <svg
-        viewBox={`0 0 ${W} ${H}`}
-        className="h-auto w-full"
-        role="img"
-        aria-label={`Route map with ${stops.length} stops`}
-      >
-        <defs>
-          <pattern id="rd-grid" width="34" height="34" patternUnits="userSpaceOnUse">
-            <path d="M 34 0 L 0 0 0 34" fill="none" stroke="#1F1F23" strokeWidth="1" />
-          </pattern>
-        </defs>
-        <rect width={W} height={H} fill="url(#rd-grid)" />
-
-        <path
-          d={path}
-          fill="none"
-          stroke="#1A8FD6"
-          strokeWidth="1.5"
-          strokeDasharray="4 3"
-          strokeLinejoin="round"
-          opacity="0.8"
-        />
-
-        <circle cx={x(origin.lng)} cy={y(origin.lat)} r="5"
-                fill="#0E0E11" stroke="#A1A1A8" strokeWidth="1.5" />
-
-        {stops.map((s, i) => (
-          <g key={s.booking.id}>
-            <circle cx={x(s.lng)} cy={y(s.lat)} r="10"
-                    fill="#1A8FD6" fillOpacity="0.18" stroke="#1A8FD6" strokeWidth="1.5" />
-            <text
-              x={x(s.lng)} y={y(s.lat) + 3.5}
-              textAnchor="middle"
-              fontSize="10"
-              fontFamily="ui-monospace, monospace"
-              fill="#8dcef2"
-            >
-              {i + 1}
-            </text>
-          </g>
-        ))}
-      </svg>
     </div>
   )
 }
