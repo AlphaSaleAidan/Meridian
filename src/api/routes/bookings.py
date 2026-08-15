@@ -411,6 +411,12 @@ async def create_booking(body: BookingCreate,
     except BookingStoreError as e:
         logger.error("portal booking failed: %s", e)
         raise HTTPException(502, "could not save the booking")
+
+    # Mirror it into the merchant's own calendar, exactly as a phone booking
+    # is. A walk-in typed at the host stand that never reaches their Square
+    # calendar means the owner has to check two places all evening.
+    from src.services.booking_agent import _spawn_push
+    _spawn_push(body.merchant_id, row)
     return {"booking": row}
 
 
@@ -456,6 +462,13 @@ async def update_booking(booking_id: str, body: BookingUpdate,
         row = await store.update_booking(booking_id, fields)
     except SlotTaken:
         raise HTTPException(409, "that time is already taken on this resource")
+
+    # A booking that stops occupying the table has to stop occupying it in the
+    # merchant's calendar too, or their staff keep holding it.
+    if body.status in ("cancelled", "no_show"):
+        from src.services.booking_agent import _spawn_withdraw
+        _spawn_withdraw(row.get("merchant_id") or "", row)
+
     return {"booking": row}
 
 

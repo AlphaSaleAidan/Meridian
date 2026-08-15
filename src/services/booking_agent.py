@@ -371,6 +371,10 @@ async def handle_cancel(args: dict, setup: be.MerchantBookingSetup,
 
     await store.cancel_booking(str(row["id"]), reason="cancelled by caller on the phone")
 
+    # Take it off the merchant's own calendar too, or their staff keep holding
+    # a table for someone who is not coming.
+    _spawn_withdraw(setup.merchant_id, row)
+
     # The freed slot is worth more in the next ten minutes than at any later
     # point, so recovery starts before the caller has hung up. Fire-and-forget:
     # the cancellation is already done and must not depend on this.
@@ -379,6 +383,28 @@ async def handle_cancel(args: dict, setup: be.MerchantBookingSetup,
     start = be._parse_ts(row.get("starts_at"))
     when = be._speak_time(start.astimezone(setup.tz)) if start else "that time"
     return f"Done — your {noun} at {when} is cancelled. Anything else I can help with?"
+
+
+def _spawn_withdraw(merchant_id: str, row: dict) -> None:
+    """Take a cancelled booking back off the merchant's own calendar.
+
+    Same fire-and-forget contract as _spawn_push: the cancellation is already
+    committed, and a stale copy in their calendar must never turn into an
+    error the caller hears.
+    """
+    import asyncio
+
+    async def _run():
+        try:
+            from src.services.booking_sync import withdraw_booking
+            await withdraw_booking(merchant_id, row)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("background booking withdraw failed: %s", e)
+
+    try:
+        asyncio.get_running_loop().create_task(_run())
+    except RuntimeError:
+        pass
 
 
 def _spawn_recovery(merchant_id: str, cancelled: dict) -> None:

@@ -310,6 +310,27 @@ async def test_cancel_by_caller_number_when_unambiguous(store):
 
 
 @pytest.mark.asyncio
+async def test_cancel_also_takes_it_off_the_merchants_calendar(store, monkeypatch):
+    """The original bug was not a broken withdraw — it was that NOTHING CALLED
+    the withdraw. Both adapters implemented cancel_booking and no code path
+    ever reached it, so a phone cancellation left the guest sitting on the
+    shop's Square calendar and staff held the table. This asserts the wiring,
+    which is the part that was missing."""
+    withdrawn: list[tuple[str, str]] = []
+    monkeypatch.setattr(
+        ba, "_spawn_withdraw",
+        lambda merchant_id, row: withdrawn.append((merchant_id, row["id"])),
+    )
+    store.bookings.append({
+        "id": "bk-w", "confirmation_code": "WITH01", "party_size": 2,
+        "starts_at": "2026-09-14T18:00:00+00:00",
+        "ends_at": "2026-09-14T19:00:00+00:00",
+    })
+    await ba.handle_cancel({"confirmation_code": "WITH01"}, _setup())
+    assert withdrawn == [("m1", "bk-w")]
+
+
+@pytest.mark.asyncio
 async def test_lookup_reads_back_day_and_time(store):
     store.bookings.append({
         "id": "bk-1", "confirmation_code": "AAA111", "party_size": 4,

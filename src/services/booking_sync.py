@@ -151,6 +151,56 @@ async def push_booking(merchant_id: str, booking: dict) -> None:
                 logger.warning("could not record provider ref: %s", e)
 
 
+async def withdraw_booking(merchant_id: str, booking: dict) -> bool:
+    """Remove a cancelled booking from the merchant's own calendar.
+
+    THE COUNTERPART TO push_booking, and its absence was a real cost to
+    merchants: we mirrored bookings out and then never took them back. A
+    caller who cancelled by phone stayed on the shop's Square calendar for
+    ever, so staff held a table for someone who was not coming and the owner
+    had to go and delete it by hand — our platform making their day longer,
+    which is the one thing it must not do.
+
+    Best-effort, like the push. A booking IS cancelled in our database before
+    this runs; failing to clean up their copy is a stale calendar entry, not
+    an uncancelled booking, and must never be reported to the caller as a
+    failure to cancel.
+    """
+    provider_key = (booking.get("provider") or "").strip()
+    external_id = (booking.get("provider_booking_id") or "").strip()
+    # Nothing was ever pushed — there is nothing to withdraw.
+    if not provider_key or not external_id:
+        return False
+
+    provider = get_provider(provider_key)
+    if not provider or not provider.capabilities.cancel_booking:
+        return False
+
+    store = get_booking_store()
+    try:
+        connections = await store.list_connections(merchant_id)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("could not list connections for withdraw: %s", e)
+        return False
+
+    connection = next(
+        (c for c in connections or []
+         if c.get("provider") == provider_key
+         and (c.get("status") or "") == "connected"),
+        None,
+    )
+    if not connection:
+        return False
+
+    try:
+        return bool(await provider.cancel_booking(connection, external_id))
+    except Exception as e:  # noqa: BLE001
+        await _mark_error(connection, f"withdraw failed: {e}")
+        logger.warning("booking withdraw failed for %s/%s: %s",
+                       merchant_id, provider_key, e)
+        return False
+
+
 async def _mark_ok(connection: dict) -> None:
     from src.db import get_db
     try:

@@ -2,9 +2,15 @@
  * Today's book — the screen a host or a barber actually stands in front of.
  *
  * Optimised for one question asked fifty times a shift: who is coming, and
- * when. Everything else is secondary. The list is chronological, the next
- * arrival is marked, and the three status actions (seat, complete, no-show)
- * are one tap each rather than buried in a menu.
+ * when. Everything else is secondary. The list is chronological and the next
+ * arrival is marked.
+ *
+ * THE DAILY COST OF THIS SCREEN IS ONE TAP PER GUEST. That is the budget it
+ * is designed against, because a booking system that costs a host more time
+ * than a paper book is one they will stop using by the second busy Friday.
+ * Every row therefore offers exactly one primary action — the guest turned up
+ * — and imported busy time from the merchant's own tools is shown here so
+ * they never need a second screen open to know what tonight looks like.
  *
  * Times are rendered in the MERCHANT's timezone, which the server sends back
  * with the data. The browser's own timezone is never used: an owner checking
@@ -12,10 +18,9 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  AlertCircle, CalendarCheck, CalendarDays, CheckCircle2, ChevronLeft,
-  ChevronRight, Clock, Phone, Plus, UserX, Users,
+  AlertCircle, CalendarDays, CheckCircle2, ChevronLeft,
+  ChevronRight, Clock, Phone, Plus, Users,
 } from 'lucide-react'
-import { SegmentedControl } from '@/components/ui/SegmentedControl'
 import { useOrgId } from '@/hooks/useOrg'
 import {
   bookingsApi, BookingsApiError,
@@ -38,23 +43,90 @@ const PROVIDER_LABEL: Record<string, string> = {
   ics_feed: 'Calendar feed',
 }
 
-/** Statuses a host can still act on. Everything else is history. */
-const LIVE_STATUSES: BookingStatus[] = ['confirmed', 'seated', 'no_show']
-
-/** The tints travel with the sliding indicator, so seating a guest visibly
- *  moves from blue to teal instead of blinking to a new colour. */
-const STATUS_SEGMENTS = [
-  { value: 'confirmed' as const, label: 'Booked', Icon: CalendarCheck, tint: '#1A8FD6' },
-  { value: 'seated' as const, label: 'Here', Icon: CheckCircle2, tint: '#17C5B0' },
-  { value: 'no_show' as const, label: 'No-show', Icon: UserX, tint: '#E5484D' },
-]
-
 const STATUS_LABEL: Record<BookingStatus, string> = {
   confirmed: 'Booked',
   seated: 'Here',
   completed: 'Done',
   cancelled: 'Cancelled',
   no_show: 'No-show',
+}
+
+/**
+ * The right-hand side of a booking row.
+ *
+ * A host's whole interaction with tonight's book is: the guest walks in, tap
+ * once. That is the design target — one tap per guest and nothing else — so
+ * this shows exactly one primary action at a time.
+ *
+ * No-show is deliberately NOT offered until the booking time has passed.
+ * Before then it is not a thing anyone means to press, and next to the arrival
+ * button it is a mis-tap that tells a waiting guest their table is gone.
+ *
+ * Every terminal state keeps an Undo, because these get pressed one-handed
+ * while carrying menus.
+ */
+function RowAction({ booking, onSet }: {
+  booking: Booking
+  onSet: (status: BookingStatus) => void
+}) {
+  const started = new Date(booking.startsAt).getTime() <= Date.now()
+
+  if (booking.status === 'confirmed') {
+    return (
+      <div className="flex items-center gap-1.5">
+        <button
+          onClick={() => onSet('seated')}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-[#17C5B0]/40 bg-[#17C5B0]/10 px-3 py-1.5 text-xs font-medium text-[#17C5B0] transition-colors hover:bg-[#17C5B0]/20"
+        >
+          <CheckCircle2 className="h-3.5 w-3.5" />
+          They're here
+        </button>
+        {started && (
+          <button
+            onClick={() => onSet('no_show')}
+            className="rounded-lg border border-transparent px-2 py-1.5 text-xs text-[#6B6B73] transition-colors hover:border-[#E5484D]/30 hover:text-[#E5484D]"
+          >
+            No-show
+          </button>
+        )}
+      </div>
+    )
+  }
+
+  if (booking.status === 'seated') {
+    return (
+      <div className="flex items-center gap-1.5">
+        <span className="inline-flex items-center gap-1 rounded border border-[#17C5B0]/30 bg-[#17C5B0]/10 px-2 py-0.5 text-[11px] font-medium text-[#17C5B0]">
+          <CheckCircle2 className="h-3 w-3" />
+          Seated
+        </span>
+        <button
+          onClick={() => onSet('completed')}
+          className="rounded-lg border border-[#1F1F23] px-2.5 py-1.5 text-xs text-[#A1A1A8] transition-colors hover:text-[#F5F5F7]"
+        >
+          Done
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <span
+        className={`rounded border px-2 py-0.5 text-[11px] font-medium ${STATUS_STYLES[booking.status]}`}
+      >
+        {STATUS_LABEL[booking.status]}
+      </span>
+      {booking.status !== 'cancelled' && (
+        <button
+          onClick={() => onSet('confirmed')}
+          className="rounded-lg px-2 py-1.5 text-xs text-[#6B6B73] transition-colors hover:text-[#F5F5F7]"
+        >
+          Undo
+        </button>
+      )}
+    </div>
+  )
 }
 
 function toDayKey(d: Date): string {
@@ -332,34 +404,11 @@ export default function BookingsPage() {
                   )}
                 </div>
 
-                {/* Live rows get ONE control that both shows the state and
-                    sets it. A finished row is no longer actionable, so it
-                    drops back to a plain chip rather than offering buttons
-                    that would silently reopen a closed table. */}
-                {LIVE_STATUSES.includes(b.status) ? (
-                  <div className="flex items-center gap-1.5">
-                    <SegmentedControl
-                      ariaLabel={`Status for ${b.customerName}`}
-                      value={b.status}
-                      segments={STATUS_SEGMENTS}
-                      onChange={(next) => setStatus(b, next)}
-                    />
-                    {b.status === 'seated' && (
-                      <button
-                        onClick={() => setStatus(b, 'completed')}
-                        className="rounded-md border border-[#1F1F23] px-2 py-1 text-xs text-[#A1A1A8] transition-colors hover:text-[#F5F5F7]"
-                      >
-                        Done
-                      </button>
-                    )}
-                  </div>
-                ) : (
-                  <span
-                    className={`rounded border px-2 py-0.5 text-[11px] font-medium ${STATUS_STYLES[b.status]}`}
-                  >
-                    {STATUS_LABEL[b.status]}
-                  </span>
-                )}
+                {/* ONE action per row, because there is only one thing a host
+                    does with a booking: mark that the guest turned up.
+                    Everything in this list is already booked, so a "Booked"
+                    control would be a button that changes nothing. */}
+                <RowAction booking={b} onSet={(s) => setStatus(b, s)} />
               </div>
             </li>
           )})()
