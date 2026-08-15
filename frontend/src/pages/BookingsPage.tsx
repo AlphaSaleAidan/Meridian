@@ -12,13 +12,14 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  AlertCircle, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight,
-  Clock, Phone, Plus, UserX, Users,
+  AlertCircle, CalendarCheck, CalendarDays, CheckCircle2, ChevronLeft,
+  ChevronRight, Clock, Phone, Plus, UserX, Users,
 } from 'lucide-react'
+import { SegmentedControl } from '@/components/ui/SegmentedControl'
 import { useOrgId } from '@/hooks/useOrg'
 import {
   bookingsApi, BookingsApiError,
-  type Booking, type BookingStatus, type Resource, type WaitlistEntry,
+  type Booking, type BookingStatus, type BusyBlock, type Resource, type WaitlistEntry,
 } from '@/lib/bookings-api'
 
 const STATUS_STYLES: Record<BookingStatus, string> = {
@@ -28,6 +29,25 @@ const STATUS_STYLES: Record<BookingStatus, string> = {
   cancelled: 'bg-[#A1A1A8]/10 text-[#A1A1A8] border-[#A1A1A8]/25',
   no_show: 'bg-[#E5484D]/10 text-[#E5484D] border-[#E5484D]/30',
 }
+
+/** Imported busy time says which tool it came from, so an owner who sees a
+ *  block they don't recognise knows where to go and change it. */
+const PROVIDER_LABEL: Record<string, string> = {
+  square_appointments: 'Square',
+  google_calendar: 'Google Calendar',
+  ics_feed: 'Calendar feed',
+}
+
+/** Statuses a host can still act on. Everything else is history. */
+const LIVE_STATUSES: BookingStatus[] = ['confirmed', 'seated', 'no_show']
+
+/** The tints travel with the sliding indicator, so seating a guest visibly
+ *  moves from blue to teal instead of blinking to a new colour. */
+const STATUS_SEGMENTS = [
+  { value: 'confirmed' as const, label: 'Booked', Icon: CalendarCheck, tint: '#1A8FD6' },
+  { value: 'seated' as const, label: 'Here', Icon: CheckCircle2, tint: '#17C5B0' },
+  { value: 'no_show' as const, label: 'No-show', Icon: UserX, tint: '#E5484D' },
+]
 
 const STATUS_LABEL: Record<BookingStatus, string> = {
   confirmed: 'Booked',
@@ -48,6 +68,7 @@ export default function BookingsPage() {
   const [day, setDay] = useState(() => toDayKey(new Date()))
   const [bookings, setBookings] = useState<Booking[]>([])
   const [resources, setResources] = useState<Resource[]>([])
+  const [busy, setBusy] = useState<BusyBlock[]>([])
   const [timezone, setTimezone] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -62,18 +83,18 @@ export default function BookingsPage() {
       // the night before and runs past midnight still appears.
       const start = new Date(`${day}T00:00:00`)
       const end = new Date(start.getTime() + 24 * 3600 * 1000)
-      const [rows, res, avail] = await Promise.all([
-        bookingsApi.listBookings(
-          merchantId,
-          new Date(start.getTime() - 12 * 3600 * 1000).toISOString(),
-          end.toISOString(),
-          true,
-        ),
+      const from = new Date(start.getTime() - 12 * 3600 * 1000).toISOString()
+      const [rows, res, avail, busyRows] = await Promise.all([
+        bookingsApi.listBookings(merchantId, from, end.toISOString(), true),
         bookingsApi.listResources(merchantId),
         bookingsApi.availability(merchantId, day, 1).catch(() => null),
+        // Imported from the merchant's other tools. Failing softly on purpose:
+        // a calendar we cannot reach must not blank out tonight's real book.
+        bookingsApi.listBusy(merchantId, from, end.toISOString()).catch(() => []),
       ])
       setBookings(rows)
       setResources(res)
+      setBusy(busyRows)
       if (avail) setTimezone(avail.timezone)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not load bookings')
@@ -118,6 +139,32 @@ export default function BookingsPage() {
       })
       .sort((a, b) => a.startsAt.localeCompare(b.startsAt))
   }, [bookings, day, timezone])
+
+  /** One timeline, ours and theirs, in time order.
+   *
+   *  A host asking "what's happening tonight" does not care which system a
+   *  commitment lives in. Showing only our own rows makes the screen quietly
+   *  wrong on exactly the evenings that matter — the ones with a private
+   *  event booked in the other tool. */
+  const timeline = useMemo(() => {
+    const items: Array<
+      | { kind: 'booking'; at: string; booking: Booking }
+      | { kind: 'busy'; at: string; block: BusyBlock }
+    > = dayBookings.map((b) => ({ kind: 'booking', at: b.startsAt, booking: b }))
+
+    for (const block of busy) {
+      try {
+        const local = new Intl.DateTimeFormat('en-CA', {
+          year: 'numeric', month: '2-digit', day: '2-digit',
+          timeZone: timezone || undefined,
+        }).format(new Date(block.startsAt))
+        if (local === day) items.push({ kind: 'busy', at: block.startsAt, block })
+      } catch {
+        /* An unparseable imported row is dropped rather than shown wrong. */
+      }
+    }
+    return items.sort((a, b) => a.at.localeCompare(b.at))
+  }, [dayBookings, busy, day, timezone])
 
   const live = dayBookings.filter(
     (b) => b.status !== 'cancelled' && b.status !== 'no_show',
@@ -209,11 +256,27 @@ export default function BookingsPage() {
             />
           ))}
         </div>
-      ) : dayBookings.length === 0 ? (
+      ) : timeline.length === 0 ? (
         <EmptyDay onAdd={() => setShowAdd(true)} />
       ) : (
         <ul className="space-y-2">
-          {dayBookings.map((b) => (
+          {timeline.map((item) => item.kind === 'busy' ? (
+            <li
+              key={item.block.id}
+              className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-dashed border-[#1F1F23] bg-[#0E0E11] px-4 py-2.5"
+            >
+              <div className="w-20 shrink-0 font-mono text-sm text-[#A1A1A8]">
+                {fmt(item.block.startsAt)}
+              </div>
+              <div className="min-w-0 flex-1 truncate text-sm text-[#A1A1A8]">
+                {item.block.summary || 'Busy'}
+              </div>
+              <span className="rounded border border-[#1F1F23] px-2 py-0.5 text-[11px] text-[#6B6B73]">
+                {PROVIDER_LABEL[item.block.provider] || 'Your calendar'}
+              </span>
+            </li>
+          ) : (
+            (() => { const b = item.booking; return (
             <li
               key={b.id}
               className={`rounded-lg border bg-[#111113] px-4 py-3 transition-colors ${
@@ -269,40 +332,37 @@ export default function BookingsPage() {
                   )}
                 </div>
 
-                <span
-                  className={`rounded border px-2 py-0.5 text-[11px] font-medium ${STATUS_STYLES[b.status]}`}
-                >
-                  {STATUS_LABEL[b.status]}
-                </span>
-
-                {b.status === 'confirmed' && (
+                {/* Live rows get ONE control that both shows the state and
+                    sets it. A finished row is no longer actionable, so it
+                    drops back to a plain chip rather than offering buttons
+                    that would silently reopen a closed table. */}
+                {LIVE_STATUSES.includes(b.status) ? (
                   <div className="flex items-center gap-1.5">
-                    <button
-                      onClick={() => setStatus(b, 'seated')}
-                      className="inline-flex items-center gap-1 rounded-md border border-[#17C5B0]/30 px-2 py-1 text-xs text-[#17C5B0] hover:bg-[#17C5B0]/10 transition-colors"
-                    >
-                      <CheckCircle2 className="w-3 h-3" />
-                      Here
-                    </button>
-                    <button
-                      onClick={() => setStatus(b, 'no_show')}
-                      className="inline-flex items-center gap-1 rounded-md border border-[#1F1F23] px-2 py-1 text-xs text-[#A1A1A8] hover:border-[#E5484D]/30 hover:text-[#E5484D] transition-colors"
-                    >
-                      <UserX className="w-3 h-3" />
-                      No-show
-                    </button>
+                    <SegmentedControl
+                      ariaLabel={`Status for ${b.customerName}`}
+                      value={b.status}
+                      segments={STATUS_SEGMENTS}
+                      onChange={(next) => setStatus(b, next)}
+                    />
+                    {b.status === 'seated' && (
+                      <button
+                        onClick={() => setStatus(b, 'completed')}
+                        className="rounded-md border border-[#1F1F23] px-2 py-1 text-xs text-[#A1A1A8] transition-colors hover:text-[#F5F5F7]"
+                      >
+                        Done
+                      </button>
+                    )}
                   </div>
-                )}
-                {b.status === 'seated' && (
-                  <button
-                    onClick={() => setStatus(b, 'completed')}
-                    className="rounded-md border border-[#1F1F23] px-2 py-1 text-xs text-[#A1A1A8] hover:text-[#F5F5F7] transition-colors"
+                ) : (
+                  <span
+                    className={`rounded border px-2 py-0.5 text-[11px] font-medium ${STATUS_STYLES[b.status]}`}
                   >
-                    Done
-                  </button>
+                    {STATUS_LABEL[b.status]}
+                  </span>
                 )}
               </div>
             </li>
+          )})()
           ))}
         </ul>
       )}

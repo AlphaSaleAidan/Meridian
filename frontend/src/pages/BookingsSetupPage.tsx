@@ -9,12 +9,14 @@
  */
 import { useCallback, useEffect, useState } from 'react'
 import {
-  AlertCircle, Armchair, Calendar, Check, Copy, Info, Link2, Plus, Trash2,
+  AlertCircle, Armchair, Calendar, Check, Copy, ExternalLink, Info, Link2,
+  MessageSquare, Plus, Trash2,
 } from 'lucide-react'
+import { Select } from '@/components/ui/Select'
 import { useOrgId } from '@/hooks/useOrg'
 import {
   bookingsApi,
-  type AvailableProvider, type Connection, type HoursRow,
+  type AvailableProvider, type BookingLink, type Connection, type HoursRow,
   type Resource, type ResourceKind, type Service, type SquareOptions,
   type UnavailableTool,
 } from '@/lib/bookings-api'
@@ -94,6 +96,10 @@ export default function BookingsSetupPage() {
         </div>
       )}
 
+      {/* First, because it is the fastest thing a merchant can switch on:
+          it needs one URL and no resources, services or hours at all. */}
+      <BookingLinkCard merchantId={merchantId} />
+
       <ResourcesCard
         merchantId={merchantId}
         resources={resources}
@@ -135,6 +141,129 @@ function Card({ title, subtitle, icon: Icon, children }: {
       </div>
       {children}
     </section>
+  )
+}
+
+function BookingLinkCard({ merchantId }: { merchantId: string }) {
+  const [link, setLink] = useState<BookingLink | null>(null)
+  const [url, setUrl] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [error, setError] = useState('')
+
+  const load = useCallback(async () => {
+    if (!merchantId) return
+    try {
+      const l = await bookingsApi.bookingLink(merchantId)
+      setLink(l)
+      setUrl(l.url)
+    } catch {
+      /* The rest of the page is still usable without this card. */
+    }
+  }, [merchantId])
+
+  useEffect(() => { load() }, [load])
+
+  const save = async () => {
+    setBusy(true)
+    setError('')
+    try {
+      await bookingsApi.saveBookingLink(merchantId, url.trim())
+      setSaved(true)
+      await load()
+      window.setTimeout(() => setSaved(false), 2000)
+    } catch {
+      setError('That does not look like a web address.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const on = !!link?.url
+  // Rounded to whole percent: a merchant reading "71%" and a merchant reading
+  // "70.6%" make the same decision, and the second one looks like a lie.
+  const openRate = link && link.sent > 0
+    ? Math.round((link.opened / link.sent) * 100)
+    : null
+
+  return (
+    <Card
+      title="If you already take bookings on your own website"
+      subtitle="We text the caller your booking link instead of reading the address out loud. Leave this empty if you'd rather we took the booking ourselves."
+      icon={MessageSquare}
+    >
+      <div className="flex flex-wrap items-end gap-2">
+        <div className="min-w-[16rem] flex-1 space-y-1">
+          <span className="block text-xs uppercase tracking-wide text-[#A1A1A8]">
+            Your booking page
+          </span>
+          <input
+            value={url}
+            onChange={(e) => { setUrl(e.target.value); setSaved(false) }}
+            placeholder="mapletandoor.ca/reservations"
+            className="w-full rounded-lg border border-[#1F1F23] bg-[#0A0A0B] px-3 py-2 text-sm text-[#F5F5F7] outline-none focus:border-[#1A8FD6]/50"
+          />
+        </div>
+        <button
+          onClick={save}
+          disabled={busy || url.trim() === (link?.url || '')}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-[#1F1F23] px-3 py-2 text-sm text-[#F5F5F7] transition-colors hover:border-[#1A8FD6]/40 disabled:opacity-40"
+        >
+          {saved ? <Check className="h-4 w-4 text-[#17C5B0]" /> : null}
+          {saved ? 'Saved' : 'Save'}
+        </button>
+      </div>
+
+      {error && <p className="mt-2 text-xs text-[#E5484D]">{error}</p>}
+
+      {link?.inherited && (
+        <p className="mt-2 flex items-start gap-1.5 text-xs text-[#A1A1A8]">
+          <Info className="mt-px h-3.5 w-3.5 shrink-0" />
+          This came from your setup questionnaire. Save it here to confirm it,
+          or change it.
+        </p>
+      )}
+
+      {on && (
+        <div className="mt-4 rounded-lg border border-[#1F1F23] bg-[#0E0E11] p-3">
+          <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1">
+            <span className="text-sm text-[#F5F5F7]">
+              <span className="font-semibold">{link.sent}</span>{' '}
+              <span className="text-[#A1A1A8]">texted</span>
+            </span>
+            <span className="text-sm text-[#F5F5F7]">
+              <span className="font-semibold text-[#17C5B0]">{link.opened}</span>{' '}
+              <span className="text-[#A1A1A8]">opened</span>
+              {openRate !== null && (
+                <span className="text-[#A1A1A8]"> · {openRate}%</span>
+              )}
+            </span>
+            {link.failed > 0 && (
+              <span className="text-sm text-[#A1A1A8]">
+                {link.failed} couldn't be delivered — usually a landline
+              </span>
+            )}
+          </div>
+          <p className="mt-2 text-xs text-[#A1A1A8]">
+            {link.sent === 0
+              ? 'Nothing texted yet. The next caller who asks about booking gets the link.'
+              : 'Opens are the only evidence you get that the agent produced a booking — the booking itself lands in your own system under the customer’s name.'}
+          </p>
+        </div>
+      )}
+
+      {on && (
+        <a
+          href={link.url}
+          target="_blank"
+          rel="noreferrer noopener"
+          className="mt-3 inline-flex items-center gap-1.5 text-xs text-[#1A8FD6] hover:underline"
+        >
+          <ExternalLink className="h-3.5 w-3.5" />
+          Open the page callers land on
+        </a>
+      )}
+    </Card>
   )
 }
 
@@ -205,18 +334,17 @@ function ResourcesCard({ merchantId, resources, onChanged }: {
             className="w-full rounded-lg border border-[#1F1F23] bg-[#0A0A0B] px-3 py-2 text-sm text-[#F5F5F7] outline-none focus:border-[#1A8FD6]/50"
           />
         </label>
-        <label className="space-y-1">
-          <span className="text-xs uppercase tracking-wide text-[#A1A1A8]">Type</span>
-          <select
+        <div className="w-36 space-y-1">
+          <span className="block text-xs uppercase tracking-wide text-[#A1A1A8]">Type</span>
+          <Select
+            ariaLabel="Type of thing being booked"
             value={kind}
-            onChange={(e) => setKind(e.target.value as ResourceKind)}
-            className="rounded-lg border border-[#1F1F23] bg-[#0A0A0B] px-3 py-2 text-sm text-[#F5F5F7] outline-none focus:border-[#1A8FD6]/50"
-          >
-            {Object.entries(KIND_LABEL).map(([k, label]) => (
-              <option key={k} value={k}>{label}</option>
-            ))}
-          </select>
-        </label>
+            onChange={(v) => setKind(v as ResourceKind)}
+            options={Object.entries(KIND_LABEL).map(([k, label]) => ({
+              value: k, label,
+            }))}
+          />
+        </div>
         {(kind === 'table' || kind === 'room') && (
           <label className="space-y-1">
             <span className="text-xs uppercase tracking-wide text-[#A1A1A8]">Seats</span>
@@ -534,36 +662,33 @@ function SquarePanel({ merchantId, connections, onChanged }: {
 
       {opts && opts.services.length > 0 && (
         <div className="flex flex-wrap items-end gap-2">
-          <label className="min-w-[9rem] flex-1 space-y-1">
-            <span className="text-xs uppercase tracking-wide text-[#A1A1A8]">
+          <div className="min-w-[9rem] flex-1 space-y-1">
+            <span className="block text-xs uppercase tracking-wide text-[#A1A1A8]">
               Book this service
             </span>
-            <select
+            <Select
+              ariaLabel="Square service to book"
               value={service}
-              onChange={(e) => { setService(e.target.value); setSaved(false) }}
-              className="w-full rounded-lg border border-[#1F1F23] bg-[#0A0A0B] px-3 py-2 text-sm text-[#F5F5F7] outline-none focus:border-[#1A8FD6]/50"
-            >
-              {opts.services.map((s) => (
-                <option key={s.serviceVariationId} value={s.serviceVariationId}>
-                  {s.name}{s.durationMinutes ? ` (${s.durationMinutes} min)` : ''}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="min-w-[8rem] flex-1 space-y-1">
-            <span className="text-xs uppercase tracking-wide text-[#A1A1A8]">With</span>
-            <select
+              onChange={(v) => { setService(v); setSaved(false) }}
+              options={opts.services.map((s) => ({
+                value: s.serviceVariationId,
+                label: s.name,
+                hint: s.durationMinutes ? `${s.durationMinutes} min` : undefined,
+              }))}
+            />
+          </div>
+          <div className="min-w-[8rem] flex-1 space-y-1">
+            <span className="block text-xs uppercase tracking-wide text-[#A1A1A8]">With</span>
+            <Select
+              ariaLabel="Staff member the booking is assigned to"
               value={member}
-              onChange={(e) => { setMember(e.target.value); setSaved(false) }}
-              className="w-full rounded-lg border border-[#1F1F23] bg-[#0A0A0B] px-3 py-2 text-sm text-[#F5F5F7] outline-none focus:border-[#1A8FD6]/50"
-            >
-              {opts.teamMembers.filter((t) => t.isBookable).map((t) => (
-                <option key={t.teamMemberId} value={t.teamMemberId}>
-                  {t.displayName || t.teamMemberId}
-                </option>
-              ))}
-            </select>
-          </label>
+              onChange={(v) => { setMember(v); setSaved(false) }}
+              options={opts.teamMembers.filter((t) => t.isBookable).map((t) => ({
+                value: t.teamMemberId,
+                label: t.displayName || t.teamMemberId,
+              }))}
+            />
+          </div>
           <button
             onClick={saveMapping}
             disabled={busy || !service || !member}

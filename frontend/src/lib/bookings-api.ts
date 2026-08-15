@@ -194,6 +194,25 @@ export interface SquareOptions {
   } | null
 }
 
+export interface BusyBlock {
+  id: string
+  startsAt: string
+  endsAt: string
+  summary?: string | null
+  /** Which connection it came from — 'square_appointments', 'ics_feed', … */
+  provider: string
+}
+
+export interface BookingLink {
+  url: string
+  /** True when the URL came from onboarding rather than this screen. */
+  inherited: boolean
+  mode: string
+  sent: number
+  opened: number
+  failed: number
+}
+
 export interface UnavailableTool {
   key: string
   label: string
@@ -533,6 +552,36 @@ export const bookingsApi = {
 
   async refreshSquare(merchantId: string) {
     return call(`/square/refresh/${merchantId}`, { method: 'POST' })
+  },
+
+  /** Time taken in the merchant's OTHER tools, so the book is one book. */
+  async listBusy(merchantId: string, startIso: string, endIso: string): Promise<BusyBlock[]> {
+    const r = await call<{ busy: any[] }>(`/busy/${merchantId}`, {
+      params: { start: startIso, end: endIso },
+    })
+    return (r.busy || []).map((b) => ({
+      id: b.id,
+      startsAt: b.starts_at,
+      endsAt: b.ends_at,
+      summary: b.summary ?? null,
+      provider: b.provider || '',
+    }))
+  },
+
+  async bookingLink(merchantId: string): Promise<BookingLink> {
+    const r = await call<any>(`/link/${merchantId}`)
+    return {
+      url: r.url || '',
+      inherited: !!r.inherited,
+      mode: r.mode || 'off',
+      sent: r.sent ?? 0,
+      opened: r.opened ?? 0,
+      failed: r.failed ?? 0,
+    }
+  },
+
+  async saveBookingLink(merchantId: string, url: string): Promise<{ url: string; mode: string }> {
+    return call(`/link/${merchantId}`, { method: 'POST', body: { url } })
   },
 
   async enableFeed(merchantId: string): Promise<string> {
