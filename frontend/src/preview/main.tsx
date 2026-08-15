@@ -18,7 +18,7 @@
 import { StrictMode, useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
-import { AlertTriangle, Info } from 'lucide-react'
+import { AlertTriangle, Info, LayoutDashboard } from 'lucide-react'
 import { AuthProvider } from '@/lib/auth'
 import BookingsPage from '@/pages/BookingsPage'
 import BookingsSetupPage from '@/pages/BookingsSetupPage'
@@ -28,7 +28,7 @@ import { flagsForMerchant } from '@/config/moduleFlags'
 import { ALL_PACKS, type NichePack } from '@/config/niches'
 import TradeVersions from './TradeVersions'
 import { BASE_LOCATION, configureForTrade, installFixtureApi } from './fixtureApi'
-import TradeOverview from '@/components/overview/TradeOverview'
+import TradeWorkspace from '@/components/overview/TradeWorkspace'
 import { bookingsApi, type Booking, type BusyBlock, type Resource } from '@/lib/bookings-api'
 import '@/index.css'
 
@@ -83,7 +83,8 @@ function Shell() {
       merchantPillars.filter((p) => !p.flag || flags[p.flag]),
       pack.pillarOrder,
     )[0]
-    setPillarPath(first?.path ?? '')
+    // Always land on the workspace — it is the app, not a destination.
+    setPillarPath('__home')
     setView(first?.segments[0]?.view ?? '')
   }, [pack])
 
@@ -143,20 +144,35 @@ function Shell() {
             <div className="text-xs text-[#6B6B73]">{pack.label}</div>
           </div>
           <nav className="space-y-0.5">
-            {pillars.map((p) => (
+            <button
+              onClick={() => setPillarPath('__home')}
+              className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors ${
+                pillarPath === '__home'
+                  ? 'bg-[#1A8FD6]/15 text-[#1A8FD6]'
+                  : 'text-[#F5F5F7] hover:bg-white/5'
+              }`}
+            >
+              <LayoutDashboard className="h-4 w-4 shrink-0" />
+              Today
+            </button>
+
+            <div className="pt-3 text-[10px] uppercase tracking-wide text-[#4A4A52]">
+              Everything else
+            </div>
+            {pillars.filter((p) => p.path !== '').map((p) => (
               <button
-                key={p.path || 'home'}
+                key={p.path}
                 onClick={() => {
                   setPillarPath(p.path)
                   setView(p.segments[0]?.view ?? '')
                 }}
-                className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm transition-colors ${
+                className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-1.5 text-left text-[13px] transition-colors ${
                   pillarPath === p.path
-                    ? 'bg-[#1A8FD6]/15 text-[#1A8FD6]'
-                    : 'text-[#A1A1A8] hover:bg-white/5 hover:text-[#F5F5F7]'
+                    ? 'bg-white/10 text-[#F5F5F7]'
+                    : 'text-[#6B6B73] hover:bg-white/5 hover:text-[#A1A1A8]'
                 }`}
               >
-                <p.icon className="h-4 w-4 shrink-0" />
+                <p.icon className="h-3.5 w-3.5 shrink-0" />
                 {p.label}
               </button>
             ))}
@@ -215,8 +231,12 @@ function Shell() {
                 ? <BookingsSetupPage key={`setup-${pack.key}-${runKey}`} />
                 : <BookingsPage key={`book-${pack.key}-${runKey}`} />)}
             </>
-          ) : active && active.path === '' ? (
-            <OverviewHost key={`ov-${pack.key}-${runKey}`} pack={pack} />
+          ) : pillarPath === '__home' ? (
+            <OverviewHost
+              key={`ov-${pack.key}-${runKey}`}
+              pack={pack}
+              shopName={SHOP[pack.key] || 'Preview Merchant'}
+            />
           ) : (
             <NotWired pillar={active} pack={pack} />
           )}
@@ -231,16 +251,18 @@ function Shell() {
  * numbers on it are derived from the day actually on the book rather than
  * written into a mock.
  */
-function OverviewHost({ pack }: { pack: NichePack }) {
+function OverviewHost({ pack, shopName }: { pack: NichePack; shopName: string }) {
   const [bookings, setBookings] = useState<Booking[]>([])
   const [resources, setResources] = useState<Resource[]>([])
   const [busy, setBusy] = useState<BusyBlock[]>([])
   const [timezone, setTimezone] = useState('')
+  const [day, setDay] = useState(() => {
+    const n = new Date()
+    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`
+  })
 
   useEffect(() => {
     if (!pack.booksAtAll) return
-    const now = new Date()
-    const day = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
     const start = new Date(`${day}T00:00:00`)
     const from = new Date(start.getTime() - 12 * 3600_000).toISOString()
     const to = new Date(start.getTime() + 24 * 3600_000).toISOString()
@@ -255,7 +277,7 @@ function OverviewHost({ pack }: { pack: NichePack }) {
       setBusy(bz)
       if (av) setTimezone(av.timezone)
     })
-  }, [pack])
+  }, [pack, day])
 
   const stops = bookings
     .filter((b) => b.serviceAddress && b.serviceLat != null && b.serviceLng != null)
@@ -266,13 +288,22 @@ function OverviewHost({ pack }: { pack: NichePack }) {
       lng: b.serviceLng as number,
     }))
 
+  const shiftDay = (delta: number) => {
+    const d = new Date(`${day}T12:00:00`)
+    d.setDate(d.getDate() + delta)
+    setDay(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`)
+  }
+
   return (
-    <TradeOverview
+    <TradeWorkspace
       pack={pack}
+      shopName={shopName}
       bookings={bookings}
       resources={resources}
       busy={busy}
       timezone={timezone}
+      day={day}
+      onShiftDay={shiftDay}
       stops={stops}
       origin={BASE_LOCATION}
     />

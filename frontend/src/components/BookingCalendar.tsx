@@ -58,13 +58,18 @@ function label(minutes: number): string {
 }
 
 export default function BookingCalendar({
-  bookings, resources, busy, timezone, onSelect,
+  bookings, resources, busy, timezone, onSelect, openMinutes,
 }: {
   bookings: Booking[]
   resources: Resource[]
   busy: BusyBlock[]
   timezone: string
   onSelect?: (booking: Booking) => void
+  /** The merchant's trading window, when the caller knows it. Without this the
+   *  grid spans only what is booked, so a shop open from nine with nothing
+   *  before noon appears to open at eleven — and the gaps listed elsewhere
+   *  refer to hours the grid does not draw. */
+  openMinutes?: [number, number]
 }) {
   const columns = useMemo(
     () => resources.filter((r) => r.active)
@@ -93,11 +98,15 @@ export default function BookingCalendar({
       const end = localMinutes(x.endsAt, timezone)
       ends.push(end <= starts[starts.length - 1] ? 24 * 60 : end)
     }
+    if (openMinutes) {
+      starts.push(openMinutes[0])
+      ends.push(openMinutes[1])
+    }
     if (!starts.length) return [9 * 60, 22 * 60]
     const lo = Math.max(0, Math.floor((Math.min(...starts) - 60) / 60) * 60)
     const hi = Math.min(24 * 60, Math.ceil((Math.max(...ends) + 60) / 60) * 60)
     return [lo, Math.max(hi, lo + 240)]
-  }, [bookings, busy, timezone])
+  }, [bookings, busy, timezone, openMinutes])
 
   const height = (dayEnd - dayStart) * PX_PER_MIN
   const hourMarks = useMemo(() => {

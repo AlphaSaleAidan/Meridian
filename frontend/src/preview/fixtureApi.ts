@@ -167,13 +167,24 @@ function overlaps(a: Row, startMs: number, endMs: number): boolean {
 
 const HOLDING = new Set(['confirmed', 'seated', 'offered'])
 
+/**
+ * What occupies a slot when PLACING a booking.
+ *
+ * Wider than HOLDING on purpose. The real exclusion constraint excludes
+ * 'completed' — correctly, because a finished booking's time has passed and
+ * the resource is free again. But seeding a whole day in one go places
+ * afternoon bookings while morning ones are already marked completed, and
+ * without this a chair ends up with two people in it at once.
+ */
+const OCCUPIES = new Set(['confirmed', 'seated', 'offered', 'completed'])
+
 function freeResource(startMs: number, endMs: number, party: number): string | null {
   const fits = RESOURCES
     .filter((r) => r.active && r.seats >= party)
     .sort((a, b) => a.seats - b.seats || a.sort_order - b.sort_order)
   for (const r of fits) {
     const clash = bookings.some(
-      (b) => b.resource_id === r.id && HOLDING.has(b.status) && overlaps(b, startMs, endMs),
+      (b) => b.resource_id === r.id && OCCUPIES.has(b.status) && overlaps(b, startMs, endMs),
     )
     if (!clash) return r.id
   }
