@@ -119,9 +119,13 @@ class MerchantPhoneConfig:
     # BOOKINGS (migrations/081_bookings.sql). "off" (default) keeps the legacy
     # behaviour byte-for-byte: reservations are a prompt instruction, not a
     # system. "native" turns on the real availability engine and the booking
-    # tools. "external_link" reads the caller a URL. "provider" books through
-    # the merchant's own tool.
+    # tools. "external_link" TEXTS the caller the merchant's own booking link
+    # (migrations/083 — it used to read the URL aloud). "provider" books
+    # through the merchant's own tool.
     booking_mode: str = "off"
+    # Where external_link mode sends people. Falls back to the older
+    # reservation_config.website_url when unset (src/services/booking_links.py).
+    booking_link_url: str = ""
     # The noun the agent says out loud — "table", "chair", "bay". A barbershop
     # caller should never be offered a table.
     booking_noun: str = "reservation"
@@ -394,6 +398,7 @@ async def get_merchant_config(merchant_id: str) -> Optional[MerchantPhoneConfig]
             sms_pay_template=(row.get("sms_pay_template") or "").strip(),
             reservation_config=row.get("reservation_config") or None,
             booking_mode=_norm_booking_mode(row.get("booking_mode")),
+            booking_link_url=(row.get("booking_link_url") or "").strip(),
             booking_noun=(row.get("booking_noun") or "reservation").strip() or "reservation",
             waitlist_enabled=bool(row.get("waitlist_enabled")),
             waitlist_offer_minutes=int(row.get("waitlist_offer_minutes") or 15),

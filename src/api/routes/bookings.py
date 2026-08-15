@@ -638,6 +638,131 @@ async def booking_feed(token: str):
     )
 
 
+@router.get("/busy/{merchant_id}")
+async def list_busy(
+    merchant_id: str,
+    start: str = Query(...),
+    end: str = Query(...),
+    principal=Depends(require_service_auth),
+):
+    """Time taken in the merchant's OTHER systems, imported by the sync.
+
+    This is what makes the book one book. A merchant on external_link mode
+    takes no bookings through us at all, and a merchant on native mode still
+    has a personal calendar — in both cases the owner's real question is "what
+    is happening tonight", and an answer that only counts our own rows is a
+    half-answer that quietly teaches them not to trust the screen.
+
+    Read-only by construction: these rows are owned by the sync and are
+    replaced wholesale on every run, so nothing here is editable.
+    """
+    _validate_merchant(merchant_id)
+    await enforce_service_member(principal, merchant_id)
+    rows = await get_booking_store().list_busy_blocks(merchant_id, start, end)
+    conns = {c["id"]: c for c in await get_booking_store().list_connections(merchant_id)}
+    for r in rows:
+        conn = conns.get(r.get("connection_id")) or {}
+        r["provider"] = conn.get("provider") or ""
+    return {"busy": rows}
+
+
+class BookingLinkRequest(BaseModel):
+    url: str = Field("", max_length=500)
+
+
+@router.get("/link/{merchant_id}")
+async def get_booking_link(merchant_id: str, principal=Depends(require_service_auth)):
+    """The external booking link, and whether callers actually open it.
+
+    The counts are the point. A merchant who hands bookings off to their own
+    website otherwise has no way to tell whether the phone agent did anything
+    at all, because every booking it produced landed in somebody else's
+    system under the customer's own name.
+    """
+    from src.services.booking_links import get_link_service
+
+    _validate_merchant(merchant_id)
+    await enforce_service_member(principal, merchant_id)
+
+    db = get_db()
+    rows = await db.select(
+        "phone_agent_config",
+        {"merchant_id": f"eq.{merchant_id}",
+         "select": "booking_mode,booking_link_url,reservation_config"},
+    )
+    row = rows[0] if rows else {}
+    resv = row.get("reservation_config") or {}
+    url = (row.get("booking_link_url") or "").strip()
+    inherited = False
+    if not url and resv.get("on_website"):
+        url = (resv.get("website_url") or "").strip()
+        inherited = bool(url)
+
+    stats = await get_link_service().stats(merchant_id)
+    return {
+        "url": url,
+        # True when the URL came from the onboarding questionnaire rather than
+        # this screen — worth showing, because the merchant did not type it here
+        # and may not recognise it.
+        "inherited": inherited,
+        "mode": row.get("booking_mode") or "off",
+        "sent": stats["sent"],
+        "opened": stats["opened"],
+        "failed": stats["failed"],
+        "recent": [
+            {
+                "code": r.get("code"),
+                "created_at": r.get("created_at"),
+                "clicked_at": r.get("clicked_at"),
+                "delivery": r.get("delivery"),
+            }
+            for r in stats["recent"]
+        ],
+    }
+
+
+@router.post("/link/{merchant_id}")
+async def set_booking_link(
+    merchant_id: str,
+    req: BookingLinkRequest,
+    principal=Depends(require_service_auth),
+):
+    """Set where the texted link points.
+
+    Saving a URL switches the merchant into external_link mode, and clearing it
+    switches them back off — because a link mode with nowhere to send anyone is
+    an agent that promises a text it cannot deliver. Merchants already booking
+    through us (native/provider) are never switched: this screen setting must
+    not be able to silently disable a working calendar.
+    """
+    _validate_merchant(merchant_id)
+    await enforce_service_member(principal, merchant_id)
+
+    url = (req.url or "").strip()
+    if url:
+        if not re.match(r"^(https?://)?[\w.-]+\.[a-z]{2,}(/\S*)?$", url, re.I):
+            raise HTTPException(400, "that does not look like a web address")
+        if not url.startswith(("http://", "https://")):
+            url = f"https://{url}"
+        if len(url) > 500:
+            raise HTTPException(400, "url too long")
+
+    db = get_db()
+    rows = await db.select(
+        "phone_agent_config",
+        {"merchant_id": f"eq.{merchant_id}", "select": "booking_mode"},
+    )
+    current = (rows[0].get("booking_mode") if rows else "off") or "off"
+
+    fields: dict = {"booking_link_url": url or None}
+    if current in ("off", "external_link"):
+        fields["booking_mode"] = "external_link" if url else "off"
+
+    await db.update("phone_agent_config", fields,
+                    {"merchant_id": f"eq.{merchant_id}"})
+    return {"url": url, "mode": fields.get("booking_mode", current)}
+
+
 @router.get("/detail/{booking_id}")
 async def get_booking(booking_id: str, principal=Depends(require_service_auth)):
     _validate_uuid(booking_id, "booking_id")

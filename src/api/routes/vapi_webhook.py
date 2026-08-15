@@ -341,6 +341,8 @@ def _reservation_block(config, display_types: list[str]) -> str:
     """
     if _booking_enabled(config):
         return _native_booking_block(config)
+    if _link_mode(config):
+        return _link_booking_block(config)
 
     reservation_lines = ""
     if "reservation" in display_types:
@@ -400,6 +402,36 @@ def _native_booking_block(config) -> str:
         f"\n- Then call book_reservation. Read the confirmation code back slowly."
         f"\n- To cancel, ask for the confirmation code and call cancel_reservation."
         f"\n- If a tool says a time is gone, say so plainly and offer what it returned instead."
+    )
+
+
+def _link_booking_block(config) -> str:
+    """BOOKINGS prompt for merchants who keep their own booking system.
+
+    The old version of this block put the URL in the prompt, which meant the
+    agent read it out: "book online at w-w-w dot maple tandoor dot c-a slash
+    reservations". Callers are driving. Slashes and hyphens get mangled, a
+    mis-heard character is a 404, and nobody ever finds out whether the caller
+    arrived.
+
+    THE URL IS DELIBERATELY ABSENT FROM THIS TEXT. If the model cannot see the
+    address it cannot recite it, so the tool is the only way out and the text
+    goes every time — which is the whole point. It reappears only in the
+    tool's failure path, where reading it aloud is genuinely the best
+    remaining option.
+    """
+    noun = (getattr(config, "booking_noun", "") or "reservation").strip()
+    return (
+        f"\nBOOKINGS: This business takes its own {noun}s online."
+        f"\n- The moment a caller mentions booking, a table or an appointment, "
+        f"call text_booking_link. Do it straight away — do not ask whether they "
+        f"want the link, and do not ask for their number first."
+        f"\n- Then say you have just texted it to them, and stay on the line in "
+        f"case they have another question."
+        f"\n- NEVER say the web address out loud. You do not have it."
+        f"\n- If the tool reports the text could not be sent, say so, read out "
+        f"the address it returns slowly, and offer to take their name and time "
+        f"as a backup so the shop can call them back."
     )
 
 
@@ -982,9 +1014,40 @@ _CLAIM_WAITLIST_TOOL = {
 }
 
 
+_TEXT_BOOKING_LINK_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "text_booking_link",
+        "description": (
+            "Text the caller this restaurant's booking link. Call this as soon "
+            "as the caller mentions booking, a table, a reservation or an "
+            "appointment — before discussing times, and without asking "
+            "permission first. Never read the web address out loud unless this "
+            "tool tells you the text could not be delivered."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "phone": {
+                    "type": "string",
+                    "description": (
+                        "Only if the caller asks for it to go to a different "
+                        "number. Leave empty to text the number they are "
+                        "calling from."
+                    ),
+                },
+            },
+            "required": [],
+        },
+    },
+    "server": {"url": WEBHOOK_URL},
+}
+
+
 _BOOKING_TOOL_NAMES = frozenset(
     {"check_availability", "book_reservation", "cancel_reservation",
-     "lookup_reservation", "join_waitlist", "claim_waitlist_offer"}
+     "lookup_reservation", "join_waitlist", "claim_waitlist_offer",
+     "text_booking_link"}
 )
 
 
@@ -999,7 +1062,23 @@ def _booking_enabled(config) -> bool:
     return (getattr(config, "booking_mode", "off") or "off") in ("native", "provider")
 
 
+def _link_mode(config) -> bool:
+    """True when this merchant keeps their own booking system and we hand the
+    caller off to it by text.
+
+    Same hot-path rule as _booking_enabled: read off the fetched config, never
+    a query. Requires a destination — a link mode with nowhere to send anyone
+    is just the old take-a-message path, so it stays off.
+    """
+    if (getattr(config, "booking_mode", "off") or "off") != "external_link":
+        return False
+    from src.services.booking_links import configured_url
+    return bool(configured_url(config))
+
+
 def _booking_tools(config) -> list[dict]:
+    if _link_mode(config):
+        return [_TEXT_BOOKING_LINK_TOOL]
     if not _booking_enabled(config):
         return []
     tools = [_CHECK_AVAILABILITY_TOOL, _BOOK_RESERVATION_TOOL,
@@ -1296,6 +1375,46 @@ def _order_failed_message(mode: str) -> str:
             "Please try calling back in a few minutes and we'll take care of you.")
 
 
+async def _handle_text_booking_link(args: dict, config, caller_phone: str = "",
+                                    vapi_call_id: str | None = None) -> str:
+    """Text the merchant's booking link and tell the agent what to say.
+
+    The returned copy is the honesty contract for this tool: it says "I've
+    texted it" ONLY when a provider accepted the message. Every failure path
+    hands back the address so the agent can fall back to reading it — which is
+    the one situation where speaking a URL is the right answer.
+    """
+    from src.services.booking_links import configured_url, text_booking_link
+
+    if not _link_mode(config):
+        return ("I can't send a booking link on this line, but I can take your "
+                "name and number and have someone call you back.")
+
+    to = (args.get("phone") or "").strip() or (caller_phone or "").strip()
+    result = await text_booking_link(
+        config, to, vapi_call_id=vapi_call_id or "",
+    )
+
+    if result.get("sent"):
+        return ("Sent. Tell them you've just texted the booking link to their "
+                "phone and it should arrive in a few seconds. Do not read the "
+                "address out.")
+
+    target = result.get("target") or configured_url(config)
+    reason = result.get("reason") or ""
+    if reason == "no_phone":
+        return ("No number to text. Ask them for a mobile number to send the "
+                "booking link to, then call this tool again with it.")
+    # Everything else — a landline, a provider outage, no SMS configured —
+    # produces the same recovery, because from the caller's side it is the
+    # same problem: the text is not coming.
+    return (
+        "The text could not be delivered. Apologise briefly, then read this "
+        f"address out slowly and clearly: {target}. Offer to take their name, "
+        "party size and preferred time so the shop can call them back."
+    )
+
+
 async def _handle_booking_tool(name: str, args: dict, config,
                                caller_phone: str = "",
                                vapi_call_id: str | None = None) -> str:
@@ -1307,6 +1426,11 @@ async def _handle_booking_tool(name: str, args: dict, config,
     """
     from src.services import booking_agent
     from src.services.booking_engine import load_setup
+
+    if name == "text_booking_link":
+        return await _handle_text_booking_link(
+            args, config, caller_phone, vapi_call_id,
+        )
 
     if not _booking_enabled(config):
         return ("I can't take bookings on this line, but I can help you with "

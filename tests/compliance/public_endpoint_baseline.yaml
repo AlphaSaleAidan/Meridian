@@ -146,6 +146,18 @@ inline-auth:
   # require_service_auth) and rotating it revokes the old URL immediately. The
   # feed body carries only what is already in a booking confirmation.
   - "GET /api/bookings/feed/{token}.ics"
+  # Texted booking-link redirect (migrations/083). Public by construction: the
+  # code arrives in an SMS and is tapped from a phone with no session, so there
+  # is nothing to authenticate against. It is NOT a credential and grants
+  # nothing — the only effect of resolving one is a 302 to a URL the merchant
+  # already publishes on their own website, plus a click counter. The handler
+  # (src/api/routes/booking_link_redirect.py) rejects anything non-alphanumeric
+  # or over 16 chars before querying, returns the same 404 page for unknown and
+  # malformed codes alike, and puts no merchant, caller or booking data in any
+  # response. The redirect target is snapshotted from merchant config at send
+  # time, never taken from the request, so this cannot be used as an open
+  # redirect.
+  - "GET /b/{code}"
   # Browser/phone camera frame ingest. Per-camera HMAC frame token bound to
   # (camera_id, org_id): verify_frame_token() at
   # src/api/routes/browser_camera.py:50 → 401 (src/camera/frame_ingest.py:73 —
