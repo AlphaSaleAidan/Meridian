@@ -27,6 +27,7 @@ import type { Booking, BusyBlock, Resource, Service } from '@/lib/bookings-api'
 import type { NichePack } from '@/config/niches'
 import BookingCalendar from '@/components/BookingCalendar'
 import StatCard from '@/components/StatCard'
+import Top3ActionsPanel from '@/components/Top3ActionsPanel'
 import ForecastChart, { type ForecastPoint } from '@/components/ForecastChart'
 import PeakHoursHeatmap, { type HeatmapCell } from '@/components/PeakHoursHeatmap'
 import InsightCard from '@/components/InsightCard'
@@ -339,6 +340,11 @@ export default function TradeWorkspace(data: WorkspaceData) {
           />
         ))}
       </div>
+
+      {/* The portal's own do-this-next panel, fed niche-specific actions from
+          /api/dashboard/actions. Not a lookalike — the same component, with its
+          reasoning chain, evidence and complete/reject behaviour intact. */}
+      <Top3ActionsPanel />
 
       {peakCells.length > 0 && (
         <PeakHoursHeatmap

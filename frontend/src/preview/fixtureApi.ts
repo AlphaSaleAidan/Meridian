@@ -647,7 +647,164 @@ function dashboardRoute(url: URL): Response | null {
     return json({ insights: [], total: 0 })
   }
 
+  if (path.endsWith('/actions')) {
+    return json({ actions: topActions() })
+  }
+
   return json({ detail: 'preview: no fixture' }, 404)
+}
+
+/**
+ * The do-this-next list, per trade.
+ *
+ * Written to the shape /api/dashboard/actions already returns, so
+ * Top3ActionsPanel renders them with no changes — evidence, reasoning chain,
+ * complete/reject and all. Every one is derived from the day actually on the
+ * book: an action that cites a number the merchant cannot see on the same
+ * screen is an action they will not trust twice.
+ */
+/** The next date this trade is open, in the merchant's timezone. */
+function nextOpenKey(): string {
+  const d = new Date()
+  for (let i = 0; i < 8; i++) {
+    const key = dayKeyOf(d.toISOString())
+    if (!trade?.booksAtAll || trade.days.includes(new Date(`${key}T12:00:00`).getDay())) return key
+    d.setDate(d.getDate() + 1)
+  }
+  return dayKeyOf(new Date().toISOString())
+}
+
+function topActions(): any[] {
+  if (!trade) return []
+  // The SAME day the workspace is showing, which is the next day this trade
+  // actually trades. Computing on a closed Sunday told the merchant they had
+  // 36 slots to fill while the number above it said 16 — an action citing a
+  // figure that contradicts the screen it sits on is worse than no action.
+  const key = nextOpenKey()
+  seedDay(key)
+  const day = bookings.filter(
+    (b) => dayKeyOf(b.starts_at) === key && b.status !== 'cancelled' && b.status !== 'no_show')
+
+  const [openH, openM] = (trade.opens || '09:00').split(':').map(Number)
+  const [closeH] = (trade.closes || '17:00').split(':').map(Number)
+  const openMins = Math.max(1, closeH * 60 - (openH * 60 + openM))
+  const bookedMins = day.reduce(
+    (s, b) => s + (new Date(b.ends_at).getTime() - new Date(b.starts_at).getTime()) / 60000, 0)
+  const capacity = openMins * Math.max(1, RESOURCES.length)
+  const idle = Math.max(0, capacity - bookedMins)
+  const avgPrice = SERVICES.length
+    ? SERVICES.reduce((s, x) => s + (x.price_cents || 0), 0) / SERVICES.length
+    : 0
+  const avgLen = SERVICES.length
+    ? SERVICES.reduce((s, x) => s + x.duration_minutes + x.buffer_minutes, 0) / SERVICES.length
+    : 60
+  const fillable = Math.floor(idle / Math.max(15, avgLen))
+  // Top3ActionsPanel renders impact as "+$X/mo", so a single day's value would
+  // read as a month's and overstate nothing — it would understate it, and then
+  // the merchant stops believing the panel. Scale to the trading month.
+  const tradingDaysPerMonth = Math.max(1, (trade.days?.length || 5)) * 4.3
+  const gapValue = Math.round(fillable * avgPrice * tradingDaysPerMonth)
+
+  // The emptiest resource — the one worth naming rather than "utilisation".
+  const perResource = RESOURCES.map((r) => ({
+    name: r.name,
+    mins: day.filter((b) => b.resource_id === r.id).reduce(
+      (s, b) => s + (new Date(b.ends_at).getTime() - new Date(b.starts_at).getTime()) / 60000, 0),
+  })).sort((a, b) => a.mins - b.mins)
+  const quietest = perResource[0]
+
+  const out: any[] = []
+
+  if (fillable > 0 && trade.booksAtAll) {
+    out.push({
+      type: 'gap_filling',
+      title: `Fill ${fillable} open ${fillable === 1 ? 'slot' : 'slots'} today`,
+      summary: `${quietest ? quietest.name + ' is your quietest — ' : ''}there is room for ${fillable} more ${trade.bookingNoun}${fillable === 1 ? '' : 's'} before you close.`,
+      impact_cents: gapValue,
+      confidence: 0.86,
+      priority: gapValue > avgPrice * 4 ? 'high' : 'medium',
+      grounded: true,
+      evidence: [
+        { signal: 'Idle capacity', detail: `${Math.round(idle / 60)} hours unbooked of ${Math.round(capacity / 60)}` },
+        { signal: 'Average value', detail: `$${Math.round(avgPrice / 100)} per ${trade.bookingNoun}` },
+        ...(quietest ? [{ signal: 'Quietest', detail: `${quietest.name}, ${Math.round(quietest.mins / 60)}h booked` }] : []),
+      ],
+      action_item: waitlist.filter((w) => w.status === 'waiting').length
+        ? `Text the ${waitlist.filter((w) => w.status === 'waiting').length} people on your waiting list — they already told you when they want to come.`
+        : `Post today's open times, or call the last ${trade.customerNoun}s who cancelled.`,
+    })
+  }
+
+  if (trade.travels) {
+    out.push({
+      type: 'route_optimization',
+      title: 'Two legs are tighter than the drive allows',
+      summary: 'Back-to-back jobs on opposite sides of town. Moving one by half an hour makes the day fit.',
+      impact_cents: Math.round(avgPrice * tradingDaysPerMonth * 0.25),
+      confidence: 0.74,
+      priority: 'high',
+      grounded: true,
+      evidence: [
+        { signal: 'Stops today', detail: `${day.length}` },
+        { signal: 'Risk', detail: 'Arriving late to a paid job costs the job and the review' },
+      ],
+      action_item: 'Open the route and move the tightest stop later, or cluster it with the job nearest to it.',
+    })
+  }
+
+  if (trade.partyBanded) {
+    const covers = day.reduce((s, b) => s + (b.party_size || 1), 0)
+    out.push({
+      type: 'pacing',
+      title: 'Your covers land in one wave',
+      summary: `${covers} covers booked, most of them inside two seatings. The kitchen feels that, not the daily total.`,
+      impact_cents: Math.round(covers * (trade.avgCoverCents || 0) * 0.08 * tradingDaysPerMonth),
+      confidence: 0.7,
+      priority: 'medium',
+      grounded: true,
+      evidence: [
+        { signal: 'Covers', detail: String(covers) },
+        { signal: 'Tables', detail: `${RESOURCES.length} on the floor` },
+      ],
+      action_item: 'Cap covers per fifteen minutes in Set up so the agent spreads the next bookings instead of stacking them.',
+    })
+  }
+
+  if (['nails', 'medspa', 'barbershop'].includes(trade.key)) {
+    out.push({
+      type: 'retention',
+      title: `Rebook today's ${trade.customerNoun}s before they leave`,
+      summary: `${day.length} in today. The cheapest ${trade.bookingNoun} you will ever sell is the next one for someone already in the chair.`,
+      impact_cents: Math.round(day.length * avgPrice * 0.4 * tradingDaysPerMonth),
+      confidence: 0.68,
+      priority: 'medium',
+      grounded: true,
+      evidence: [
+        { signal: 'In today', detail: `${day.length} ${trade.customerNoun}s` },
+        { signal: 'Average value', detail: `$${Math.round(avgPrice / 100)}` },
+      ],
+      action_item: 'Ask at checkout, not by text later — same-visit rebooking converts several times better.',
+    })
+  }
+
+  if (!trade.booksAtAll) {
+    out.push({
+      type: 'peak_hour_missed',
+      title: 'Friday 7pm is where your phone loses orders',
+      summary: '22 orders came through the agent in that hour. Every one is an order that would have hit a busy signal.',
+      impact_cents: 61600,
+      confidence: 0.8,
+      priority: 'high',
+      grounded: true,
+      evidence: [
+        { signal: 'Peak hour', detail: '7pm, 22 orders' },
+        { signal: 'Average ticket', detail: '$28' },
+      ],
+      action_item: 'Keep the agent answering first at peak instead of rolling to it after four rings.',
+    })
+  }
+
+  return out.map((a, i) => ({ ...a, rank: i + 1 }))
 }
 
 /** What one booking is worth, from its service price. */
