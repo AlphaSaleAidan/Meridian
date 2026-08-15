@@ -463,11 +463,18 @@ async def update_booking(booking_id: str, body: BookingUpdate,
     except SlotTaken:
         raise HTTPException(409, "that time is already taken on this resource")
 
-    # A booking that stops occupying the table has to stop occupying it in the
-    # merchant's calendar too, or their staff keep holding it.
     if body.status in ("cancelled", "no_show"):
-        from src.services.booking_agent import _spawn_withdraw
-        _spawn_withdraw(row.get("merchant_id") or "", row)
+        merchant_id = row.get("merchant_id") or ""
+        # A booking that stops occupying the table has to stop occupying it in
+        # the merchant's calendar too, or their staff keep holding it.
+        from src.services.booking_agent import _spawn_recovery, _spawn_withdraw
+        _spawn_withdraw(merchant_id, row)
+        # And the freed slot goes to the waiting list, exactly as it does when
+        # a caller cancels by phone. A no-show marked at 7:10pm frees a table
+        # that somebody wants RIGHT NOW — that is the moment the waitlist is
+        # worth the most, and leaving it to the phone path meant a table freed
+        # at the host stand quietly recovered nothing.
+        _spawn_recovery(merchant_id, row)
 
     return {"booking": row}
 

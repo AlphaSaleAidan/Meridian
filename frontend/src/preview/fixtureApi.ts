@@ -480,8 +480,15 @@ async function route(url: URL, init: RequestInit): Promise<Response> {
     const start = url.searchParams.get('start')!
     const end = url.searchParams.get('end')!
     const includeCancelled = url.searchParams.get('include_cancelled') === 'true'
-    seedDay(dayKeyOf(start))
-    seedDay(dayKeyOf(end))
+    // Seed EVERY local day the window touches, not just its two ends. The
+    // window starts at midnight-minus-12h, so its endpoints fall on the days
+    // either side and the day actually being asked for was never seeded —
+    // it only ever appeared because the concurrent availability call happened
+    // to seed it first, which is a race the book lost as soon as the fixture
+    // timings shifted.
+    for (let t = new Date(start).getTime(); t <= new Date(end).getTime(); t += 6 * 3600_000) {
+      seedDay(dayKeyOf(new Date(t).toISOString()))
+    }
     const s = new Date(start).getTime()
     const e = new Date(end).getTime()
     const rows = bookings

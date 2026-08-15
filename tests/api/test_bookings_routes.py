@@ -366,3 +366,45 @@ def test_feed_rejects_a_malformed_token_without_touching_the_database():
 
     for junk in ("", "short", "z" * 32, "../../etc/passwd", "A" * 33):
         assert asyncio.run(feed_for_token(junk)) is None
+
+
+# ─── Freeing a table from the host stand ──────────────────────
+
+def test_no_show_withdraws_from_their_calendar_and_works_the_waitlist(
+    client, monkeypatch,
+):
+    """Marking a no-show at the host stand has to do everything a phone
+    cancellation does.
+
+    Both of these were phone-only once: a table freed at the stand left a
+    ghost on the merchant's Square calendar AND quietly recovered nothing,
+    which is the moment the waiting list is worth the most — 7:10pm, table
+    empty, somebody wants it now.
+    """
+    withdrawn: list[tuple[str, str]] = []
+    recovered: list[tuple[str, str]] = []
+    import src.services.booking_agent as ba
+    monkeypatch.setattr(ba, "_spawn_withdraw",
+                        lambda m, row: withdrawn.append((m, row["id"])))
+    monkeypatch.setattr(ba, "_spawn_recovery",
+                        lambda m, row: recovered.append((m, row["id"])))
+    monkeypatch.setattr(br, "enforce_service_member", lambda *a, **kw: _noop())
+
+    r = client.patch(f"/api/bookings/{BOOKING}", json={"status": "no_show"})
+    assert r.status_code == 200
+    assert [b for _, b in withdrawn] == [BOOKING]
+    assert [b for _, b in recovered] == [BOOKING]
+
+
+def test_seating_a_guest_does_neither(client, monkeypatch):
+    """Seating occupies the table — withdrawing it from their calendar or
+    offering it to the waitlist would be actively wrong."""
+    called: list[str] = []
+    import src.services.booking_agent as ba
+    monkeypatch.setattr(ba, "_spawn_withdraw", lambda m, row: called.append("w"))
+    monkeypatch.setattr(ba, "_spawn_recovery", lambda m, row: called.append("r"))
+    monkeypatch.setattr(br, "enforce_service_member", lambda *a, **kw: _noop())
+
+    r = client.patch(f"/api/bookings/{BOOKING}", json={"status": "seated"})
+    assert r.status_code == 200
+    assert called == []

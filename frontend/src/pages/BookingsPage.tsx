@@ -19,7 +19,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   AlertCircle, CalendarDays, CheckCircle2, ChevronLeft,
-  ChevronRight, Clock, Phone, Plus, Users,
+  ChevronRight, Clock, Phone, Plus, UserX, Users,
 } from 'lucide-react'
 import { useOrgId } from '@/hooks/useOrg'
 import {
@@ -28,6 +28,7 @@ import {
 } from '@/lib/bookings-api'
 
 const STATUS_STYLES: Record<BookingStatus, string> = {
+  offered: 'bg-[#F5A524]/10 text-[#F5A524] border-[#F5A524]/30',
   confirmed: 'bg-[#1A8FD6]/10 text-[#1A8FD6] border-[#1A8FD6]/30',
   seated: 'bg-[#17C5B0]/10 text-[#17C5B0] border-[#17C5B0]/30',
   completed: 'bg-[#A1A1A8]/10 text-[#A1A1A8] border-[#A1A1A8]/25',
@@ -44,6 +45,7 @@ const PROVIDER_LABEL: Record<string, string> = {
 }
 
 const STATUS_LABEL: Record<BookingStatus, string> = {
+  offered: 'Held',
   confirmed: 'Booked',
   seated: 'Here',
   completed: 'Done',
@@ -58,9 +60,15 @@ const STATUS_LABEL: Record<BookingStatus, string> = {
  * once. That is the design target — one tap per guest and nothing else — so
  * this shows exactly one primary action at a time.
  *
- * No-show is deliberately NOT offered until the booking time has passed.
- * Before then it is not a thing anyone means to press, and next to the arrival
- * button it is a mis-tap that tells a waiting guest their table is gone.
+ * A booking ends one of two ways, so both are one tap and both look like
+ * buttons. An earlier version drew No-show as borderless grey text, which
+ * reads as a label rather than a control — the action was there and nobody
+ * could see it.
+ *
+ * Arrival is the primary of the two: it is the common case, it is pressed
+ * during service, and it is safe. No-show is secondary and stays quiet until
+ * hovered, because it is the destructive one — it releases the table, and on
+ * a merchant running the waitlist it immediately texts the next guest.
  *
  * Every terminal state keeps an Undo, because these get pressed one-handed
  * while carrying menus.
@@ -69,8 +77,6 @@ function RowAction({ booking, onSet }: {
   booking: Booking
   onSet: (status: BookingStatus) => void
 }) {
-  const started = new Date(booking.startsAt).getTime() <= Date.now()
-
   if (booking.status === 'confirmed') {
     return (
       <div className="flex items-center gap-1.5">
@@ -81,14 +87,14 @@ function RowAction({ booking, onSet }: {
           <CheckCircle2 className="h-3.5 w-3.5" />
           They're here
         </button>
-        {started && (
-          <button
-            onClick={() => onSet('no_show')}
-            className="rounded-lg border border-transparent px-2 py-1.5 text-xs text-[#6B6B73] transition-colors hover:border-[#E5484D]/30 hover:text-[#E5484D]"
-          >
-            No-show
-          </button>
-        )}
+        <button
+          onClick={() => onSet('no_show')}
+          title="Frees the table. If you run a waiting list, the next guest is texted straight away."
+          className="inline-flex items-center gap-1.5 rounded-lg border border-[#1F1F23] px-3 py-1.5 text-xs font-medium text-[#A1A1A8] transition-colors hover:border-[#E5484D]/40 hover:bg-[#E5484D]/10 hover:text-[#E5484D]"
+        >
+          <UserX className="h-3.5 w-3.5" />
+          No-show
+        </button>
       </div>
     )
   }
@@ -105,6 +111,26 @@ function RowAction({ booking, onSet }: {
           className="rounded-lg border border-[#1F1F23] px-2.5 py-1.5 text-xs text-[#A1A1A8] transition-colors hover:text-[#F5F5F7]"
         >
           Done
+        </button>
+      </div>
+    )
+  }
+
+  // A held slot belongs to a waitlist guest who is deciding. Undo would turn
+  // their hold into a confirmed booking they never accepted, so the only
+  // action offered is handing the table back to the floor.
+  if (booking.status === 'offered') {
+    return (
+      <div className="flex items-center gap-1.5">
+        <span className={`rounded border px-2 py-0.5 text-[11px] font-medium ${STATUS_STYLES.offered}`}>
+          Held — waiting for a reply
+        </span>
+        <button
+          onClick={() => onSet('cancelled')}
+          title="Releases the hold and puts the table back on the floor."
+          className="rounded-lg border border-[#1F1F23] px-2.5 py-1.5 text-xs text-[#A1A1A8] transition-colors hover:text-[#F5F5F7]"
+        >
+          Release
         </button>
       </div>
     )
@@ -145,6 +171,8 @@ export default function BookingsPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [showAdd, setShowAdd] = useState(false)
+  /** Bumped whenever a table is freed, so the waitlist panel refetches. */
+  const [freed, setFreed] = useState(0)
 
   const load = useCallback(async () => {
     if (!merchantId) return
@@ -251,6 +279,14 @@ export default function BookingsPage() {
       prev.map((x) => (x.id === b.id ? { ...x, status } : x)))
     try {
       await bookingsApi.updateBooking(b.id, { status })
+      // Freeing a table sets the recovery going server-side. Reload so the
+      // host actually SEES it — the offer that just went out is the whole
+      // point of the waiting list, and a screen that shows nothing until the
+      // next refresh teaches them it does nothing.
+      if (status === 'no_show' || status === 'cancelled') {
+        setFreed((n) => n + 1)
+        load()
+      }
     } catch {
       // Put the old value back rather than leaving the screen lying about
       // what the database says.
@@ -416,7 +452,7 @@ export default function BookingsPage() {
         </ul>
       )}
 
-      <WaitlistPanel merchantId={merchantId} timezone={timezone} />
+      <WaitlistPanel merchantId={merchantId} timezone={timezone} refreshKey={freed} />
 
       {showAdd && (
         <AddBookingDialog
@@ -437,9 +473,12 @@ export default function BookingsPage() {
  * 3 past visits, $240 spent before" can agree or overrule; a host who just
  * sees "offered to Dana" has to trust a black box, and won't.
  */
-function WaitlistPanel({ merchantId, timezone }: {
+function WaitlistPanel({ merchantId, timezone, refreshKey }: {
   merchantId: string
   timezone: string
+  /** Bumped when a table is freed, so the offer that just went out appears
+   *  without the host reloading the page. */
+  refreshKey: number
 }) {
   const [waiting, setWaiting] = useState<WaitlistEntry[]>([])
   const [offered, setOffered] = useState<WaitlistEntry[]>([])
@@ -451,7 +490,7 @@ function WaitlistPanel({ merchantId, timezone }: {
       bookingsApi.listWaitlist(merchantId, 'waiting').catch(() => []),
       bookingsApi.listWaitlist(merchantId, 'offered').catch(() => []),
     ]).then(([w, o]) => { setWaiting(w); setOffered(o) })
-  }, [merchantId])
+  }, [merchantId, refreshKey])
 
   if (waiting.length === 0 && offered.length === 0) return null
 
