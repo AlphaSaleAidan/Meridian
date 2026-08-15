@@ -101,6 +101,10 @@ export interface Booking {
   source: string
   confirmationCode: string
   provider?: string | null
+  /** Mobile trades only (migration 084): where the job actually happens. */
+  serviceAddress?: string | null
+  serviceLat?: number | null
+  serviceLng?: number | null
 }
 
 export interface Slot {
@@ -260,6 +264,9 @@ const booking = (b: any): Booking => ({
   source: b.source ?? 'phone',
   confirmationCode: b.confirmation_code ?? '',
   provider: b.provider ?? null,
+  serviceAddress: b.service_address ?? null,
+  serviceLat: b.service_lat ?? null,
+  serviceLng: b.service_lng ?? null,
 })
 
 const connection = (c: any): Connection => ({

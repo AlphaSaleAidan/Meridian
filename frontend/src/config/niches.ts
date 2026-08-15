@@ -185,6 +185,37 @@ export const NICHE_PACKS: NichePack[] = [
     pillarOrder: ['bookings', 'phone', ''],
     homeMetric: { label: 'Bay hours sold today',
                   help: 'A bay standing empty is the only thing that costs you money.' },
+  },
+  {
+    // Split from shop detailing on purpose. They look like one trade and are
+    // not: a shop runs jobs in PARALLEL across bays, a mobile operator runs
+    // them in SERIES down a road. Modelling mobile as "a shop with bays"
+    // produced a route with two stops at the same time, which is not a
+    // scheduling edge case — it is physically impossible.
+    key: 'mobiledetailing',
+    label: 'Mobile detailing',
+    pitch: 'Your day is a route, and it either fits or it does not.',
+    bookingNoun: 'appointment',
+    customerNoun: 'customer',
+    resourceKind: 'staff',
+    countTitle: 'How many vans are on the road?',
+    countLabel: 'Vans',
+    booksAtAll: true,
+    defaultCount: 1,
+    defaultSeats: 1,
+    partyBanded: false,
+    services: [
+      { name: 'Exterior wash', duration: 60, buffer: 15, min: 1, max: 1 },
+      { name: 'Interior and exterior', duration: 120, buffer: 20, min: 1, max: 1 },
+      { name: 'Full detail', duration: 240, buffer: 30, min: 1, max: 1 },
+    ],
+    days: [1, 2, 3, 4, 5, 6],
+    opens: '08:00',
+    closes: '18:00',
+    modules: { inventory: false, camera: false, schedule: false, taxExpenses: false, topActions: false },
+    pillarOrder: ['', 'bookings', 'phone'],
+    homeMetric: { label: 'Stops on today\'s route',
+                  help: 'Not how many you booked — how many you can actually reach.' },
     travels: true,
   },
   {

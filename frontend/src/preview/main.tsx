@@ -27,7 +27,9 @@ import { merchantPillars, orderPillars, type Pillar } from '@/config/merchantPil
 import { flagsForMerchant } from '@/config/moduleFlags'
 import { ALL_PACKS, type NichePack } from '@/config/niches'
 import TradeVersions from './TradeVersions'
-import { configureForTrade, installFixtureApi } from './fixtureApi'
+import { BASE_LOCATION, configureForTrade, installFixtureApi } from './fixtureApi'
+import TradeOverview from '@/components/overview/TradeOverview'
+import { bookingsApi, type Booking, type BusyBlock, type Resource } from '@/lib/bookings-api'
 import '@/index.css'
 
 installFixtureApi()
@@ -41,6 +43,7 @@ const SHOP: Record<string, string> = {
   barbershop: 'The Fade Room',
   nails: 'Lacquer Lash Bar',
   detailing: 'Apex Auto Detail',
+  mobiledetailing: 'Roadside Shine Mobile',
   restaurant: 'Maple & Vine',
   quickservice: 'Sorrento Pizza',
   medspa: 'Northline Aesthetics',
@@ -212,12 +215,67 @@ function Shell() {
                 ? <BookingsSetupPage key={`setup-${pack.key}-${runKey}`} />
                 : <BookingsPage key={`book-${pack.key}-${runKey}`} />)}
             </>
+          ) : active && active.path === '' ? (
+            <OverviewHost key={`ov-${pack.key}-${runKey}`} pack={pack} />
           ) : (
             <NotWired pillar={active} pack={pack} />
           )}
         </main>
       </div>
     </div>
+  )
+}
+
+/**
+ * Feeds the trade overview from the same endpoints the portal uses, so the
+ * numbers on it are derived from the day actually on the book rather than
+ * written into a mock.
+ */
+function OverviewHost({ pack }: { pack: NichePack }) {
+  const [bookings, setBookings] = useState<Booking[]>([])
+  const [resources, setResources] = useState<Resource[]>([])
+  const [busy, setBusy] = useState<BusyBlock[]>([])
+  const [timezone, setTimezone] = useState('')
+
+  useEffect(() => {
+    if (!pack.booksAtAll) return
+    const now = new Date()
+    const day = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+    const start = new Date(`${day}T00:00:00`)
+    const from = new Date(start.getTime() - 12 * 3600_000).toISOString()
+    const to = new Date(start.getTime() + 24 * 3600_000).toISOString()
+    Promise.all([
+      bookingsApi.listBookings(MERCHANT, from, to, false).catch(() => []),
+      bookingsApi.listResources(MERCHANT).catch(() => []),
+      bookingsApi.listBusy(MERCHANT, from, to).catch(() => []),
+      bookingsApi.availability(MERCHANT, day, 1).catch(() => null),
+    ]).then(([b, r, bz, av]) => {
+      setBookings(b)
+      setResources(r)
+      setBusy(bz)
+      if (av) setTimezone(av.timezone)
+    })
+  }, [pack])
+
+  const stops = bookings
+    .filter((b) => b.serviceAddress && b.serviceLat != null && b.serviceLng != null)
+    .map((b) => ({
+      booking: b,
+      address: b.serviceAddress as string,
+      lat: b.serviceLat as number,
+      lng: b.serviceLng as number,
+    }))
+
+  return (
+    <TradeOverview
+      pack={pack}
+      bookings={bookings}
+      resources={resources}
+      busy={busy}
+      timezone={timezone}
+      stops={stops}
+      origin={BASE_LOCATION}
+    />
   )
 }
 

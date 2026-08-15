@@ -53,6 +53,9 @@ interface Row {
   confirmation_code: string
   provider: string | null
   waitlist_id?: string | null
+  service_address?: string | null
+  service_lat?: number | null
+  service_lng?: number | null
 }
 
 interface WaitRow {
@@ -204,6 +207,12 @@ function makeBooking(input: {
     confirmation_code: code(input.rand ?? Math.random),
     provider: null,
   }
+  if (trade?.travels) {
+    const [addr, lat, lng] = ADDRESSES[bookings.length % ADDRESSES.length]
+    row.service_address = addr
+    row.service_lat = lat
+    row.service_lng = lng
+  }
   bookings.push(row)
   return row
 }
@@ -234,11 +243,14 @@ function seedDay(dayKey: string) {
 
   // Roughly two thirds full — busy enough to look like a real day, empty
   // enough that the gaps the calendar exists to show are actually visible.
-  const target = Math.max(1, Math.round(slots.length * RESOURCES.length * 0.42))
+  const target = Math.max(2, Math.round(slots.length * RESOURCES.length * 0.5))
   let made = 0
   for (const minute of slots) {
     for (let n = 0; n < RESOURCES.length && made < target; n++) {
-      if (rand() > 0.55) continue
+      // Long jobs collide constantly on a two-bay day, so most attempts fail
+      // and a low acceptance rate leaves the shop looking shut. Try often and
+      // let the exclusion logic decide what actually fits.
+      if (rand() > 0.82) continue
       const [name, phone] = NAMES[(made + d) % NAMES.length]
       const party = trade.partyBanded ? 2 + Math.floor(rand() * 4) : 1
       const r = rand()
@@ -418,7 +430,11 @@ export function configureForTrade(pack: any) {
       id: uid('r'),
       // Staff are people, not numbered stations — a nail studio with
       // "Staff 1" through "Staff 4" reads as a spreadsheet, not a shop.
-      name: pack.resourceKind === 'staff' ? STAFF_NAMES[i % STAFF_NAMES.length] : `${base} ${i + 1}`,
+      name: pack.travels
+        ? VAN_NAMES[i % VAN_NAMES.length]
+        : pack.resourceKind === 'staff'
+          ? STAFF_NAMES[i % STAFF_NAMES.length]
+          : `${base} ${i + 1}`,
       kind: pack.resourceKind,
       seats: pack.resourceKind === 'table' ? (i < 2 ? 2 : i > 4 ? 6 : 4) : 1,
       sort_order: i,
@@ -476,6 +492,9 @@ const RESOURCE_NAME: Record<string, string> = {
   table: 'Table', chair: 'Chair', bay: 'Bay', room: 'Room', staff: 'Staff',
 }
 
+/** A van is not a person, so it does not get a person's name. */
+const VAN_NAMES = ['Van 1', 'Van 2', 'Van 3']
+
 const STAFF_NAMES = ['Mia', 'Jordan', 'Alexis', 'Sam', 'Rae', 'Kit']
 
 /** Demo colour, deliberately kept OUT of the shipped pack config — a note a
@@ -485,6 +504,7 @@ const NOTE_EXAMPLE: Record<string, string> = {
   barbershop: 'Same barber as last time',
   nails: 'Allergic to acetone',
   detailing: 'Black SUV, pet hair',
+  mobiledetailing: 'Driveway — gate code 4402',
   medspa: 'First visit — consult first',
   other: 'Called ahead',
 }
@@ -492,6 +512,7 @@ const NOTE_EXAMPLE: Record<string, string> = {
 /** Time already committed in the shop's own calendar. */
 const BUSY: Record<string, [string, number, number][]> = {
   restaurant: [['Staff briefing', 16, 17], ['Private event — Booth 5', 21, 23]],
+  mobiledetailing: [['Van service', 13, 14]],
   barbershop: [['Barber training', 12, 13]],
   nails: [['Supplier visit', 13, 14]],
   detailing: [['Equipment service', 12, 13]],
@@ -506,6 +527,27 @@ const WAITING: [string, string, string][] = [
 ]
 
 let trade: any = null
+
+/**
+ * Where a mobile trade's customers are. Scattered across one metro so the
+ * route has a real shape — a couple of clusters and one outlier, which is what
+ * makes the "can I actually make it" question interesting rather than academic.
+ */
+const ADDRESSES: [string, number, number][] = [
+  ['418 Maple Ridge Dr', 49.2827, -123.1207],
+  ['77 Harbourview Ln', 49.2965, -123.1340],
+  ['1220 Kingsway', 49.2480, -123.0710],
+  ['3405 Oak Meadow Cres', 49.2380, -123.1450],
+  ['92 Alder Court', 49.3120, -123.0820],
+  ['615 Fraser St', 49.2600, -123.0900],
+  ['2210 Westbrook Way', 49.2690, -123.2100],
+  ['58 Quarry Rd', 49.3300, -123.0300],
+  ['1701 Commercial Dr', 49.2700, -123.0700],
+  ['840 Seymour Hts', 49.3450, -123.0100],
+]
+
+/** The van starts and ends here. */
+export const BASE_LOCATION = { label: 'Shop — 12 Foundry Rd', lat: 49.2750, lng: -123.1000 }
 
 // ── Router ──────────────────────────────────────────────────────────────
 const json = (body: unknown, status = 200) =>
