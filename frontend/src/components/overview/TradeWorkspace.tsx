@@ -26,6 +26,15 @@ import { AlertTriangle, ChevronLeft, ChevronRight, Plus } from 'lucide-react'
 import type { Booking, BusyBlock, Resource, Service } from '@/lib/bookings-api'
 import type { NichePack } from '@/config/niches'
 import BookingCalendar from '@/components/BookingCalendar'
+import StatCard from '@/components/StatCard'
+import RevenueChart from '@/components/RevenueChart'
+import PeakHoursHeatmap, { type HeatmapCell } from '@/components/PeakHoursHeatmap'
+import InsightCard from '@/components/InsightCard'
+import type { Insight } from '@/lib/api'
+import {
+  CalendarCheck, Car, Clock, DollarSign, Navigation, PhoneCall,
+  Receipt, Sparkles, Users, type LucideIcon,
+} from 'lucide-react'
 import RouteDay, { haversineKm, driveMinutes, type RouteOrigin, type Stop } from '@/components/RouteDay'
 
 const LIVE = new Set(['confirmed', 'seated', 'completed'])
@@ -52,6 +61,8 @@ export interface WorkspaceData {
   forecasts?: { period_start: string; predicted_cents: number; lower_bound_cents: number | null; upper_bound_cents: number | null; confidence: number | null }[]
   /** From /api/dashboard/anomalies. */
   anomalies?: { date: string; value_cents: number; expected_cents: number; description: string }[]
+  /** The fortnight of bookings behind the trend, for the peak-hours heatmap. */
+  fortnight?: Booking[]
 }
 
 const money = (cents: number): string =>
@@ -180,6 +191,33 @@ export default function TradeWorkspace(data: WorkspaceData) {
     () => computeTiles(data, live, open, close, booked),
     [data, live, open, close, booked])
 
+  /**
+   * Peak hours, computed from the same fortnight of bookings. Only for the
+   * trades where it changes a decision — a one-van operator does not staff
+   * against a heatmap.
+   */
+  const peakCells = useMemo<HeatmapCell[]>(() => {
+    if (!data.fortnight || data.fortnight.length === 0) return []
+    if (!['restaurant', 'barbershop', 'nails', 'medspa'].includes(pack.key)) return []
+    const grid = new Map<string, { n: number; cents: number }>()
+    for (const b of data.fortnight) {
+      const d = new Date(b.startsAt)
+      // PeakHoursHeatmap indexes Monday-first.
+      const day = (d.getDay() + 6) % 7
+      const hour = Number(new Intl.DateTimeFormat('en-GB', {
+        hour: '2-digit', hour12: false, timeZone: timezone || undefined,
+      }).format(d))
+      const key = `${day}-${hour}`
+      const cur = grid.get(key) || { n: 0, cents: 0 }
+      grid.set(key, { n: cur.n + 1, cents: cur.cents })
+    }
+    const max = Math.max(1, ...[...grid.values()].map((v) => v.n))
+    return [...grid.entries()].map(([key, v]) => {
+      const [day, hour] = key.split('-').map(Number)
+      return { day, hour, intensity: v.n / max, transactions: v.n }
+    })
+  }, [data.fortnight, pack.key, timezone])
+
   const forecast = useMemo(() => {
     const days = data.forecasts || []
     return {
@@ -232,7 +270,6 @@ export default function TradeWorkspace(data: WorkspaceData) {
           </div>
 
           <div className="flex items-center gap-3">
-            {history && history.length > 3 && <Spark points={history.map((h) => h.cents)} />}
             <div className="flex items-center gap-1 rounded-lg border border-[#1F1F23] bg-[#0E0E11]">
               <button
                 onClick={() => onShiftDay?.(-1)}
@@ -253,24 +290,47 @@ export default function TradeWorkspace(data: WorkspaceData) {
           </div>
         </div>
 
-        {/* The four figures an owner checks before anything else. */}
-        <div className="mt-6 grid gap-px overflow-hidden rounded-lg border border-[#1F1F23] bg-[#1F1F23] sm:grid-cols-2 lg:grid-cols-4">
-          {tiles.map((t) => (
-            <div key={t.label} className="bg-[#0E0E11] px-4 py-3">
-              <div className="text-[10px] uppercase tracking-wide text-[#6B6B73]">
-                {t.label}
-              </div>
-              <div className={`mt-1 font-mono text-2xl font-semibold ${
-                t.tone === 'warn' ? 'text-[#E5484D]'
-                  : t.tone === 'good' ? 'text-[#17C5B0]' : 'text-[#F5F5F7]'
-              }`}>
-                {t.value}
-              </div>
-              {t.sub && <div className="mt-0.5 text-[11px] text-[#6B6B73]">{t.sub}</div>}
-            </div>
-          ))}
-        </div>
       </section>
+
+      {/* The portal's own money tiles, not a second set drawn beside them. */}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {tiles.map((t) => (
+          <StatCard
+            key={t.label}
+            label={t.label}
+            value={t.value}
+            subtitle={t.sub}
+            icon={t.icon}
+            iconColor={
+              t.tone === 'warn' ? 'text-[#E5484D]'
+                : t.tone === 'good' ? 'text-[#17C5B0]' : 'text-[#1A8FD6]'
+            }
+            change={t.change}
+            changeType={t.changeType}
+          />
+        ))}
+      </div>
+
+      {history && history.length > 3 && (
+        <section className="rounded-xl border border-[#1F1F23] bg-[#111113] p-5">
+          <h2 className="text-sm font-semibold text-[#F5F5F7]">Booked revenue, last fortnight</h2>
+          <p className="mb-2 mt-0.5 text-sm text-[#A1A1A8]">
+            The portal's own revenue chart, on booking value.
+          </p>
+          <RevenueChart
+            height={260}
+            data={history.map((h) => ({ date: h.day, revenue_cents: h.cents } as any))}
+          />
+        </section>
+      )}
+
+      {peakCells.length > 0 && (
+        <PeakHoursHeatmap
+          cells={peakCells}
+          title="When the work lands"
+          caption="Two weeks of bookings by day and hour — the shape you staff against."
+        />
+      )}
 
       {forecast.total > 0 && (
         <section className="rounded-xl border border-[#1F1F23] bg-[#111113] p-5">
@@ -397,7 +457,15 @@ function mainTitle(pack: NichePack): string {
 
 // ── the four figures, per trade ─────────────────────────────────────────
 
-interface Tile { label: string; value: string; sub?: string; tone?: 'warn' | 'good' }
+interface Tile {
+  label: string
+  value: string
+  sub?: string
+  tone?: 'warn' | 'good'
+  icon?: LucideIcon
+  change?: string
+  changeType?: 'positive' | 'negative' | 'neutral'
+}
 
 function computeTiles(
   data: WorkspaceData, live: Booking[], open: number, close: number, booked: number,
@@ -414,8 +482,8 @@ function computeTiles(
       const covers = live.reduce((s, b) => s + b.partySize, 0)
       const peak = peakBucket(live, timezone, open, close)
       return [
-        { label: 'Covers booked', value: String(covers), sub: `${live.length} bookings` },
-        { label: 'Avg spend / cover', value: money(pack.avgCoverCents ?? 0) },
+        { label: 'Covers booked', value: String(covers), sub: `${live.length} bookings`, icon: Users },
+        { label: 'Avg spend / cover', value: money(pack.avgCoverCents ?? 0), icon: Receipt },
         { label: 'Busiest half hour', value: peak.covers ? clock(peak.at) : '—',
           sub: peak.covers ? `${peak.covers} covers land` : undefined,
           tone: peak.covers > 20 ? 'warn' : undefined },
@@ -427,18 +495,18 @@ function computeTiles(
       const tight = legs.filter((l) => l.tight).length
       const drive = legs.reduce((s, l) => s + l.minutes, 0)
       return [
-        { label: 'Jobs on the route', value: String((stops || []).length) },
-        { label: 'Avg job value', value: money(avgTicket) },
+        { label: 'Jobs on the route', value: String((stops || []).length), icon: Navigation },
+        { label: 'Avg job value', value: money(avgTicket), icon: Receipt },
         { label: 'Driving', value: drive >= 60 ? `${Math.floor(drive / 60)}h ${drive % 60}m` : `${drive}m`,
-          sub: 'unpaid time' },
+          sub: 'unpaid time', icon: Car },
         { label: 'Tight legs', value: String(tight), tone: tight > 0 ? 'warn' : 'good',
           sub: tight > 0 ? 'may not make it' : 'the day fits' },
       ]
     }
     case 'quickservice':
       return [
-        { label: 'Orders by phone', value: '86', sub: 'taken by the agent' },
-        { label: 'Avg ticket', value: '$28' },
+        { label: 'Orders by phone', value: '86', sub: 'taken by the agent', icon: PhoneCall },
+        { label: 'Avg ticket', value: '$28', icon: Receipt },
         { label: 'Busiest hour', value: '7pm', sub: '22 orders' },
         { label: 'Missed calls', value: '0', tone: 'good', sub: 'nobody hung up' },
       ]
@@ -446,7 +514,7 @@ function computeTiles(
       const consults = live.filter((b) => mins(b) <= 45)
       const treatments = live.filter((b) => mins(b) > 45)
       return [
-        { label: 'Consultations', value: String(consults.length), sub: 'top of the funnel' },
+        { label: 'Consultations', value: String(consults.length), sub: 'top of the funnel', icon: Sparkles },
         { label: 'Treatments', value: String(treatments.length) },
         { label: 'Avg treatment', value: money(
           treatments.length
@@ -458,12 +526,12 @@ function computeTiles(
     default:
       return [
         { label: pack.bookingNoun === 'table' ? 'Bookings' : 'Appointments',
-          value: String(live.length) },
-        { label: 'Avg ticket', value: money(avgTicket) },
-        { label: `${pack.countLabel} utilisation`, value: `${util}%`,
+          value: String(live.length), icon: CalendarCheck },
+        { label: 'Avg ticket', value: money(avgTicket), icon: Receipt },
+        { label: `${pack.countLabel} utilisation`, value: `${util}%`, icon: Clock,
           tone: util < 50 ? 'warn' : util > 80 ? 'good' : undefined,
           sub: `${(bookedMins / 60).toFixed(0)}h of ${(capacity / 60).toFixed(0)}h` },
-        { label: `${pack.countLabel} working`,
+        { label: `${pack.countLabel} working`, icon: Users,
           value: `${new Set(live.map((b) => b.resourceId)).size}/${active.length}` },
       ]
   }

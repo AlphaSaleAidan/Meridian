@@ -260,6 +260,7 @@ function OverviewHost({ pack, shopName }: { pack: NichePack; shopName: string })
   const [history, setHistory] = useState<{ day: string; cents: number }[]>([])
   const [forecasts, setForecasts] = useState<any[]>([])
   const [anomalies, setAnomalies] = useState<any[]>([])
+  const [fortnight, setFortnight] = useState<Booking[]>([])
   const [timezone, setTimezone] = useState('')
   // Open on a day this trade actually trades. A barbershop shut on Sundays
   // showing an empty Sunday is CORRECT and a terrible first impression, so the
@@ -329,6 +330,7 @@ function OverviewHost({ pack, shopName }: { pack: NichePack; shopName: string })
         byDay.set(key, (byDay.get(key) || 0) + cents)
       }
       setHistory([...byDay.entries()].map(([d, cents]) => ({ day: d, cents })))
+      setFortnight(rows)
     })
   }, [pack, day])
 
@@ -357,6 +359,7 @@ function OverviewHost({ pack, shopName }: { pack: NichePack; shopName: string })
       history={history}
       forecasts={forecasts}
       anomalies={anomalies}
+      fortnight={fortnight}
       busy={busy}
       timezone={timezone}
       day={day}
