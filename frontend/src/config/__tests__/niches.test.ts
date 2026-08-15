@@ -30,6 +30,31 @@ describe('a merchant with no trade set', () => {
   })
 })
 
+describe('the public demos', () => {
+  it('do not get a Bookings tab until it has demo data', () => {
+    // BookingsPage has no demo path yet: it would call the real API with the
+    // org id 'demo', be refused, and render an error on the surface a
+    // prospect is shown. Flip this on in the same change that gives it one.
+    for (const path of ['/demo', '/canada/demo']) {
+      expect(flagsForPath(path).bookings).toBe(false)
+    }
+  })
+
+  it('still get bookings on the real merchant portals', () => {
+    for (const path of ['/canada/merchant', '/us/merchant', '/app']) {
+      expect(flagsForPath(path).bookings).toBe(true)
+    }
+  })
+
+  it('keep the rest of the demo surface unchanged', () => {
+    const demo = flagsForPath('/demo')
+    const canada = flagsForPath('/canada/merchant')
+    const { bookings: _d, ...restDemo } = demo
+    const { bookings: _c, ...restCanada } = canada
+    expect(restDemo).toEqual(restCanada)
+  })
+})
+
 describe('a pack may only turn modules OFF', () => {
   it('cannot resurrect a module its market cut', () => {
     // Canada deliberately cut these. A pack asking for them back must lose,

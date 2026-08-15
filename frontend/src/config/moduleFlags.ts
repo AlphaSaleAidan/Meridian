@@ -92,10 +92,22 @@ export const canadaModuleFlags: ModuleFlags = {
  * a market must keep trimming them whatever trade the merchant is in.
  */
 export function flagsForPath(pathname: string): ModuleFlags {
+  // PUBLIC DEMOS: bookings is off until it has demo data of its own.
+  //
+  // demoMerchantPillars is derived from merchantPillars, so adding the
+  // Bookings pillar handed both public demos a tab whose page calls the real
+  // API with the org id 'demo', gets refused, and renders "Could not load
+  // bookings" — on the surface a prospect is shown. An empty tab is a bad
+  // demo; a broken one loses the meeting. Flip this back on in the same
+  // change that gives BookingsPage a demo path, the way api.ts already does
+  // for every other dataset.
+  const isDemoPath = pathname.startsWith('/demo') || pathname.startsWith('/canada/demo')
+  if (isDemoPath) return { ...canadaModuleFlags, bookings: false }
+
   if (pathname.startsWith('/canada')) return canadaModuleFlags
-  // US merchant portal + US demo mirror the Canada product exactly (same
-  // trimmed pillar set). Legacy surfaces (/app, /us/dashboard) keep the full set.
-  if (pathname.startsWith('/us/merchant') || pathname.startsWith('/demo')) return canadaModuleFlags
+  // US merchant portal mirrors the Canada product exactly (same trimmed pillar
+  // set). Legacy surfaces (/app, /us/dashboard) keep the full set.
+  if (pathname.startsWith('/us/merchant')) return canadaModuleFlags
   return defaultModuleFlags
 }
 
