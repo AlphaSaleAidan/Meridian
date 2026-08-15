@@ -26,105 +26,41 @@
  */
 import { useState } from 'react'
 import {
-  ArrowLeft, ArrowRight, Armchair, Building2, Car, Check, Loader2,
-  MessageSquare, Phone, Plus, Scissors, Trash2, UtensilsCrossed,
+  ArrowLeft, ArrowRight, Armchair, Building2, Car, Check, HeartPulse, Loader2,
+  MessageSquare, Phone, Plus, Scissors, Sparkles, Trash2, UtensilsCrossed,
 } from 'lucide-react'
 import { Select } from '@/components/ui/Select'
+import { ALL_PACKS, type NichePack } from '@/config/niches'
 import { bookingsApi, type HoursRow, type ResourceKind } from '@/lib/bookings-api'
 
 type Mode = 'native' | 'provider' | 'external_link'
 type Step = 'vertical' | 'mode' | 'link' | 'resources' | 'services' | 'hours' | 'review'
 
-interface Preset {
-  key: string
-  label: string
-  blurb: string
-  Icon: typeof UtensilsCrossed
-  noun: string
-  kind: ResourceKind
-  /** What one unit of capacity is called, singular, for review copy. */
-  unitLabel: string
-  /**
-   * The count question, written out per vertical rather than assembled from
-   * the unit label. "How many people take appointments?" is not a template of
-   * "How many <unit>s do you have?", and an earlier version that tried to
-   * generate it produced "How many tables can be booked at once?" — which
-   * reads as a limit on the guest rather than a count of what the shop owns.
-   */
-  countTitle: string
-  /** Field label above the number box. */
-  countLabel: string
-  defaultCount: number
-  defaultSeats: number
-  /** Restaurants band by party size; everyone else books a named service. */
-  partyBanded: boolean
-  services: { name: string; duration: number; buffer: number; min: number; max: number }[]
-  days: number[]
-  opens: string
-  closes: string
+/**
+ * The vertical choices come from the shared niche packs (config/niches.ts) so
+ * the wizard, the sales pitch and anything built on top of a trade cannot
+ * drift apart. Trades that do not book at all are filtered out here rather
+ * than offered a table plan they will never use.
+ */
+const PRESETS = ALL_PACKS.filter((p) => p.booksAtAll)
+
+const ICONS: Record<string, typeof UtensilsCrossed> = {
+  restaurant: UtensilsCrossed,
+  barbershop: Scissors,
+  nails: Sparkles,
+  detailing: Car,
+  medspa: HeartPulse,
+  other: Building2,
 }
 
-/**
- * Per-vertical defaults. These are guesses, and every one is editable on the
- * next screen — the point is that a merchant who agrees with all of them can
- * press Next four times, which is the difference between finishing in the
- * meeting and "I'll do it later".
- */
-const PRESETS: Preset[] = [
-  {
-    key: 'restaurant',
-    label: 'Restaurant or bar',
-    blurb: 'Tables, party sizes, turn times',
-    Icon: UtensilsCrossed,
-    noun: 'table', kind: 'table', unitLabel: 'table',
-    countTitle: 'How many tables do you have?', countLabel: 'Tables',
-    defaultCount: 8, defaultSeats: 4, partyBanded: true,
-    services: [
-      { name: 'Table for 1–4', duration: 90, buffer: 15, min: 1, max: 4 },
-      { name: 'Table for 5–8', duration: 120, buffer: 15, min: 5, max: 8 },
-    ],
-    days: [0, 2, 3, 4, 5, 6], opens: '17:00', closes: '22:00',
-  },
-  {
-    key: 'barbershop',
-    label: 'Barbershop or salon',
-    blurb: 'Chairs, named services, back to back',
-    Icon: Scissors,
-    noun: 'appointment', kind: 'chair', unitLabel: 'chair',
-    countTitle: 'How many chairs do you have?', countLabel: 'Chairs',
-    defaultCount: 3, defaultSeats: 1, partyBanded: false,
-    services: [
-      { name: 'Haircut', duration: 30, buffer: 5, min: 1, max: 1 },
-      { name: 'Cut and beard', duration: 45, buffer: 5, min: 1, max: 1 },
-    ],
-    days: [2, 3, 4, 5, 6], opens: '09:00', closes: '18:00',
-  },
-  {
-    key: 'detailing',
-    label: 'Auto detailing',
-    blurb: 'Bays, long jobs, one car at a time',
-    Icon: Car,
-    noun: 'appointment', kind: 'bay', unitLabel: 'bay',
-    countTitle: 'How many bays do you have?', countLabel: 'Bays',
-    defaultCount: 2, defaultSeats: 1, partyBanded: false,
-    services: [
-      { name: 'Interior and exterior', duration: 120, buffer: 15, min: 1, max: 1 },
-      { name: 'Full detail', duration: 240, buffer: 30, min: 1, max: 1 },
-    ],
-    days: [1, 2, 3, 4, 5, 6], opens: '08:00', closes: '17:00',
-  },
-  {
-    key: 'other',
-    label: 'Something else',
-    blurb: 'People and appointments',
-    Icon: Building2,
-    noun: 'appointment', kind: 'staff', unitLabel: 'person',
-    countTitle: 'How many people take appointments?', countLabel: 'People',
-    defaultCount: 2, defaultSeats: 1, partyBanded: false,
-    services: [{ name: 'Appointment', duration: 60, buffer: 0, min: 1, max: 1 }],
-    days: [1, 2, 3, 4, 5], opens: '09:00', closes: '17:00',
-  },
-]
+const BLURBS: Record<string, string> = {
+  restaurant: 'Tables, party sizes, turn times',
+  barbershop: 'Chairs, named services, back to back',
+  nails: 'Technicians, longer sittings, rebooking',
+  detailing: 'Bays, long jobs, one car at a time',
+  medspa: 'Treatment rooms, consultations, follow-ups',
+  other: 'People and appointments',
+}
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 
@@ -138,7 +74,7 @@ export default function BookingsWizard({ merchantId, onDone, onSkip }: {
   onSkip: () => void
 }) {
   const [step, setStep] = useState<Step>('vertical')
-  const [preset, setPreset] = useState<Preset>(PRESETS[0])
+  const [preset, setPreset] = useState<NichePack>(PRESETS[0])
   const [mode, setMode] = useState<Mode>('native')
   const [linkUrl, setLinkUrl] = useState('')
   const [count, setCount] = useState(PRESETS[0].defaultCount)
@@ -150,7 +86,7 @@ export default function BookingsWizard({ merchantId, onDone, onSkip }: {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
-  const choosePreset = (p: Preset) => {
+  const choosePreset = (p: NichePack) => {
     setPreset(p)
     setCount(p.defaultCount)
     setSeats(p.defaultSeats)
@@ -176,9 +112,9 @@ export default function BookingsWizard({ merchantId, onDone, onSkip }: {
   }
 
   const resourceNames = Array.from({ length: count }, (_, i) => {
-    const base = preset.kind === 'table' ? 'Table'
-      : preset.kind === 'chair' ? 'Chair'
-      : preset.kind === 'bay' ? 'Bay' : 'Staff'
+    const base = preset.resourceKind === 'table' ? 'Table'
+      : preset.resourceKind === 'chair' ? 'Chair'
+      : preset.resourceKind === 'bay' ? 'Bay' : 'Staff'
     return `${base} ${i + 1}`
   })
 
@@ -193,12 +129,12 @@ export default function BookingsWizard({ merchantId, onDone, onSkip }: {
       await bookingsApi.applySetup({
         merchantId,
         mode,
-        noun: preset.noun,
+        noun: preset.bookingNoun,
         linkUrl: mode === 'external_link' ? linkUrl.trim() : '',
         resources: mode === 'native'
           ? resourceNames.map((name, i) => ({
-              name, kind: preset.kind,
-              seats: preset.kind === 'table' ? seats : 1,
+              name, kind: preset.resourceKind,
+              seats: preset.resourceKind === 'table' ? seats : 1,
               sortOrder: i,
             }))
           : [],
@@ -263,25 +199,31 @@ export default function BookingsWizard({ merchantId, onDone, onSkip }: {
             hint="It only sets the starting point — you can change everything after."
           >
             <div className="grid gap-2 sm:grid-cols-2">
-              {PRESETS.map((p) => (
-                <button
-                  key={p.key}
-                  onClick={() => choosePreset(p)}
-                  className={`flex items-start gap-3 rounded-lg border p-3 text-left transition-colors ${
-                    preset.key === p.key
-                      ? 'border-[#1A8FD6]/60 bg-[#1A8FD6]/10'
-                      : 'border-[#1F1F23] hover:border-[#2A2A30]'
-                  }`}
-                >
-                  <p.Icon className={`mt-0.5 h-4 w-4 shrink-0 ${
-                    preset.key === p.key ? 'text-[#1A8FD6]' : 'text-[#A1A1A8]'
-                  }`} />
-                  <span className="min-w-0">
-                    <span className="block text-sm text-[#F5F5F7]">{p.label}</span>
-                    <span className="block text-xs text-[#A1A1A8]">{p.blurb}</span>
-                  </span>
-                </button>
-              ))}
+              {PRESETS.map((p) => {
+                const Icon = ICONS[p.key] || Building2
+                const chosen = preset.key === p.key
+                return (
+                  <button
+                    key={p.key}
+                    onClick={() => choosePreset(p)}
+                    className={`flex items-start gap-3 rounded-lg border p-3 text-left transition-colors ${
+                      chosen
+                        ? 'border-[#1A8FD6]/60 bg-[#1A8FD6]/10'
+                        : 'border-[#1F1F23] hover:border-[#2A2A30]'
+                    }`}
+                  >
+                    <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${
+                      chosen ? 'text-[#1A8FD6]' : 'text-[#A1A1A8]'
+                    }`} />
+                    <span className="min-w-0">
+                      <span className="block text-sm text-[#F5F5F7]">{p.label}</span>
+                      <span className="block text-xs text-[#A1A1A8]">
+                        {BLURBS[p.key] || ''}
+                      </span>
+                    </span>
+                  </button>
+                )
+              })}
             </div>
           </Question>
         )}
@@ -350,7 +292,7 @@ export default function BookingsWizard({ merchantId, onDone, onSkip }: {
                   className="w-24 rounded-lg border border-[#1F1F23] bg-[#0A0A0B] px-3 py-2 text-sm text-[#F5F5F7] outline-none focus:border-[#1A8FD6]/50"
                 />
               </label>
-              {preset.kind === 'table' && (
+              {preset.resourceKind === 'table' && (
                 <label className="space-y-1">
                   {/* "Most tables seat" rather than "Seats each": no restaurant
                       has identical tables, and a label that claims they do
@@ -369,7 +311,7 @@ export default function BookingsWizard({ merchantId, onDone, onSkip }: {
                 </label>
               )}
             </div>
-            {preset.kind === 'table' && (
+            {preset.resourceKind === 'table' && (
               <p className="mt-3 text-xs text-[#6B6B73]">
                 Got a two-top and a big booth? Set the common size now and
                 change the odd ones on the next screen.
@@ -383,7 +325,7 @@ export default function BookingsWizard({ merchantId, onDone, onSkip }: {
             title={preset.partyBanded ? 'How long does a table turn?' : 'What do you book, and for how long?'}
             hint={preset.partyBanded
               ? 'The agent picks the right one from the party size. Turnaround is held after they leave, and never quoted to the guest.'
-              : `Turnaround is the gap you need afterwards. It holds the ${preset.unitLabel} without being part of what the customer is quoted.`}
+              : `Turnaround is the gap you need afterwards. It holds the ${preset.countLabel.toLowerCase().replace(/s$/, '')} without being part of what the customer is quoted.`}
           >
             <div className="space-y-2">
               {services.map((s, i) => (
@@ -551,7 +493,7 @@ export default function BookingsWizard({ merchantId, onDone, onSkip }: {
               {mode === 'native' && (
                 <>
                   <Row label={preset.countLabel}>
-                    {count}{preset.kind === 'table' ? ` · mostly ${seats} seats` : ''}
+                    {count}{preset.resourceKind === 'table' ? ` · mostly ${seats} seats` : ''}
                   </Row>
                   <Row label="Bookable">
                     {services.map((s) => `${s.name} (${s.duration} min)`).join(', ')}
@@ -562,7 +504,7 @@ export default function BookingsWizard({ merchantId, onDone, onSkip }: {
                   </Row>
                 </>
               )}
-              <Row label="The agent will say">“{preset.noun}”</Row>
+              <Row label="The agent will say">“{preset.bookingNoun}”</Row>
             </dl>
 
             {mode === 'provider' && (
