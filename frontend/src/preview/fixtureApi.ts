@@ -574,6 +574,89 @@ function dayKeyOf(iso: string): string {
   return `${g('year')}-${g('month')}-${g('day')}`
 }
 
+/**
+ * Meridian already has forecasting, insights and anomaly detection behind
+ * /api/dashboard/*. The workspace should USE them rather than grow its own,
+ * so the preview answers those endpoints too — derived from the same bookings
+ * the book is drawn from, so the projection cannot disagree with the calendar
+ * sitting under it.
+ */
+function dashboardRoute(url: URL): Response | null {
+  const path = url.pathname
+  if (!path.startsWith('/api/dashboard/')) return null
+
+  // Fourteen days behind, seeded the same way the visible day is.
+  const now = new Date()
+  const perDay: { key: string; cents: number; weekday: number }[] = []
+  for (let i = 13; i >= 0; i--) {
+    const d = new Date(now.getTime() - i * 86400_000)
+    const key = dayKeyOf(d.toISOString())
+    seedDay(key)
+    const cents = bookings
+      .filter((b) => dayKeyOf(b.starts_at) === key && b.status !== 'cancelled' && b.status !== 'no_show')
+      .reduce((sum, b) => sum + serviceValue(b), 0)
+    perDay.push({ key, cents, weekday: d.getDay() })
+  }
+
+  if (path.endsWith('/forecasts')) {
+    // Per-weekday average, which is the only projection that survives a shop
+    // being shut on Mondays. A flat average would forecast revenue on a day
+    // the doors do not open.
+    const out: any[] = []
+    for (let i = 1; i <= 7; i++) {
+      const d = new Date(now.getTime() + i * 86400_000)
+      const sameDay = perDay.filter((x) => x.weekday === d.getDay() && x.cents > 0)
+      const avg = sameDay.length
+        ? sameDay.reduce((a, b) => a + b.cents, 0) / sameDay.length
+        : 0
+      out.push({
+        id: `fc-${i}`,
+        type: 'revenue',
+        period_start: dayKeyOf(d.toISOString()),
+        period_end: dayKeyOf(d.toISOString()),
+        predicted_cents: Math.round(avg),
+        lower_bound_cents: Math.round(avg * 0.82),
+        upper_bound_cents: Math.round(avg * 1.18),
+        confidence: sameDay.length > 1 ? 0.78 : 0.5,
+        horizon_days: i,
+      })
+    }
+    return json({ forecasts: out, total: out.length })
+  }
+
+  if (path.endsWith('/anomalies')) {
+    const traded = perDay.filter((d) => d.cents > 0)
+    const avg = traded.length
+      ? traded.reduce((a, b) => a + b.cents, 0) / traded.length
+      : 0
+    const rows = traded
+      .filter((d) => avg > 0 && d.cents < avg * 0.65)
+      .slice(-2)
+      .map((d) => ({
+        type: 'revenue_drop',
+        date: d.key,
+        value_cents: d.cents,
+        expected_cents: Math.round(avg),
+        z_score: -2.1,
+        description: 'Took less than a normal day for the time of week',
+      }))
+    return json({ stats: { checked_days: perDay.length }, anomalies: rows })
+  }
+
+  if (path.endsWith('/insights')) {
+    return json({ insights: [], total: 0 })
+  }
+
+  return json({ detail: 'preview: no fixture' }, 404)
+}
+
+/** What one booking is worth, from its service price. */
+function serviceValue(b: Row): number {
+  if (trade?.avgCoverCents) return (b.party_size || 1) * trade.avgCoverCents
+  const svc = SERVICES.find((x) => x.id === b.service_id)
+  return svc?.price_cents ?? 0
+}
+
 async function route(url: URL, init: RequestInit): Promise<Response> {
   const method = (init.method || 'GET').toUpperCase()
   const path = url.pathname.replace('/api/bookings', '')
@@ -913,6 +996,10 @@ export function installFixtureApi() {
   window.fetch = async (input: any, init: any = {}) => {
     const raw = typeof input === 'string' ? input : input.url
     const url = new URL(raw, window.location.origin)
+    if (url.pathname.startsWith('/api/dashboard/')) {
+      await new Promise((r) => setTimeout(r, 80))
+      return dashboardRoute(url) || real(input, init)
+    }
     if (!url.pathname.startsWith('/api/bookings')) return real(input, init)
     // A beat of latency so loading states are visible rather than skipped.
     await new Promise((r) => setTimeout(r, 90 + Math.random() * 120))

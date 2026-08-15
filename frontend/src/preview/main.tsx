@@ -29,6 +29,7 @@ import { ALL_PACKS, type NichePack } from '@/config/niches'
 import TradeVersions from './TradeVersions'
 import { BASE_LOCATION, configureForTrade, installFixtureApi } from './fixtureApi'
 import TradeWorkspace from '@/components/overview/TradeWorkspace'
+import { api } from '@/lib/api'
 import { bookingsApi, type Booking, type BusyBlock, type Resource, type Service } from '@/lib/bookings-api'
 import '@/index.css'
 
@@ -257,6 +258,8 @@ function OverviewHost({ pack, shopName }: { pack: NichePack; shopName: string })
   const [busy, setBusy] = useState<BusyBlock[]>([])
   const [services, setServices] = useState<Service[]>([])
   const [history, setHistory] = useState<{ day: string; cents: number }[]>([])
+  const [forecasts, setForecasts] = useState<any[]>([])
+  const [anomalies, setAnomalies] = useState<any[]>([])
   const [timezone, setTimezone] = useState('')
   // Open on a day this trade actually trades. A barbershop shut on Sundays
   // showing an empty Sunday is CORRECT and a terrible first impression, so the
@@ -264,6 +267,19 @@ function OverviewHost({ pack, shopName }: { pack: NichePack; shopName: string })
   const [day, setDay] = useState(() => nextOpenDay(pack))
 
   useEffect(() => { setDay(nextOpenDay(pack)) }, [pack])
+
+  // The forecasting and anomaly detection Meridian already ships. Called the
+  // same way the rest of the portal calls them.
+  useEffect(() => {
+    if (!pack.booksAtAll) { setForecasts([]); setAnomalies([]); return }
+    Promise.all([
+      api.forecasts(MERCHANT).catch(() => ({ forecasts: [] })),
+      api.anomalies(MERCHANT).catch(() => ({ anomalies: [] })),
+    ]).then(([f, a]: any[]) => {
+      setForecasts(f.forecasts || [])
+      setAnomalies(a.anomalies || [])
+    })
+  }, [pack])
 
   useEffect(() => {
     if (!pack.booksAtAll) return
@@ -339,6 +355,8 @@ function OverviewHost({ pack, shopName }: { pack: NichePack; shopName: string })
       resources={resources}
       services={services}
       history={history}
+      forecasts={forecasts}
+      anomalies={anomalies}
       busy={busy}
       timezone={timezone}
       day={day}

@@ -46,6 +46,12 @@ export interface WorkspaceData {
    *  Drives the trend line and the comparison — an owner reads today against
    *  a normal day, never against zero. */
   history?: { day: string; cents: number }[]
+  /** From Meridian's existing /api/dashboard/forecasts. Reused rather than
+   *  reinvented — the product already forecasts revenue and the workspace
+   *  should show it, not grow a second model beside it. */
+  forecasts?: { period_start: string; predicted_cents: number; lower_bound_cents: number | null; upper_bound_cents: number | null; confidence: number | null }[]
+  /** From /api/dashboard/anomalies. */
+  anomalies?: { date: string; value_cents: number; expected_cents: number; description: string }[]
 }
 
 const money = (cents: number): string =>
@@ -174,6 +180,15 @@ export default function TradeWorkspace(data: WorkspaceData) {
     () => computeTiles(data, live, open, close, booked),
     [data, live, open, close, booked])
 
+  const forecast = useMemo(() => {
+    const days = data.forecasts || []
+    return {
+      days,
+      total: days.reduce((s, f) => s + f.predicted_cents, 0),
+      peak: Math.max(1, ...days.map((f) => f.predicted_cents)),
+    }
+  }, [data.forecasts])
+
   const dayLabel = new Date(`${day}T12:00:00`).toLocaleDateString('en-CA', {
     weekday: 'long', month: 'long', day: 'numeric',
   })
@@ -256,6 +271,52 @@ export default function TradeWorkspace(data: WorkspaceData) {
           ))}
         </div>
       </section>
+
+      {forecast.total > 0 && (
+        <section className="rounded-xl border border-[#1F1F23] bg-[#111113] p-5">
+          <div className="flex flex-wrap items-baseline justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold text-[#F5F5F7]">The week ahead</h2>
+              <p className="mt-0.5 text-sm text-[#A1A1A8]">
+                Projected from what this shop normally takes on each day of the
+                week — not a flat average, which would forecast money on the days
+                you are shut.
+              </p>
+            </div>
+            <div className="text-right">
+              <div className="font-mono text-2xl font-semibold text-[#F5F5F7]">
+                {money(forecast.total)}
+              </div>
+              <div className="text-[11px] uppercase tracking-wide text-[#6B6B73]">
+                next 7 days
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-4 flex items-end gap-2">
+            {forecast.days.map((f) => (
+              <div key={f.period_start} className="flex flex-1 flex-col items-center gap-1.5">
+                <span className="font-mono text-[10px] text-[#A1A1A8]">
+                  {f.predicted_cents > 0 ? money(f.predicted_cents) : '—'}
+                </span>
+                <div className="flex h-24 w-full items-end">
+                  <div
+                    className="w-full rounded-t bg-[#1A8FD6]/50"
+                    style={{
+                      height: `${forecast.peak > 0 ? (f.predicted_cents / forecast.peak) * 100 : 0}%`,
+                      minHeight: f.predicted_cents > 0 ? 3 : 0,
+                    }}
+                    title={`${f.period_start} — ${money(f.predicted_cents)} projected`}
+                  />
+                </div>
+                <span className="text-[10px] text-[#6B6B73]">
+                  {new Date(`${f.period_start}T12:00:00`).toLocaleDateString('en-CA', { weekday: 'short' })}
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* ── The work, and what needs a human ──────────────────────── */}
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
@@ -446,6 +507,17 @@ function computeAttention(
 ): Attention[] {
   const { pack, resources, timezone, stops, origin } = data
   const out: Attention[] = []
+
+  // Meridian already detects these. Surfacing them here rather than leaving
+  // them on a page nobody opens is most of the value of having them.
+  for (const a of data.anomalies || []) {
+    out.push({
+      title: 'A day came in low',
+      detail: a.description,
+      tone: 'warn',
+      rows: [`${a.date} · took ${money(a.value_cents)}, expected ${money(a.expected_cents)}`],
+    })
+  }
   const active = resources.filter((r) => r.active)
 
   if (pack.travels) {
