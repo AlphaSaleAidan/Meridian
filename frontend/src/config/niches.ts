@@ -33,6 +33,9 @@ export interface PackService {
   buffer: number
   min: number
   max: number
+  /** US list price in cents. Money is the first thing an owner looks at, so a
+   *  pack that cannot price its own services cannot show them revenue. */
+  price?: number
 }
 
 export interface NichePack {
@@ -92,6 +95,12 @@ export interface NichePack {
    * trade's, it is a theme, not a version.
    */
   homeMetric: { label: string; help: string }
+  /**
+   * Average spend per cover, for trades where the booking is a table rather
+   * than a priced service. A restaurant's revenue is covers x spend; pricing
+   * a "Table for 1-4" would be nonsense.
+   */
+  avgCoverCents?: number
 
   /** True when the work happens at the customer's address, which changes what
    *  a booking needs to carry (where, and how long to get there). Not yet
@@ -120,9 +129,9 @@ export const NICHE_PACKS: NichePack[] = [
     defaultSeats: 1,
     partyBanded: false,
     services: [
-      { name: 'Haircut', duration: 30, buffer: 5, min: 1, max: 1 },
-      { name: 'Cut and beard', duration: 45, buffer: 5, min: 1, max: 1 },
-      { name: 'Skin fade', duration: 45, buffer: 5, min: 1, max: 1 },
+      { name: 'Haircut', duration: 30, buffer: 5, min: 1, max: 1, price: 3500 },
+      { name: 'Cut and beard', duration: 45, buffer: 5, min: 1, max: 1, price: 5500 },
+      { name: 'Skin fade', duration: 45, buffer: 5, min: 1, max: 1, price: 4500 },
     ],
     days: [2, 3, 4, 5, 6],
     opens: '09:00',
@@ -146,10 +155,10 @@ export const NICHE_PACKS: NichePack[] = [
     defaultSeats: 1,
     partyBanded: false,
     services: [
-      { name: 'Gel manicure', duration: 45, buffer: 10, min: 1, max: 1 },
-      { name: 'Full set', duration: 90, buffer: 15, min: 1, max: 1 },
-      { name: 'Fill', duration: 60, buffer: 10, min: 1, max: 1 },
-      { name: 'Lash extensions', duration: 120, buffer: 15, min: 1, max: 1 },
+      { name: 'Gel manicure', duration: 45, buffer: 10, min: 1, max: 1, price: 5500 },
+      { name: 'Full set', duration: 90, buffer: 15, min: 1, max: 1, price: 9500 },
+      { name: 'Fill', duration: 60, buffer: 10, min: 1, max: 1, price: 6500 },
+      { name: 'Lash extensions', duration: 120, buffer: 15, min: 1, max: 1, price: 15000 },
     ],
     days: [1, 2, 3, 4, 5, 6],
     opens: '09:00',
@@ -173,10 +182,10 @@ export const NICHE_PACKS: NichePack[] = [
     defaultSeats: 1,
     partyBanded: false,
     services: [
-      { name: 'Wash and wax', duration: 90, buffer: 15, min: 1, max: 1 },
-      { name: 'Interior and exterior', duration: 120, buffer: 15, min: 1, max: 1 },
-      { name: 'Full detail', duration: 240, buffer: 30, min: 1, max: 1 },
-      { name: 'Ceramic coating', duration: 480, buffer: 60, min: 1, max: 1 },
+      { name: 'Wash and wax', duration: 90, buffer: 15, min: 1, max: 1, price: 12000 },
+      { name: 'Interior and exterior', duration: 120, buffer: 15, min: 1, max: 1, price: 22000 },
+      { name: 'Full detail', duration: 240, buffer: 30, min: 1, max: 1, price: 40000 },
+      { name: 'Ceramic coating', duration: 480, buffer: 60, min: 1, max: 1, price: 90000 },
     ],
     days: [1, 2, 3, 4, 5, 6],
     opens: '08:00',
@@ -205,9 +214,9 @@ export const NICHE_PACKS: NichePack[] = [
     defaultSeats: 1,
     partyBanded: false,
     services: [
-      { name: 'Exterior wash', duration: 60, buffer: 15, min: 1, max: 1 },
-      { name: 'Interior and exterior', duration: 120, buffer: 20, min: 1, max: 1 },
-      { name: 'Full detail', duration: 240, buffer: 30, min: 1, max: 1 },
+      { name: 'Exterior wash', duration: 60, buffer: 15, min: 1, max: 1, price: 9000 },
+      { name: 'Interior and exterior', duration: 120, buffer: 20, min: 1, max: 1, price: 20000 },
+      { name: 'Full detail', duration: 240, buffer: 30, min: 1, max: 1, price: 40000 },
     ],
     days: [1, 2, 3, 4, 5, 6],
     opens: '08:00',
@@ -240,6 +249,7 @@ export const NICHE_PACKS: NichePack[] = [
     closes: '22:00',
     modules: { camera: false },
     pillarOrder: ['bookings', 'phone', '', 'inventory', 'schedule'],
+    avgCoverCents: 4800,
     homeMetric: { label: 'Covers booked tonight',
                   help: 'Guests expected, not tables — a four-top and a two-top are not the same night.' },
   },
@@ -282,10 +292,10 @@ export const NICHE_PACKS: NichePack[] = [
     defaultSeats: 1,
     partyBanded: false,
     services: [
-      { name: 'Consultation', duration: 30, buffer: 10, min: 1, max: 1 },
-      { name: 'Facial', duration: 60, buffer: 15, min: 1, max: 1 },
-      { name: 'Injectables', duration: 45, buffer: 15, min: 1, max: 1 },
-      { name: 'Laser session', duration: 90, buffer: 20, min: 1, max: 1 },
+      { name: 'Consultation', duration: 30, buffer: 10, min: 1, max: 1, price: 0 },
+      { name: 'Facial', duration: 60, buffer: 15, min: 1, max: 1, price: 18000 },
+      { name: 'Injectables', duration: 45, buffer: 15, min: 1, max: 1, price: 65000 },
+      { name: 'Laser session', duration: 90, buffer: 20, min: 1, max: 1, price: 30000 },
     ],
     days: [1, 2, 3, 4, 5],
     opens: '09:00',
@@ -312,7 +322,7 @@ export const GENERIC_PACK: NichePack = {
   defaultCount: 2,
   defaultSeats: 1,
   partyBanded: false,
-  services: [{ name: 'Appointment', duration: 60, buffer: 0, min: 1, max: 1 }],
+  services: [{ name: 'Appointment', duration: 60, buffer: 0, min: 1, max: 1, price: 8000 }],
   days: [1, 2, 3, 4, 5],
   opens: '09:00',
   closes: '17:00',

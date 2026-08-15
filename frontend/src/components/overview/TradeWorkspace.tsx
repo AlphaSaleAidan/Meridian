@@ -23,7 +23,7 @@
  */
 import { useMemo } from 'react'
 import { AlertTriangle, ChevronLeft, ChevronRight, Plus } from 'lucide-react'
-import type { Booking, BusyBlock, Resource } from '@/lib/bookings-api'
+import type { Booking, BusyBlock, Resource, Service } from '@/lib/bookings-api'
 import type { NichePack } from '@/config/niches'
 import BookingCalendar from '@/components/BookingCalendar'
 import RouteDay, { haversineKm, driveMinutes, type RouteOrigin, type Stop } from '@/components/RouteDay'
@@ -34,6 +34,7 @@ export interface WorkspaceData {
   pack: NichePack
   bookings: Booking[]
   resources: Resource[]
+  services: Service[]
   busy: BusyBlock[]
   timezone: string
   day: string
@@ -41,6 +42,31 @@ export interface WorkspaceData {
   stops?: Stop[]
   origin?: RouteOrigin
   shopName: string
+  /** Booked revenue per day for the fortnight ending today, oldest first.
+   *  Drives the trend line and the comparison — an owner reads today against
+   *  a normal day, never against zero. */
+  history?: { day: string; cents: number }[]
+}
+
+const money = (cents: number): string =>
+  cents >= 100_000
+    ? `$${(cents / 100_000).toFixed(1)}k`.replace('.0k', 'k')
+    : `$${Math.round(cents / 100).toLocaleString()}`
+
+/**
+ * What a day's bookings are worth.
+ *
+ * Priced services carry their own price; a restaurant's "service" is a party
+ * band, which cannot sensibly be priced, so its revenue is covers x average
+ * spend. Getting this wrong in either direction makes every number above it a
+ * lie, so the two cases are handled separately rather than averaged.
+ */
+function revenueCents(bookings: Booking[], services: Service[], pack: NichePack): number {
+  if (pack.avgCoverCents) {
+    return bookings.reduce((s, b) => s + b.partySize * pack.avgCoverCents!, 0)
+  }
+  const price = new Map(services.map((sv) => [sv.id, sv.priceCents ?? 0]))
+  return bookings.reduce((s, b) => s + (price.get(b.serviceId || '') ?? 0), 0)
 }
 
 // ── derivations shared by every trade ───────────────────────────────────
@@ -74,11 +100,79 @@ function openWindow(pack: NichePack): [number, number] {
 
 export default function TradeWorkspace(data: WorkspaceData) {
   const { pack, bookings, resources, busy, timezone, day, onShiftDay, stops, origin } = data
-  const live = bookings.filter((b) => LIVE.has(b.status))
+
+  /**
+   * Only THIS day.
+   *
+   * The fetch deliberately widens the window either side so a booking that
+   * runs past midnight is not lost, which means the raw list carries the
+   * previous afternoon. Money computed over that window reported a closed
+   * Sunday as a $655 day — yesterday's takings, on today's screen.
+   */
+  const today = useMemo(() => bookings.filter((b) => {
+    try {
+      return new Intl.DateTimeFormat('en-CA', {
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        timeZone: timezone || undefined,
+      }).format(new Date(b.startsAt)) === day
+    } catch {
+      return true
+    }
+  }), [bookings, day, timezone])
+
+  const live = today.filter((b) => LIVE.has(b.status))
   const [open, close] = openWindow(pack)
 
-  const headline = useMemo(() => computeHeadline(data, live, open, close), [data, live, open, close])
   const attention = useMemo(() => computeAttention(data, live, open, close), [data, live, open, close])
+
+  const { services = [], history } = data
+  const booked = useMemo(
+    () => revenueCents(live, services, pack), [live, services, pack])
+
+  /** Today against the same weekday, not against yesterday — a Sunday is not
+   *  a slow Monday, and comparing them invents a crisis every week. */
+  const weekdayName = new Date(`${day}T12:00:00`).toLocaleDateString('en-CA', { weekday: 'long' })
+  const changePct = useMemo(() => {
+    if (!history || history.length < 8) return undefined
+    const target = new Date(`${day}T12:00:00`).getDay()
+    const sameWeekday = history
+      .filter((h) => new Date(`${h.day}T12:00:00`).getDay() === target && h.day !== day)
+      .map((h) => h.cents)
+    if (!sameWeekday.length) return undefined
+    const avg = sameWeekday.reduce((a, b) => a + b, 0) / sameWeekday.length
+    if (avg <= 0) return undefined
+    return Math.round(((booked - avg) / avg) * 100)
+  }, [history, day, booked])
+
+  /**
+   * Money left on the table — the figure that makes the gaps below matter.
+   * Idle capacity converted at what this shop actually charges, so an owner
+   * reads "two empty chairs" as the dollars they are.
+   */
+  const { recoverable, recoverableWhy } = useMemo(() => {
+    if (!pack.booksAtAll) return { recoverable: 0, recoverableWhy: '' }
+    const active = resources.filter((r) => r.active)
+    const capacity = Math.max(1, (close - open)) * Math.max(1, active.length)
+    const bookedMins = live.reduce((s, b) => s + mins(b), 0)
+    const idle = Math.max(0, capacity - bookedMins)
+    const avgDuration = services.length
+      ? services.reduce((s, sv) => s + sv.durationMinutes + sv.bufferMinutes, 0) / services.length
+      : 60
+    const avgValue = pack.avgCoverCents
+      ? pack.avgCoverCents * 2
+      : services.length
+        ? services.reduce((s, sv) => s + (sv.priceCents ?? 0), 0) / services.length
+        : 0
+    const slots = Math.floor(idle / Math.max(15, avgDuration))
+    return {
+      recoverable: Math.round(slots * avgValue),
+      recoverableWhy: `${slots} more ${slots === 1 ? 'slot' : 'slots'} would fit`,
+    }
+  }, [pack, resources, services, live, open, close])
+
+  const tiles = useMemo(
+    () => computeTiles(data, live, open, close, booked),
+    [data, live, open, close, booked])
 
   const dayLabel = new Date(`${day}T12:00:00`).toLocaleDateString('en-CA', {
     weekday: 'long', month: 'long', day: 'numeric',
@@ -86,60 +180,81 @@ export default function TradeWorkspace(data: WorkspaceData) {
 
   return (
     <div className="space-y-4">
-      {/* ── The decision line ─────────────────────────────────────── */}
+      {/* ── The money line ────────────────────────────────────────── */}
       <section className="rounded-xl border border-[#1F1F23] bg-gradient-to-br from-[#12171C] to-[#111113] p-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
+          <div className="min-w-0">
             <div className="text-[11px] uppercase tracking-[0.14em] text-[#6B6B73]">
-              {dayLabel}
+              {dayLabel} · booked so far
             </div>
-            <div className="mt-3 flex items-end gap-4">
+            <div className="mt-2 flex flex-wrap items-end gap-x-4 gap-y-1">
               <div className="font-mono text-[56px] font-semibold leading-none tracking-tight text-[#F5F5F7]">
-                {headline.value}
+                {money(booked)}
               </div>
-              <div className="pb-1.5">
-                <div className="text-sm font-medium text-[#F5F5F7]">{headline.label}</div>
-                <div className="text-xs text-[#6B6B73]">{headline.sub}</div>
-              </div>
+              {typeof changePct === 'number' && (
+                <div className={`pb-2 text-sm font-medium ${
+                  changePct >= 0 ? 'text-[#17C5B0]' : 'text-[#E5484D]'
+                }`}>
+                  {changePct >= 0 ? '+' : ''}{changePct}%
+                  <span className="ml-1 text-xs font-normal text-[#6B6B73]">
+                    vs a normal {weekdayName}
+                  </span>
+                </div>
+              )}
             </div>
+
+            {/* The number that ties the operations below back to money. */}
+            {recoverable > 0 && (
+              <div className="mt-3 inline-flex items-center gap-2 rounded-lg border border-[#F5A524]/30 bg-[#F5A524]/5 px-3 py-1.5">
+                <span className="font-mono text-sm font-semibold text-[#F5A524]">
+                  {money(recoverable)}
+                </span>
+                <span className="text-xs text-[#D4D4D8]">
+                  still sellable today — {recoverableWhy}
+                </span>
+              </div>
+            )}
           </div>
 
-          <div className="flex items-center gap-1 rounded-lg border border-[#1F1F23] bg-[#0E0E11]">
-            <button
-              onClick={() => onShiftDay?.(-1)}
-              aria-label="Previous day"
-              className="p-2 text-[#A1A1A8] transition-colors hover:text-[#F5F5F7]"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </button>
-            <span className="px-1 font-mono text-xs text-[#A1A1A8]">{day}</span>
-            <button
-              onClick={() => onShiftDay?.(1)}
-              aria-label="Next day"
-              className="p-2 text-[#A1A1A8] transition-colors hover:text-[#F5F5F7]"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </button>
+          <div className="flex items-center gap-3">
+            {history && history.length > 3 && <Spark points={history.map((h) => h.cents)} />}
+            <div className="flex items-center gap-1 rounded-lg border border-[#1F1F23] bg-[#0E0E11]">
+              <button
+                onClick={() => onShiftDay?.(-1)}
+                aria-label="Previous day"
+                className="p-2 text-[#A1A1A8] transition-colors hover:text-[#F5F5F7]"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <span className="px-1 font-mono text-xs text-[#A1A1A8]">{day}</span>
+              <button
+                onClick={() => onShiftDay?.(1)}
+                aria-label="Next day"
+                className="p-2 text-[#A1A1A8] transition-colors hover:text-[#F5F5F7]"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
           </div>
         </div>
 
-        {headline.stats.length > 0 && (
-          <div className="mt-6 flex flex-wrap gap-x-10 gap-y-3 border-t border-[#1F1F23] pt-4">
-            {headline.stats.map((s) => (
-              <div key={s.label}>
-                <div className={`font-mono text-xl font-semibold ${
-                  s.tone === 'warn' ? 'text-[#E5484D]'
-                    : s.tone === 'good' ? 'text-[#17C5B0]' : 'text-[#F5F5F7]'
-                }`}>
-                  {s.value}
-                </div>
-                <div className="text-[11px] uppercase tracking-wide text-[#6B6B73]">
-                  {s.label}
-                </div>
+        {/* The four figures an owner checks before anything else. */}
+        <div className="mt-6 grid gap-px overflow-hidden rounded-lg border border-[#1F1F23] bg-[#1F1F23] sm:grid-cols-2 lg:grid-cols-4">
+          {tiles.map((t) => (
+            <div key={t.label} className="bg-[#0E0E11] px-4 py-3">
+              <div className="text-[10px] uppercase tracking-wide text-[#6B6B73]">
+                {t.label}
               </div>
-            ))}
-          </div>
-        )}
+              <div className={`mt-1 font-mono text-2xl font-semibold ${
+                t.tone === 'warn' ? 'text-[#E5484D]'
+                  : t.tone === 'good' ? 'text-[#17C5B0]' : 'text-[#F5F5F7]'
+              }`}>
+                {t.value}
+              </div>
+              {t.sub && <div className="mt-0.5 text-[11px] text-[#6B6B73]">{t.sub}</div>}
+            </div>
+          ))}
+        </div>
       </section>
 
       {/* ── The work, and what needs a human ──────────────────────── */}
@@ -159,7 +274,7 @@ export default function TradeWorkspace(data: WorkspaceData) {
             </p>
           ) : (
             <BookingCalendar
-              bookings={bookings}
+              bookings={today}
               resources={resources}
               busy={busy}
               timezone={timezone}
@@ -219,87 +334,102 @@ function mainTitle(pack: NichePack): string {
   return 'The floor'
 }
 
-// ── per-trade headline ──────────────────────────────────────────────────
+// ── the four figures, per trade ─────────────────────────────────────────
 
-interface Stat { label: string; value: string; tone?: 'warn' | 'good' }
+interface Tile { label: string; value: string; sub?: string; tone?: 'warn' | 'good' }
 
-function computeHeadline(
-  data: WorkspaceData, live: Booking[], open: number, close: number,
-): { value: string; label: string; sub: string; stats: Stat[] } {
-  const { pack, resources, timezone, stops, origin } = data
+function computeTiles(
+  data: WorkspaceData, live: Booking[], open: number, close: number, booked: number,
+): Tile[] {
+  const { pack, resources, services = [], timezone, stops, origin } = data
   const active = resources.filter((r) => r.active)
-  const openMins = Math.max(1, close - open)
   const bookedMins = live.reduce((s, b) => s + mins(b), 0)
-  const capacity = openMins * Math.max(1, active.length)
+  const capacity = Math.max(1, close - open) * Math.max(1, active.length)
+  const util = Math.round((bookedMins / capacity) * 100)
+  const avgTicket = live.length ? Math.round(booked / live.length) : 0
 
   switch (pack.key) {
     case 'restaurant': {
       const covers = live.reduce((s, b) => s + b.partySize, 0)
-      const seats = active.reduce((s, r) => s + r.seats, 0)
       const peak = peakBucket(live, timezone, open, close)
-      return {
-        value: String(covers),
-        label: 'covers booked',
-        sub: `${live.length} bookings · ${seats} seats on the floor`,
-        stats: [
-          { label: 'Busiest half hour', value: peak.covers ? clock(peak.at) : '—' },
-          { label: 'Covers then', value: String(peak.covers), tone: peak.covers > seats * 0.6 ? 'warn' : undefined },
-          { label: 'Tables in use', value: `${new Set(live.map((b) => b.resourceId)).size}/${active.length}` },
-        ],
-      }
+      return [
+        { label: 'Covers booked', value: String(covers), sub: `${live.length} bookings` },
+        { label: 'Avg spend / cover', value: money(pack.avgCoverCents ?? 0) },
+        { label: 'Busiest half hour', value: peak.covers ? clock(peak.at) : '—',
+          sub: peak.covers ? `${peak.covers} covers land` : undefined,
+          tone: peak.covers > 20 ? 'warn' : undefined },
+        { label: 'Tables in use', value: `${new Set(live.map((b) => b.resourceId)).size}/${active.length}` },
+      ]
     }
     case 'mobiledetailing': {
       const legs = routeLegs(stops || [], origin)
       const tight = legs.filter((l) => l.tight).length
       const drive = legs.reduce((s, l) => s + l.minutes, 0)
-      return {
-        value: String((stops || []).length),
-        label: 'stops on the route',
-        sub: `${(bookedMins / 60).toFixed(1)} hours of work booked`,
-        stats: [
-          { label: 'Driving', value: drive >= 60 ? `${Math.floor(drive / 60)}h ${drive % 60}m` : `${drive}m` },
-          { label: 'Tight legs', value: String(tight), tone: tight > 0 ? 'warn' : 'good' },
-        ],
-      }
+      return [
+        { label: 'Jobs on the route', value: String((stops || []).length) },
+        { label: 'Avg job value', value: money(avgTicket) },
+        { label: 'Driving', value: drive >= 60 ? `${Math.floor(drive / 60)}h ${drive % 60}m` : `${drive}m`,
+          sub: 'unpaid time' },
+        { label: 'Tight legs', value: String(tight), tone: tight > 0 ? 'warn' : 'good',
+          sub: tight > 0 ? 'may not make it' : 'the day fits' },
+      ]
     }
     case 'quickservice':
-      return {
-        value: '86',
-        label: 'orders taken by phone',
-        sub: 'Orders the agent took while the line was busy',
-        stats: [
-          { label: 'Busiest hour', value: '7pm' },
-          { label: 'Missed calls', value: '0', tone: 'good' },
-        ],
-      }
+      return [
+        { label: 'Orders by phone', value: '86', sub: 'taken by the agent' },
+        { label: 'Avg ticket', value: '$28' },
+        { label: 'Busiest hour', value: '7pm', sub: '22 orders' },
+        { label: 'Missed calls', value: '0', tone: 'good', sub: 'nobody hung up' },
+      ]
     case 'medspa': {
-      const consults = live.filter((b) => mins(b) <= 45).length
-      const treatments = live.length - consults
-      return {
-        value: String(consults),
-        label: 'consultations booked',
-        sub: `${treatments} treatments alongside them`,
-        stats: [
-          { label: 'Rooms in use', value: `${new Set(live.map((b) => b.resourceId)).size}/${active.length}` },
-          { label: 'Consult to treatment', value: consults ? `${Math.round((treatments / consults) * 100)}%` : '—' },
-        ],
-      }
+      const consults = live.filter((b) => mins(b) <= 45)
+      const treatments = live.filter((b) => mins(b) > 45)
+      return [
+        { label: 'Consultations', value: String(consults.length), sub: 'top of the funnel' },
+        { label: 'Treatments', value: String(treatments.length) },
+        { label: 'Avg treatment', value: money(
+          treatments.length
+            ? Math.round(revenueCents(treatments, services, pack) / treatments.length)
+            : 0) },
+        { label: 'Rooms in use', value: `${new Set(live.map((b) => b.resourceId)).size}/${active.length}` },
+      ]
     }
-    default: {
-      const pct = Math.round((bookedMins / capacity) * 100)
-      const idle = Math.max(0, capacity - bookedMins)
-      return {
-        value: `${pct}%`,
-        label: pack.homeMetric.label.toLowerCase(),
-        sub: `${(bookedMins / 60).toFixed(0)}h booked of ${(capacity / 60).toFixed(0)}h open`,
-        stats: [
-          { label: 'Idle hours', value: `${(idle / 60).toFixed(0)}h`, tone: idle > capacity * 0.4 ? 'warn' : undefined },
-          { label: `${pack.countLabel} working`, value: `${new Set(live.map((b) => b.resourceId)).size}/${active.length}` },
-          { label: 'Booked', value: String(live.length) },
-        ],
-      }
-    }
+    default:
+      return [
+        { label: pack.bookingNoun === 'table' ? 'Bookings' : 'Appointments',
+          value: String(live.length) },
+        { label: 'Avg ticket', value: money(avgTicket) },
+        { label: `${pack.countLabel} utilisation`, value: `${util}%`,
+          tone: util < 50 ? 'warn' : util > 80 ? 'good' : undefined,
+          sub: `${(bookedMins / 60).toFixed(0)}h of ${(capacity / 60).toFixed(0)}h` },
+        { label: `${pack.countLabel} working`,
+          value: `${new Set(live.map((b) => b.resourceId)).size}/${active.length}` },
+      ]
   }
+}
+
+/** Fourteen days of booked revenue, drawn small. Trend, not precision. */
+function Spark({ points }: { points: number[] }) {
+  const max = Math.max(...points, 1)
+  const W = 132
+  const H = 40
+  const step = W / Math.max(1, points.length - 1)
+  const d = points
+    .map((v, i) => `${i === 0 ? 'M' : 'L'} ${(i * step).toFixed(1)} ${(H - (v / max) * (H - 4) - 2).toFixed(1)}`)
+    .join(' ')
+  const last = points[points.length - 1]
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} aria-hidden="true" className="shrink-0">
+      <path d={`${d} L ${W} ${H} L 0 ${H} Z`} fill="#1A8FD6" fillOpacity="0.12" />
+      <path d={d} fill="none" stroke="#1A8FD6" strokeWidth="1.5" strokeLinejoin="round" />
+      <circle
+        cx={W - 0.5}
+        cy={H - (last / max) * (H - 4) - 2}
+        r="2.5"
+        fill="#1A8FD6"
+      />
+    </svg>
+  )
 }
 
 // ── the rail ────────────────────────────────────────────────────────────

@@ -457,7 +457,7 @@ export function configureForTrade(pack: any) {
     SERVICES.push({
       id: uid('s'), name: svc.name, description: null,
       duration_minutes: svc.duration, buffer_minutes: svc.buffer,
-      price_cents: null, min_party: svc.min, max_party: svc.max, active: true,
+      price_cents: svc.price ?? null, min_party: svc.min, max_party: svc.max, active: true,
     })
   }
 
