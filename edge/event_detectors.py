@@ -38,7 +38,6 @@ no face, no track id, no staff attribution — the API has no column for one.
 from __future__ import annotations
 
 import logging
-from collections import defaultdict
 from datetime import datetime, timezone
 
 import cv2
