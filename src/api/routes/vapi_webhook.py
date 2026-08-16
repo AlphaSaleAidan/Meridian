@@ -515,6 +515,9 @@ def _pack_system_prompt(pack_id: str, config, transfer_number: str) -> str:
         # uses, because a pack changing the CALL FLOW must never change what
         # the campaign is filed on.
         sms_consent_block=_sms_consent_step(config),
+        # "PAY WITH CASH" is the merchant's setting, not the pack's. Renders
+        # empty for the merchants who have not enabled it.
+        cash_block=_cash_offer_step(config) + _cash_guard_line(config),
     )
 
 

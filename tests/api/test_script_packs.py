@@ -317,3 +317,54 @@ def test_the_disclosure_names_the_merchant_not_a_placeholder(pack_id):
     prompt = vw._system_prompt(_cfg(script_pack=pack_id))
     assert "on behalf of Golden Diner" in prompt
     assert "{business}" not in prompt
+
+
+# ── merchant settings are not a pack's to drop ───────────────────────────────
+
+# Twice now a MERCHANT-level setting reached the legacy prompt and no pack:
+# the A2P 10DLC consent disclosure, and "PAY WITH CASH". Both were found by
+# accident — the first by auditing the packs, the second by an unrelated test
+# failing when trade packs started auto-applying. Both would have shipped
+# silently, because a pack rendering without a feature looks like a working
+# prompt.
+#
+# (setting, config kwargs, a marker that must appear). A pack changes the CALL
+# FLOW; it never decides whether a merchant's paid-for setting applies.
+MERCHANT_SETTINGS = [
+    ("A2P SMS consent", {}, "Message and data rates may apply"),
+    ("pay with cash", {"accept_cash": True}, "cash"),
+    ("reservations", {"reservation_config": {"on_website": True,
+                                             "website_url": "https://x.test/book"}},
+     "RESERVATIONS"),
+    ("menu link", {"menu_public_url": "https://meridian.tips/m/golden"},
+     "meridian.tips/m/golden"),
+    ("sold-out items", {"sold_out_items": ["Calzone"]}, "Calzone"),
+    ("call cap pacing", {"max_call_minutes": 4}, "4"),
+]
+
+
+@pytest.mark.parametrize("pack_id", PACK_IDS)
+@pytest.mark.parametrize("label,kwargs,marker", MERCHANT_SETTINGS,
+                         ids=[s[0] for s in MERCHANT_SETTINGS])
+def test_every_pack_carries_every_merchant_setting(pack_id, label, kwargs, marker):
+    prompt = vw._system_prompt(_cfg(script_pack=pack_id, **kwargs))
+    assert marker.lower() in prompt.lower(), (
+        f"{pack_id} drops the merchant's {label} setting"
+    )
+
+
+@pytest.mark.parametrize("label,kwargs,marker", MERCHANT_SETTINGS,
+                         ids=[s[0] for s in MERCHANT_SETTINGS])
+def test_the_legacy_prompt_carries_them_too(label, kwargs, marker):
+    # The control. If this fails the marker is wrong, not the pack layer.
+    prompt = vw._system_prompt(_cfg(**kwargs))
+    assert marker.lower() in prompt.lower()
+
+
+@pytest.mark.parametrize("pack_id", PACK_IDS)
+def test_a_setting_left_off_stays_off(pack_id):
+    # The other half: a pack must not switch a merchant's setting ON either.
+    # Cash is the clearest case — offering it where the merchant has not
+    # enabled it sends an unpaid order to the kitchen.
+    prompt = vw._system_prompt(_cfg(script_pack=pack_id))
+    assert "cash" not in prompt.lower()

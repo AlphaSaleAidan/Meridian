@@ -214,6 +214,7 @@ def compose(
     pacing_line: str = "",
     menu_block: str = "",
     sms_consent_block: str = "",
+    cash_block: str = "",
 ) -> str:
     """Compose a pack's guidelines + the shared hard rules into a prompt.
 
@@ -223,6 +224,13 @@ def compose(
     personality, reservations, transfer, menu link, cap pacing, sold-out
     menu — behaves identically regardless of pack. The keyword blocks are
     rendered by the caller with the SAME helpers the legacy prompt uses.
+
+    cash_block is "PAY WITH CASH" (migration 047) and belongs with the hard
+    rules for the same reason as the consent block: it is a MERCHANT-level
+    setting, not a pack's business. Without it, switching a merchant who
+    accepts cash onto a pack silently stopped their agent offering it —
+    exactly the failure the A2P disclosure had, found the same way, by a test
+    that already existed.
 
     sms_consent_block is the A2P 10DLC verbal opt-in, and it belongs with the
     HARD RULES rather than the merchant blocks. It was missing entirely: the
@@ -274,6 +282,7 @@ def compose(
         # line with no newline; packs are new text, so terminate it cleanly)
         f"{reservation_lines + chr(10) if reservation_lines else ''}"
         f"{_SHARED_HARD_RULES}"
+        f"{cash_block}"
         f"{sms_consent_block}"
         f"{extra_rules_block}"
         f"{menu_link_line}"
