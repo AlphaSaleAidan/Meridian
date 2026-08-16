@@ -462,8 +462,21 @@ def _resolve_script_pack(config) -> str | None:
     has the proven generic prompt as its floor.
     """
     try:
-        from script_packs import resolve_pack_id
-        return resolve_pack_id(getattr(config, "script_pack", None))
+        from script_packs import auto_pack_for_trade, resolve_pack_id
+
+        explicit = resolve_pack_id(getattr(config, "script_pack", None))
+        if explicit:
+            return explicit
+
+        # No explicit choice: fall back to the merchant's TRADE. The rep
+        # already picked it at close and it is on the organization, so making
+        # somebody separately pick a script pack by hand is how twelve packs
+        # ended up written and zero merchants using one.
+        #
+        # auto_pack_for_trade only returns a pack that has out-scored the
+        # legacy control on the bench, so an unproven pack is never pointed at
+        # a live call by this path — it stays selectable, not automatic.
+        return auto_pack_for_trade(getattr(config, "business_type", None))
     except Exception:  # noqa: BLE001 — pack selection never breaks a call
         return None
 

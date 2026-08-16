@@ -51,6 +51,14 @@ GOLDEN = json.loads(
 )
 PACK_IDS = sorted(PACK_DEFS)
 
+# Packs whose call is somebody buying items now. A lot below assumes exactly
+# that — order types, menu upsells, the item read-back — and it stopped being
+# true when the appointment trades arrived: a barbershop never says "pickup or
+# delivery", so asserting it does would force the wrong prompt onto the right
+# pack. The pack declares its own call_kind; this reads it rather than keeping
+# a second list in the tests that would drift.
+ORDER_PACK_IDS = sorted(k for k, p in PACK_DEFS.items() if p.call_kind == "order")
+
 
 def _cfg(**overrides) -> SimpleNamespace:
     """The exact fixture the golden snapshots were captured with."""
@@ -156,7 +164,7 @@ def test_list_packs_legacy_control_first():
 
 # ── 3. pack composition keeps every merchant-level block ─────────────
 
-@pytest.mark.parametrize("pack_id", PACK_IDS)
+@pytest.mark.parametrize("pack_id", ORDER_PACK_IDS)
 def test_pack_keeps_shared_safety_and_merchant_blocks(pack_id):
     prompt = vw._system_prompt(
         _full_cfg(script_pack=pack_id, language="multi"),
@@ -192,7 +200,7 @@ def test_pack_keeps_shared_safety_and_merchant_blocks(pack_id):
     assert "Group orders:" in prompt
 
 
-@pytest.mark.parametrize("pack_id", PACK_IDS)
+@pytest.mark.parametrize("pack_id", ORDER_PACK_IDS)
 def test_pack_order_type_priority_before_readback(pack_id):
     """The whole point: establishing order type is prioritized EARLY in the
     guidelines, ahead of the read-back guidance."""
@@ -203,7 +211,7 @@ def test_pack_order_type_priority_before_readback(pack_id):
     assert 0 < type_pos < readback_pos
 
 
-@pytest.mark.parametrize("pack_id", PACK_IDS)
+@pytest.mark.parametrize("pack_id", ORDER_PACK_IDS)
 def test_merchant_upsell_none_overrides_pack(pack_id):
     prompt = vw._system_prompt(_cfg(script_pack=pack_id,
                                     personality={"upsell": "none"}))
@@ -213,7 +221,7 @@ def test_merchant_upsell_none_overrides_pack(pack_id):
     assert "suggestion" not in guidelines_after.lower()
 
 
-@pytest.mark.parametrize("pack_id", PACK_IDS)
+@pytest.mark.parametrize("pack_id", ORDER_PACK_IDS)
 def test_merchant_upsell_active_overrides_pack(pack_id):
     prompt = vw._system_prompt(_cfg(script_pack=pack_id,
                                     personality={"upsell": "active"}))

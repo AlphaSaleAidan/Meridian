@@ -215,8 +215,15 @@ class MerchantPhoneConfig:
     # SCRIPT PACK (migration 20260717_phone_script_pack): named, versioned
     # call-script variant composed by services/phone_agent/script_packs.py.
     # ""/NULL/"legacy"/unknown → the untouched generic prompt, byte-for-byte
-    # (vapi_webhook._resolve_script_pack is strictly fail-legacy). NEVER
-    # auto-derived from business_type — packs are opt-in per merchant.
+    # (vapi_webhook._resolve_script_pack is strictly fail-legacy).
+    #
+    # CHANGED 2026-08-16: this used to read "NEVER auto-derived from
+    # business_type — packs are opt-in per merchant", and the result was
+    # twelve packs written and zero merchants on one. An explicit choice here
+    # still wins; when there is none, the merchant's TRADE selects the pack —
+    # but ONLY a pack that has out-scored the legacy control on the bench
+    # (script_packs.auto_pack_for_trade enforces that). An unproven pack is
+    # never pointed at a live call automatically.
     script_pack: str = ""
     # "PAY WITH CASH" (migration 047): when True, the phone agent offers cash as
     # a payment option and cash orders reach the kitchen flagged UNPAID / CASH ON

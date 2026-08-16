@@ -71,6 +71,72 @@ def resolve_pack_id(raw: object) -> str | None:
     return pack_id if pack_id in PACK_DEFS else None
 
 
+# ── trade → pack ─────────────────────────────────────────────────────
+#
+# The rep already chose the trade when they closed the deal, and it is stored
+# on the organization. Making somebody ALSO pick a script pack by hand is how
+# you end up where we were: twelve packs written, zero merchants using one.
+#
+# Keys are the pack keys from frontend/src/config/niches.ts, which is the same
+# string organizations.business_type now holds.
+TRADE_PACKS: dict[str, str] = {
+    "restaurant": "restaurant_v1",
+    "quickservice": "pizzeria_v1",
+    "coffeeshop": "cafe_quickserve_v1",
+    "barbershop": "barbershop_v1",
+    "nails": "nails_v1",
+    "medspa": "medspa_v1",
+    "detailing": "detailing_v1",
+    "mobiledetailing": "mobiledetailing_v1",
+    "autoshop": "autoshop_v1",
+    "smokeshop": "smokeshop_v1",
+}
+
+
+# The older vocabularies the same column still holds. Rep portals wrote a
+# proposal DECK SLUG before the trade key existed, and Square detection writes
+# its own BusinessType values — live data has all three. Same reconciliation
+# the portal does in config/niches.ts; without it a merchant sold as "ca-qsr"
+# silently gets no pack at all.
+_TRADE_ALIASES: dict[str, str] = {
+    "ca-qsr": "quickservice", "us-qsr": "quickservice", "fast_food": "quickservice",
+    "ca-coffee": "coffeeshop", "us-coffee": "coffeeshop", "coffee_shop": "coffeeshop",
+    "ca-salon": "barbershop", "us-salon": "barbershop", "barber_shop": "barbershop",
+    "ca-nailsalon": "nails", "us-nailsalon": "nails", "nail_salon": "nails",
+    "ca-spa": "medspa", "us-spa": "medspa", "med_spa": "medspa",
+    "ca-detailing": "detailing", "us-detailing": "detailing",
+    "ca-carwash": "detailing", "us-carwash": "detailing",
+    "mobile_detailing": "mobiledetailing",
+    "autoshop": "autoshop", "auto_shop": "autoshop",
+    "ca-smokeshop": "smokeshop", "us-smokeshop": "smokeshop", "smoke_shop": "smokeshop",
+}
+
+
+def pack_for_trade(trade: object) -> str | None:
+    """The pack this trade would use, benchmarked or not. None if unmapped."""
+    if not isinstance(trade, str):
+        return None
+    key = trade.strip().lower()
+    return TRADE_PACKS.get(_TRADE_ALIASES.get(key, key))
+
+
+def auto_pack_for_trade(trade: object) -> str | None:
+    """The pack to APPLY for a trade with no explicit choice — or None.
+
+    Gated on the benchmark rule at the top of script_pack_defs. A pack that
+    has not out-scored the legacy control does not get pointed at live calls
+    just because it is new and reads well; it stays selectable and
+    recommendable, and flips on here the moment the bench says so.
+
+    So today this returns None for every trade, and that is correct rather
+    than unfinished — the wiring is what was missing, not the permission.
+    """
+    pack_id = pack_for_trade(trade)
+    if not pack_id:
+        return None
+    return pack_id if PACK_DEFS[pack_id].status == "beat_baseline" else None
+
+
 def get_pack(pack_id: str) -> ScriptPackDef:
     return PACK_DEFS[pack_id]
 
@@ -163,6 +229,28 @@ def compose(
     extra_rules = pack.hard_rules(ctx)
     extra_rules_block = ("\n" + "\n".join(extra_rules)) if extra_rules else ""
 
+    # ── the trade knowledge blocks ──────────────────────────────────────
+    #
+    # Rendered AFTER the hard rules and before the menu, so the agent reads
+    # them as reference rather than as steps. Each is omitted entirely when a
+    # pack does not define it — an empty heading is worse than no heading,
+    # because the model will try to fill it.
+    upsells = pack.upsells(ctx)
+    upsell_block = ("\n\nWORTH OFFERING (once, by name, only when it genuinely "
+                    "fits what they asked for — never a vague 'anything else?'):\n"
+                    + "\n".join(f"- {u}" for u in upsells)) if upsells else ""
+
+    faqs = pack.faqs(ctx)
+    faq_block = ("\n\nWHAT CALLERS ASK (answer in ONE sentence, then carry on "
+                 "with what you were doing):\n"
+                 + "\n".join(f"- \"{q}\" → {a}" for q, a in faqs)) if faqs else ""
+
+    objections = pack.objections(ctx)
+    objection_block = ("\n\nIF THEY HESITATE (use the short handle, ONCE — a "
+                       "second attempt is pressure, and pressure loses the "
+                       "booking a single honest sentence would have kept):\n"
+                       + "\n".join(f"- \"{o}\" → {h}" for o, h in objections)) if objections else ""
+
     return (
         f"You are the AI phone order-taker for {ctx.business_name}.\n"
         "Keep every reply to 1-2 sentences — warm, friendly, phone-natural. Never robotic."
@@ -181,5 +269,8 @@ def compose(
         f"{menu_link_line}"
         f"{pacing_line}"
         f"{transfer_block}"
+        f"{upsell_block}"
+        f"{faq_block}"
+        f"{objection_block}"
         f"{menu_block}"
     )

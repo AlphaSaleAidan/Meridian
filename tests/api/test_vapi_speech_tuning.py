@@ -27,6 +27,11 @@ from script_pack_defs import PACK_DEFS  # noqa: E402
 
 PACK_IDS = sorted(PACK_DEFS)
 
+# "from the MENU" only means something where the call IS a menu. An
+# appointment pack has no menu to name an upsell from — its upsells are a
+# beard trim beside a cut, or the interior while the van is already there.
+ORDER_PACK_IDS = sorted(k for k, p in PACK_DEFS.items() if p.call_kind == "order")
+
 
 def _cfg(**overrides) -> SimpleNamespace:
     data = dict(
@@ -85,13 +90,13 @@ def test_flag_on_keeps_core_assistant_shape(monkeypatch):
 
 # ── 2. menu-aware upsells in every pack ──────────────────────────────
 
-@pytest.mark.parametrize("pack_id", PACK_IDS)
+@pytest.mark.parametrize("pack_id", ORDER_PACK_IDS)
 def test_pack_default_upsell_names_menu_item(pack_id):
     prompt = vw._system_prompt(_cfg(script_pack=pack_id))
     assert "from the MENU" in prompt
 
 
-@pytest.mark.parametrize("pack_id", PACK_IDS)
+@pytest.mark.parametrize("pack_id", ORDER_PACK_IDS)
 def test_active_upsell_names_menu_item(pack_id):
     prompt = vw._system_prompt(_cfg(script_pack=pack_id,
                                     personality={"upsell": "active"}))
@@ -107,3 +112,20 @@ def test_delivery_guidelines_in_guideline_section(pack_id):
     guidelines = prompt.split("HARD RULES")[0]
     assert "Vary your acknowledgments" in guidelines
     assert "Ask ONE thing at a time" in guidelines
+
+
+# ── every pack, whatever the call is, still names its upsells ────────
+
+@pytest.mark.parametrize("pack_id", PACK_IDS)
+def test_no_pack_upsells_with_a_vague_anything_else(pack_id):
+    """The rule the menu assertion above was really protecting.
+
+    A menu-named upsell was the ORDER packs' way of not saying "anything
+    else?". The appointment packs need the same discipline from a different
+    source — their own upsell list — so this asserts the outcome rather than
+    the mechanism, and covers all twelve.
+    """
+    prompt = vw._system_prompt(_cfg(script_pack=pack_id,
+                                    personality={"upsell": "active"}))
+    named = "from the MENU" in prompt or "WORTH OFFERING" in prompt
+    assert named, f"{pack_id} has no source of a specific, named upsell"
