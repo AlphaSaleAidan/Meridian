@@ -58,7 +58,20 @@ export default function MerchantLayout({ basePath = MERCHANT_BASE_PATH }: { base
     merchantPillars.filter(p => !p.flag || flags[p.flag]),
     pack.pillarOrder,
   )
-  const moneyPillars = visiblePillars.filter(p => !p.secondary && p.path !== 'settings')
+  /**
+   * On the demos the workspace is lifted out of the list and pinned to the
+   * top as "Today".
+   *
+   * The trade's own screen sitting fourth in a flat list of pillars said the
+   * opposite of what the product does — it is where a merchant lives, and the
+   * rest is where they go occasionally. Everything below the divider stays in
+   * this trade's order, which is why a barber's Bookings sits above a
+   * takeaway's Phone Calls.
+   */
+  const homePillar = isDemo ? visiblePillars.find(p => p.path === '') : undefined
+  const moneyPillars = visiblePillars
+    .filter(p => !p.secondary && p.path !== 'settings')
+    .filter(p => !(homePillar && p.path === ''))
   const secondaryPillars = visiblePillars.filter(p => p.secondary)
   const settingsPillar = visiblePillars.find(p => p.path === 'settings')
   // Roadmap previews ride along in BOTH public demos — never in a paying
@@ -71,6 +84,9 @@ export default function MerchantLayout({ basePath = MERCHANT_BASE_PATH }: { base
   // overflow) — except in the demo, where the secondary tabs (Camera) join the
   // bar so the sidebar isn't needed at all on mobile.
   const mobileNavPillars = [
+    // Today leads on mobile too — it is lifted out of moneyPillars above, so
+    // without this the bottom bar loses the home tab entirely.
+    ...(homePillar ? [{ ...homePillar, label: 'Today' }] : []),
     ...moneyPillars,
     ...(isDemo ? secondaryPillars : []),
     ...(settingsPillar ? [settingsPillar] : []),
@@ -106,6 +122,18 @@ export default function MerchantLayout({ basePath = MERCHANT_BASE_PATH }: { base
         </div>
 
         <nav className="flex-1 overflow-y-auto py-2 px-2 space-y-0.5 no-scrollbar">
+          {homePillar && (
+            <>
+              <PillarLink
+                pillar={{ ...homePillar, label: 'Today' }}
+                basePath={basePath}
+                onNavigate={closeSidebar}
+              />
+              <div className="pt-3 pb-1 px-3 text-[10px] uppercase tracking-wide text-[#4A4A52]">
+                Everything else
+              </div>
+            </>
+          )}
           {moneyPillars.map(p => (
             <PillarLink key={p.path || '_home'} pillar={p} basePath={basePath} onNavigate={closeSidebar} />
           ))}

@@ -112,3 +112,35 @@ describe('a trade resolves to a pack', () => {
     expect(packFor(undefined).key).toBe(GENERIC_PACK.key)
   })
 })
+
+describe('Canadian money says it is Canadian', () => {
+  it('qualifies the dollar sign on /canada, in both formatters', async () => {
+    // Intl renders CAD under en-CA as a bare "$", which put "CA$1.4K" as a
+    // headline and "$1,159.20" directly under it on the same screen. On a
+    // portal quoting Canadian prices to Canadian merchants, an unqualified
+    // "$" is an ambiguous price rather than a formatting slip.
+    const { formatCents, formatCentsCompact } = await import('../format')
+    const original = window.location.pathname
+    history.replaceState(null, '', '/canada/merchant')
+    try {
+      expect(formatCents(115920)).toContain('CA$')
+      expect(formatCentsCompact(140000)).toContain('CA$')
+      expect(formatCents(null)).toContain('CA$')
+      expect(formatCents(-500)).toMatch(/^-CA\$/)
+    } finally {
+      history.replaceState(null, '', original)
+    }
+  })
+
+  it('leaves the US portal on a plain dollar sign', async () => {
+    const { formatCents, formatCentsCompact } = await import('../format')
+    const original = window.location.pathname
+    history.replaceState(null, '', '/us/merchant')
+    try {
+      expect(formatCents(115920)).not.toContain('CA$')
+      expect(formatCentsCompact(140000)).not.toContain('CA$')
+    } finally {
+      history.replaceState(null, '', original)
+    }
+  })
+})

@@ -1,5 +1,6 @@
 import type { Insight } from './api'
 import { getActiveBusinessType, getCurrencyMultiplier } from './demo-context'
+import { currencyPrefix } from './format'
 import { getBusinessProfile, getProducts, getStaff } from './business-config'
 
 function cx(cents: number): number {
@@ -263,9 +264,9 @@ export function generateTopActions(): TopAction[] {
   const m = scaleMap[bt] || 1
   // cx() applies the currency multiplier (1.38 on Canada, 1.0 elsewhere) so the
   // prose dollar figures match the CAD-scaled impactCents badges the panel renders.
-  const $s = (base: number) => `$${cx(base * m).toLocaleString()}`
+  const $s = (base: number) => `${currencyPrefix()}${cx(base * m).toLocaleString()}`
   const sm = (cents: number) => Math.round(cents * m)
-  const pFmt = (cents: number) => `$${(cx(cents) / 100).toFixed(2)}`
+  const pFmt = (cents: number) => `${currencyPrefix()}${(cx(cents) / 100).toFixed(2)}`
   const p4 = p[4] || { name: 'Item E', price: 625 }
   const p1 = p[1] || { name: 'Item B', price: 525 }
   const p9 = p[9] || { name: 'Item J', price: 425 }
@@ -637,7 +638,7 @@ export function actionsFromInsights(rawActions: Array<Record<string, unknown>>):
 // Minimal cents formatter local to this module (the panel uses its own
 // `formatCents`; we only need a string for the synthesized reasoning rawData).
 function formatCentsLocal(cents: number): string {
-  return `$${Math.round(cents / 100).toLocaleString()}`
+  return `${currencyPrefix()}${Math.round(cents / 100).toLocaleString()}`
 }
 
 export function generateRFMSegments(): RFMSegment[] {

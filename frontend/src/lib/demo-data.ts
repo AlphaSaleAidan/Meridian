@@ -5,6 +5,7 @@
  * Used when org_id is 'demo' — no backend needed.
  */
 
+import { currencyPrefix } from './format'
 import type {
   Overview, MoneyLeftScore, DailyRevenue, WeeklyRevenue, RevenueData,
   HourlyData, ProductPerf, ProductsData, Insight, Forecast,
@@ -294,7 +295,7 @@ function generateInsights(): { insights: Insight[]; total: number } {
   // Canada portal, 1.0 elsewhere) so every prose dollar figure matches the
   // CAD-scaled impact_cents badges the cards render. Product prices carry no
   // business-scale (m), only currency; revenue figures carry both.
-  const priceFmt = (cents: number) => `$${(cx(cents) / 100).toFixed(2)}`
+  const priceFmt = (cents: number) => `${currencyPrefix()}${(cx(cents) / 100).toFixed(2)}`
   const p4price = cx(p[4]?.price || 625) / 100
   const p3price = cx(p[3]?.price || 500) / 100
   const p10price = cx(p[10]?.price || 895) / 100
@@ -305,7 +306,7 @@ function generateInsights(): { insights: Insight[]; total: number } {
   const p3name = p[3]?.name || 'Item D'
   const p10name = p[10]?.name || 'Item K'
 
-  const $s = (base: number) => `$${cx(base * m).toLocaleString()}`
+  const $s = (base: number) => `${currencyPrefix()}${cx(base * m).toLocaleString()}`
   const sm = (cents: number) => Math.round(cents * m) // scale cents
   const txPerDay = bt === 'auto_shop' ? 22 : bt === 'smoke_shop' ? 65 : sm(118)
   const pzM4 = Math.round((p[4]?.price || 625) * 0.45)

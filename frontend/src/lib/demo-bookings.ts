@@ -23,6 +23,7 @@
 
 import { getActiveBusinessType, getCurrencyMultiplier } from '@/lib/demo-context'
 import { packFor } from '@/config/niches'
+import { currencyPrefix } from '@/lib/format'
 
 /**
  * The book answers for WHATEVER merchant id it is asked about.
@@ -762,7 +763,7 @@ function topActions(): any[] {
       grounded: true,
       evidence: [
         { signal: 'Idle capacity', detail: `${Math.round(idle / 60)} hours unbooked of ${Math.round(capacity / 60)}` },
-        { signal: 'Average value', detail: `$${Math.round(avgPrice / 100)} per ${trade.bookingNoun}` },
+        { signal: 'Average value', detail: `${currencyPrefix()}${Math.round(avgPrice / 100)} per ${trade.bookingNoun}` },
         ...(quietest ? [{ signal: 'Quietest', detail: `${quietest.name}, ${Math.round(quietest.mins / 60)}h booked` }] : []),
       ],
       action_item: waitlist.filter((w) => w.status === 'waiting').length
@@ -817,7 +818,7 @@ function topActions(): any[] {
       grounded: true,
       evidence: [
         { signal: 'In today', detail: `${day.length} ${trade.customerNoun}s` },
-        { signal: 'Average value', detail: `$${Math.round(avgPrice / 100)}` },
+        { signal: 'Average value', detail: `${currencyPrefix()}${Math.round(avgPrice / 100)}` },
       ],
       action_item: 'Ask at checkout, not by text later — same-visit rebooking converts several times better.',
     })
