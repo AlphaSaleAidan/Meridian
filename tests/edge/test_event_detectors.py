@@ -207,3 +207,35 @@ class TestContract:
     def test_overlap_is_exclusive_at_the_edges(self):
         assert _overlaps((0, 0, 10, 10), (5, 5, 15, 15))
         assert not _overlaps((0, 0, 10, 10), (10, 0, 20, 10))
+
+
+class TestItShipsWhereMerchantsRunIt:
+    """The connector is the agent that actually reaches a merchant.
+
+    It runs as one Docker line on a POS back-office PC they already own.
+    Detection that exists only in the other agent — the dedicated-hardware
+    flavour — reaches nobody, and both images have to physically contain the
+    module or the import fails at runtime on their counter.
+    """
+
+    def _repo(self):
+        from pathlib import Path
+        return Path(__file__).resolve().parents[2]
+
+    def test_the_connector_runs_the_detectors(self):
+        src = (self._repo() / "edge/connector/local_agent.py").read_text()
+        assert "EventDetectors(" in src, "the connector does not run event detection"
+        assert "post_events" in src, "the connector cannot report what it saw"
+
+    def test_both_images_contain_the_module(self):
+        connector = (self._repo() / "edge/connector/local_agent.Dockerfile").read_text()
+        assert "event_detectors.py" in connector, "connector image would fail to import it"
+        edge = (self._repo() / "edge/Dockerfile").read_text()
+        assert "event_detectors.py" in edge, "edge image would fail to import it"
+
+    def test_the_shared_detector_keeps_phone_boxes(self):
+        # The model already runs every class and the person mask threw the
+        # phones away. Without them the connector cannot see a handset.
+        src = (self._repo() / "src/camera/detector.py").read_text()
+        assert "PHONE_CLASS = 67" in src
+        assert '"phones"' in src, "phones never reach the caller"
