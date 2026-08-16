@@ -30,6 +30,8 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(name)-25s | %(levelname)-5s | %(message)s",
 )
+from event_detectors import EventDetectors, PHONE_CLASS_ID
+
 logger = logging.getLogger("meridian.edge")
 
 API_URL = os.environ.get("MERIDIAN_API_URL", "http://localhost:8000")
@@ -71,22 +73,6 @@ class CameraProcessor:
         self.name = camera_config.get("name", "Camera")
         self.compliance_mode = camera_config.get("compliance_mode", "anonymous")
         self.zone_config = camera_config.get("zone_config", {})
-
-    @staticmethod
-    def _zone_px(zone: dict, frame_w: int, frame_h: int) -> dict:
-        """Zones from the setup wizard are NORMALIZED (0-1); legacy configs used
-        native pixels. Scale normalized rects to this frame's size."""
-        if not zone:
-            return zone
-        vals = [zone.get(k, 0) for k in ("x1", "y1", "x2", "y2")]
-        if all(0 <= v <= 1.0 for v in vals) and any(v > 0 for v in vals):
-            return {
-                "x1": zone.get("x1", 0) * frame_w,
-                "y1": zone.get("y1", 0) * frame_h,
-                "x2": zone.get("x2", 1) * frame_w,
-                "y2": zone.get("y2", 1) * frame_h,
-            }
-        return zone
         self.active_hours = camera_config.get("active_hours", {"start": "07:00", "end": "22:00"})
         # Per-camera feature toggles set by the merchant in the portal (vision_cameras.features).
         # The merchant's choice is authoritative: a disabled analysis is skipped even if
@@ -110,8 +96,27 @@ class CameraProcessor:
         if ENABLE_DEPTH:
             self._init_depth()
 
+        # Event detection: what happened, as opposed to how many walked past.
+        self.events = EventDetectors(self.camera_id, self.zone_config, self.active_hours)
+
         self._demo_frame_counter = 0
         self._reset_bucket()
+
+    @staticmethod
+    def _zone_px(zone: dict, frame_w: int, frame_h: int) -> dict:
+        """Zones from the setup wizard are NORMALIZED (0-1); legacy configs used
+        native pixels. Scale normalized rects to this frame's size."""
+        if not zone:
+            return zone
+        vals = [zone.get(k, 0) for k in ("x1", "y1", "x2", "y2")]
+        if all(0 <= v <= 1.0 for v in vals) and any(v > 0 for v in vals):
+            return {
+                "x1": zone.get("x1", 0) * frame_w,
+                "y1": zone.get("y1", 0) * frame_h,
+                "x2": zone.get("x2", 1) * frame_w,
+                "y2": zone.get("y2", 1) * frame_h,
+            }
+        return zone
 
     def _reset_bucket(self):
         self.current_bucket = defaultdict(int)
@@ -249,15 +254,23 @@ class CameraProcessor:
 
     def process_frame(self, frame: np.ndarray) -> dict:
         """Run YOLO detection + tracking on a single frame. Returns metrics."""
-        results = self.model(frame, classes=[PERSON_CLASS_ID], verbose=False)
+        # Phones come out of the SAME pass as people. COCO class 67 is
+        # "cell phone" and the model already ships it, so phone-use detection
+        # costs one extra class rather than a second model on the box.
+        results = self.model(frame, classes=[PERSON_CLASS_ID, PHONE_CLASS_ID], verbose=False)
 
         detections = []
+        phone_boxes = []
         if results and results[0].boxes:
             boxes = results[0].boxes
             for box in boxes:
                 x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
                 conf = float(box.conf[0])
-                detections.append([x1, y1, x2, y2, conf])
+                cls = int(box.cls[0]) if box.cls is not None else PERSON_CLASS_ID
+                if cls == PHONE_CLASS_ID:
+                    phone_boxes.append([x1, y1, x2, y2, conf])
+                else:
+                    detections.append([x1, y1, x2, y2, conf])
 
         person_count = len(detections)
 
@@ -316,6 +329,7 @@ class CameraProcessor:
         return {
             "person_count": person_count,
             "tracked_ids": tracked_ids,
+            "events": self.events.run(frame, detections, phone_boxes),
         }
 
     def flush_bucket(self) -> dict:
@@ -429,6 +443,30 @@ class EdgeAgent:
                     logger.warning(f"Heartbeat failed for {cam.name}: {e}")
             await asyncio.sleep(HEARTBEAT_INTERVAL)
 
+    async def push_events(self, cam: "CameraProcessor", events: list):
+        """Report what the cameras saw, as soon as they are sure.
+
+        Not batched onto the 15-minute traffic flush: the detectors already
+        hold a candidate for 25 to 180 seconds before reporting it, and adding
+        a quarter of an hour on top would mean a merchant hears about a spill
+        after somebody has already slipped on it.
+
+        Failures are swallowed. A camera that cannot reach the API must keep
+        counting rather than crash, and the dedupe key means a later retry of
+        the same detection collapses into one row anyway.
+        """
+        if not events:
+            return
+        try:
+            await self.http.post("/api/vision/ingest/events", json={
+                "org_id": ORG_ID,
+                "camera_id": cam.camera_id,
+                "events": events,
+            })
+            logger.info("Reported %d camera event(s) from %s", len(events), cam.name)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("Event push failed for %s: %s", cam.name, e)
+
     async def push_traffic(self, metrics: dict):
         try:
             await self.http.post("/api/vision/ingest/traffic", json=metrics)
@@ -461,11 +499,22 @@ class EdgeAgent:
                 if frame_count % frame_skip != 0:
                     continue
 
+                # OUTSIDE OPENING HOURS THE CAMERA STILL WATCHES.
+                #
+                # This used to sleep straight through, which is defensible for
+                # traffic counting — nobody wants footfall from an empty shop
+                # — but it made after-hours movement undetectable, and that is
+                # the one event a closed shop can produce. Events run; traffic
+                # does not; the loop idles between frames so a closed shop
+                # costs almost nothing.
                 if not cam.is_active():
-                    await asyncio.sleep(10)
+                    result = cam.process_frame(frame)
+                    await self.push_events(cam, result.get("events") or [])
+                    await asyncio.sleep(2)
                     continue
 
-                cam.process_frame(frame)
+                result = cam.process_frame(frame)
+                await self.push_events(cam, result.get("events") or [])
 
                 if time.time() - last_flush >= TRAFFIC_PUSH_INTERVAL:
                     metrics = cam.flush_bucket()
