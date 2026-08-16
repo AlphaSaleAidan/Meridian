@@ -121,15 +121,31 @@ function WhyPanel({ reasoning }: { reasoning: ReasoningChain }) {
   )
 }
 
+/**
+ * One action, as a card you can open.
+ *
+ * THE WHOLE CARD IS THE DISCLOSURE. The reasoning used to hang off the
+ * "82% confidence" text alone — a ten-pixel target at the far right of the
+ * row, which is a hard thing to discover and a harder thing to hit. Anywhere
+ * on the card now opens it; the two buttons inside stop the event so
+ * "Mark done" still means done rather than done-and-expanded.
+ *
+ * It is a div with a button role rather than a <button>, because Mark done and
+ * Reject are buttons and nesting them is invalid HTML that browsers silently
+ * restructure. Keyboard support is wired by hand for the same reason.
+ */
 function ActionItem({
   action,
   cadence,
+  index,
   done = false,
   onComplete,
   onReject,
 }: {
   action: TopAction
   cadence: Cadence
+  /** Position in the list, shown large. An owner reads "1" as "start here". */
+  index: number
   done?: boolean
   onComplete: (a: TopAction) => void
   onReject: (a: TopAction) => void
@@ -138,37 +154,58 @@ function ActionItem({
   const s = cadenceStyles[cadence]
   const CadenceIcon = s.icon
 
+  const toggle = () => setExpanded(v => !v)
+
   return (
-    <div className={clsx('card-hover overflow-hidden transition-all duration-300', expanded && s.ring, done && 'opacity-80')}>
-      <div className={clsx('p-4', done && 'bg-[#17C5B0]/[0.04]')}>
-        <div className="flex items-start gap-3">
+    <div
+      role="button"
+      tabIndex={0}
+      aria-expanded={expanded}
+      onClick={toggle}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle() }
+      }}
+      className={clsx(
+        'card-hover overflow-hidden cursor-pointer transition-all duration-300',
+        'focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1A8FD6] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0A0A0B]',
+        expanded && s.ring,
+        done && 'opacity-80',
+      )}
+    >
+      <div className={clsx('p-5', done && 'bg-[#17C5B0]/[0.04]')}>
+        <div className="flex items-start gap-4">
+          {/* The number, not the icon, is the first thing read: three actions
+              in priority order only work if the order is visible. */}
           <div className={clsx(
-            'w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0',
+            'w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0',
             done ? 'bg-[#17C5B0]/15 text-[#17C5B0]' : s.chip,
           )}>
-            {done ? <CheckCircle2 size={18} /> : <CadenceIcon size={18} />}
+            {done
+              ? <CheckCircle2 size={22} />
+              : <span className="font-mono text-2xl font-semibold leading-none">{index}</span>}
           </div>
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              <span className={clsx('text-[10px] font-semibold px-2 py-0.5 rounded-full border uppercase tracking-wider', s.chip)}>
+            <div className="flex items-center gap-2 mb-1.5">
+              <span className={clsx('text-[11px] font-semibold px-2 py-0.5 rounded-full border uppercase tracking-wider inline-flex items-center gap-1.5', s.chip)}>
+                <CadenceIcon size={11} />
                 {s.label}
               </span>
-              <span className="text-[10px] text-[#A1A1A8]/50 flex items-center gap-1">
-                <Clock size={10} /> {action.effort} effort
+              <span className="text-[11px] text-[#A1A1A8]/60 flex items-center gap-1">
+                <Clock size={11} /> {action.effort} effort
               </span>
             </div>
-            <div className="flex items-start justify-between gap-2">
+            <div className="flex items-start justify-between gap-3">
               <h3 className={clsx(
-                'text-sm font-semibold leading-tight',
+                'text-base font-semibold leading-snug',
                 done ? 'text-[#A1A1A8] line-through decoration-[#17C5B0]/40' : 'text-[#F5F5F7]',
               )}>{action.title}</h3>
-              <span className={clsx('text-sm font-bold font-mono flex-shrink-0 whitespace-nowrap', s.accent)}>
+              <span className={clsx('text-lg font-bold font-mono flex-shrink-0 whitespace-nowrap', s.accent)}>
                 +{formatCents(action.impactCents)}/mo
               </span>
             </div>
-            <p className="text-xs text-[#A1A1A8] mt-1 leading-relaxed">{action.description}</p>
+            <p className="text-sm text-[#A1A1A8] mt-1.5 leading-relaxed">{action.description}</p>
 
-            <div className="flex items-center gap-2 mt-3">
+            <div className="flex items-center gap-2 mt-4">
               {done ? (
                 <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#17C5B0]/10 text-[#17C5B0] text-xs font-semibold">
                   <CheckCircle2 size={14} /> Done · captured {cadence === 'daily' ? 'today' : 'this week'}
@@ -176,26 +213,25 @@ function ActionItem({
               ) : (
                 <>
                   <button
-                    onClick={() => onComplete(action)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#17C5B0] text-[#0A0A0B] text-xs font-semibold hover:bg-[#17C5B0]/90 transition-colors"
+                    onClick={(e) => { e.stopPropagation(); onComplete(action) }}
+                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-[#17C5B0] text-[#0A0A0B] text-[13px] font-semibold hover:bg-[#17C5B0]/90 transition-colors"
                   >
-                    <CheckCircle2 size={14} /> Mark done
+                    <CheckCircle2 size={15} /> Mark done
                   </button>
                   <button
-                    onClick={() => onReject(action)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1F1F23] text-[#A1A1A8] text-xs font-medium hover:bg-[#2A2A2F] hover:text-[#F5F5F7] transition-colors"
+                    onClick={(e) => { e.stopPropagation(); onReject(action) }}
+                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-[#1F1F23] text-[#A1A1A8] text-[13px] font-medium hover:bg-[#2A2A2F] hover:text-[#F5F5F7] transition-colors"
                   >
-                    <X size={14} /> Reject
+                    <X size={15} /> Reject
                   </button>
                 </>
               )}
-              <button
-                onClick={() => setExpanded(v => !v)}
-                className="ml-auto flex items-center gap-1 text-[10px] text-[#A1A1A8]/60 hover:text-[#A1A1A8] transition-colors"
-              >
+              {/* Still here, still a control, but no longer the ONLY way in —
+                  it now reads as a label for what opening the card reveals. */}
+              <span className="ml-auto flex items-center gap-1 text-xs text-[#A1A1A8]/70">
                 {action.confidence}% confidence
-                {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-              </button>
+                {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+              </span>
             </div>
           </div>
         </div>
@@ -463,14 +499,14 @@ export default function Top3ActionsPanel({ showHeader = true, connected = true }
       )}
 
       {daily.length > 0
-        ? daily.map(a => (
-            <ActionItem key={actionKey(a)} action={a} cadence="daily" done={doneKeys.has(actionKey(a))} onComplete={onComplete} onReject={onReject} />
+        ? daily.map((a, i) => (
+            <ActionItem key={actionKey(a)} action={a} index={i + 1} cadence="daily" done={doneKeys.has(actionKey(a))} onComplete={onComplete} onReject={onReject} />
           ))
         : <EmptySlot cadence="daily" />}
 
       {weekly.length > 0
-        ? weekly.map(a => (
-            <ActionItem key={actionKey(a)} action={a} cadence="weekly" done={doneKeys.has(actionKey(a))} onComplete={onComplete} onReject={onReject} />
+        ? weekly.map((a, i) => (
+            <ActionItem key={actionKey(a)} action={a} index={daily.length + i + 1} cadence="weekly" done={doneKeys.has(actionKey(a))} onComplete={onComplete} onReject={onReject} />
           ))
         : <EmptySlot cadence="weekly" />}
     </div>

@@ -470,6 +470,20 @@ export const bookingsApi = {
     return booking(r.booking)
   },
 
+  /**
+   * Tell one customer the arrival has slipped.
+   *
+   * Never throws on "we could not send": a booking taken without a phone
+   * number is normal, and the operator needs to see that plainly rather than
+   * get an error they cannot act on.
+   */
+  async notifyRunningLate(id: string, minutes: number): Promise<{ sent: boolean; reason?: string }> {
+    return call<{ sent: boolean; reason?: string }>(`/${id}/running-late`, {
+      method: 'POST',
+      body: { minutes },
+    })
+  },
+
   async listWaitlist(merchantId: string, status = 'waiting'): Promise<WaitlistEntry[]> {
     const r = await call<{ waitlist: any[] }>(`/waitlist/${merchantId}`, {
       params: { status },

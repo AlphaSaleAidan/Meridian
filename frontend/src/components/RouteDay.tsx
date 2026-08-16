@@ -19,8 +19,8 @@
  * number it cannot stand behind.
  */
 import { useState } from 'react'
-import { AlertTriangle, Car, MapPin, Navigation } from 'lucide-react'
-import type { Booking } from '@/lib/bookings-api'
+import { AlertTriangle, Car, Clock3, MapPin, Navigation } from 'lucide-react'
+import { bookingsApi, type Booking } from '@/lib/bookings-api'
 import RouteMap from '@/components/RouteMap'
 
 export interface Stop {
@@ -69,6 +69,10 @@ interface Leg {
   tight: boolean
 }
 
+/** The delays worth offering. Wider than this and you are rescheduling, not
+ *  running late, and the customer should be asked rather than told. */
+const LATE_OPTIONS = [15, 30, 45]
+
 export default function RouteDay({
   stops, origin, timezone, onSelect,
 }: {
@@ -77,6 +81,39 @@ export default function RouteDay({
   timezone: string
   onSelect?: (booking: Booking) => void
 }) {
+  /**
+   * "Running late" per stop.
+   *
+   * THE CALL THIS PREVENTS is the customer ringing to ask where the van is,
+   * which lands while the detailer is under a wheel arch — so it becomes a
+   * voicemail, a second call, and a review about communication rather than
+   * about the work.
+   *
+   * Per stop, not "tell everyone left today": a delay is rarely uniform, and
+   * telling someone who was five minutes behind that you are thirty behind is
+   * worse than saying nothing.
+   */
+  const [lateFor, setLateFor] = useState<string | null>(null)
+  const [sent, setSent] = useState<Record<string, string>>({})
+  const [sending, setSending] = useState<string | null>(null)
+
+  const notify = async (booking: Booking, minutes: number) => {
+    setSending(booking.id)
+    try {
+      const res = await bookingsApi.notifyRunningLate(booking.id, minutes)
+      setSent((prev) => ({
+        ...prev,
+        [booking.id]: res.sent
+          ? `Told them ${minutes} min`
+          : res.reason === 'no_phone' ? 'No number on file' : 'Could not send',
+      }))
+    } catch {
+      setSent((prev) => ({ ...prev, [booking.id]: 'Could not send' }))
+    } finally {
+      setSending(null)
+      setLateFor(null)
+    }
+  }
   // Pointing at a stop in either place highlights it in the other. On a map
   // with four pins in one suburb, "which of these is the 2pm" is the question
   // being asked constantly.
@@ -224,6 +261,46 @@ export default function RouteDay({
                   </span>
                 </span>
               </button>
+
+              {/* Under the stop rather than inside it: the card is a link to
+                  the booking, and burying a send-a-text control inside a
+                  navigation target is how someone texts a customer by
+                  accident. */}
+              <div className="ml-9 mt-1 flex flex-wrap items-center gap-1.5">
+                {sent[stop.booking.id] ? (
+                  <span className="text-xs text-[#17C5B0]">
+                    {sent[stop.booking.id]}
+                  </span>
+                ) : lateFor === stop.booking.id ? (
+                  <>
+                    <span className="text-xs text-[#A1A1A8]">How late?</span>
+                    {LATE_OPTIONS.map((m) => (
+                      <button
+                        key={m}
+                        disabled={sending === stop.booking.id}
+                        onClick={() => notify(stop.booking, m)}
+                        className="rounded-md border border-[#1A8FD6]/40 bg-[#1A8FD6]/10 px-2 py-1 text-xs font-medium text-[#1A8FD6] transition-colors hover:bg-[#1A8FD6]/20 disabled:opacity-50"
+                      >
+                        {m} min
+                      </button>
+                    ))}
+                    <button
+                      onClick={() => setLateFor(null)}
+                      className="px-1.5 py-1 text-xs text-[#6B6B73] hover:text-[#A1A1A8]"
+                    >
+                      Cancel
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={() => setLateFor(stop.booking.id)}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-[#1F1F23] px-2 py-1 text-xs text-[#A1A1A8] transition-colors hover:border-[#F5A524]/40 hover:text-[#F5A524]"
+                  >
+                    <Clock3 className="h-3.5 w-3.5" />
+                    Arriving late — notify customer
+                  </button>
+                )}
+              </div>
             </li>
           ))}
         </ol>

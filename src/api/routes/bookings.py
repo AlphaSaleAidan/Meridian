@@ -22,6 +22,7 @@ import re
 from datetime import date as date_cls
 from datetime import datetime, time, timedelta, timezone
 
+from types import SimpleNamespace
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
 
@@ -912,6 +913,53 @@ async def set_booking_link(
     await db.update("phone_agent_config", fields,
                     {"merchant_id": f"eq.{merchant_id}"})
     return {"url": url, "mode": fields.get("booking_mode", current)}
+
+
+class RunningLate(BaseModel):
+    minutes: int = Field(ge=5, le=240)
+
+
+@router.post("/{booking_id}/running-late")
+async def notify_running_late(booking_id: str, body: RunningLate,
+                              principal=Depends(require_service_auth)):
+    """Tell one customer the arrival has slipped.
+
+    THE CALL THIS PREVENTS is the customer ringing to ask where the van is —
+    which lands while the detailer is under a wheel arch and cannot answer,
+    so it becomes a voicemail, a second call, and a bad review about
+    communication rather than about the work.
+
+    Deliberately per-booking rather than "notify everyone left today": the
+    delay is rarely uniform, and a blanket 30 minutes sent to a customer who
+    was only ever 5 behind is worse than saying nothing.
+    """
+    _validate_uuid(booking_id, "booking_id")
+    row = await _enforce_row_member(principal, "bookings", booking_id)
+    if not row:
+        raise HTTPException(404, "booking not found")
+
+    phone = (row.get("customer_phone") or "").strip()
+    if not phone:
+        # Not an error: plenty of bookings are taken without a number, and a
+        # 4xx here would render as a failure the operator cannot act on.
+        return {"sent": False, "reason": "no_phone"}
+
+    merchant_id = row.get("merchant_id") or ""
+    rows = await get_db().select(
+        "phone_agent_config",
+        {"merchant_id": f"eq.{merchant_id}", "select": "business_name"},
+    )
+    cfg = SimpleNamespace(
+        merchant_id=merchant_id,
+        business_name=(rows[0].get("business_name") if rows else "") or "",
+    )
+
+    from src.services.booking_links import text_running_late
+
+    return await text_running_late(
+        cfg, phone, body.minutes,
+        booking_label=(row.get("service_name") or "").strip(),
+    )
 
 
 @router.get("/detail/{booking_id}")

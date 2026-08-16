@@ -20,12 +20,58 @@ import { bookingsApi, type Booking, type BusyBlock, type Resource, type Service 
 import type { NichePack } from '@/config/niches'
 import type { RouteOrigin } from '@/components/RouteDay'
 import TradeWorkspace from '@/components/overview/TradeWorkspace'
+import { formatCentsCompact as money } from '@/lib/format'
 
 /**
  * Feeds the trade overview from the same endpoints the portal uses, so the
  * numbers on it are derived from the day actually on the book rather than
  * written into a mock.
  */
+/**
+ * One shape out of two.
+ *
+ * /api/dashboard/anomalies returns a revenue drop: a date and two cent
+ * amounts. The demo's generator returns something else entirely — void
+ * spikes, refund surges, ingredient waste — with a title, a metric name and
+ * bare numbers that are counts or percentages, not money.
+ *
+ * Both are worth showing and neither can be read with the other's fields, so
+ * they are reconciled here, at the edge, once. The workspace then renders
+ * whatever it is handed without knowing which backend it came from.
+ */
+function normaliseAnomalies(
+  rows: any[],
+): { title: string; detail: string; row?: string; tone?: 'warn' | 'note' }[] {
+  return rows.map((a) => {
+    if (a.value_cents != null || a.expected_cents != null) {
+      return {
+        title: 'A day came in low',
+        detail: a.description || '',
+        tone: 'warn' as const,
+        row: `${a.date} · took ${money(a.value_cents ?? 0)}, expected ${money(a.expected_cents ?? 0)}`,
+      }
+    }
+    // The demo shape. `expected`/`actual` are whatever `metric` measures, and
+    // the unit is only knowable from the metric's name: a void COUNT is 14, a
+    // peak REVENUE is 48000 cents. Printing both raw put "37440" on screen as
+    // if it were a quantity of something.
+    const key = String(a.metric || '')
+    const metric = key.replace(/_/g, ' ')
+    const isMoney = /revenue|sales|spend|ticket|takings/.test(key)
+    const num = (v: number) => (isMoney ? money(v) : String(v))
+    const hasNumbers = a.expected != null && a.actual != null
+    return {
+      title: a.title || 'Something looks off',
+      detail: a.description || '',
+      // Severity carries through: an "unusual Saturday surge" is good news,
+      // and painting it the same red as a refund spike teaches an owner to
+      // ignore the colour.
+      tone: a.severity === 'info' ? 'note' : 'warn',
+      row: hasNumbers ? `${metric}: ${num(a.actual)} vs ${num(a.expected)} expected` : undefined,
+    }
+  })
+}
+
 export default function TradeWorkspaceHost({
   merchantId, pack, shopName, origin,
 }: {
@@ -60,7 +106,7 @@ export default function TradeWorkspaceHost({
       api.anomalies(merchantId).catch(() => ({ anomalies: [] })),
     ]).then(([f, a]: any[]) => {
       setForecasts(f.forecasts || [])
-      setAnomalies(a.anomalies || [])
+      setAnomalies(normaliseAnomalies(a.anomalies || []))
     })
   }, [pack])
 

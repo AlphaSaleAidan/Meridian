@@ -252,3 +252,55 @@ async def text_booking_link(
         "target": target,
         "reason": str(result.get("reason") or ""),
     }
+
+
+def compose_running_late(business_name: str, minutes: int, booking_label: str = "") -> str:
+    """The text a customer gets when the van is behind.
+
+    Written as the shop would say it out loud, and it says the ONE thing the
+    customer needs: the new time. "We are running late" without a number is
+    the message that makes someone ring you, which is the call this exists to
+    prevent.
+    """
+    who = (business_name or "").strip()
+    lead = f"{who}: " if who else ""
+    when = f" for your {booking_label}" if booking_label else ""
+    return (
+        f"{lead}we are running about {minutes} minutes behind{when}. "
+        "Sorry for the wait — no need to do anything, we will be there."
+    )
+
+
+async def text_running_late(
+    config,
+    to_phone: str,
+    minutes: int,
+    *,
+    booking_label: str = "",
+) -> dict:
+    """Tell a customer the arrival has slipped.
+
+    Returns {"sent": bool, "reason": str}. Never raises — this is fired from a
+    van, one-handed, and an exception surfacing as a red screen helps nobody.
+
+    NOT RECORDED IN booking_link_sends: that table is click attribution for
+    booking links, and a late notice has no link and nothing to attribute. The
+    SMS provider's own log is the record.
+    """
+    if not (to_phone or "").strip():
+        return {"sent": False, "reason": "no_phone"}
+    minutes = max(5, min(240, int(minutes or 0)))
+
+    from src.sms.client import send_sms
+
+    business = getattr(config, "business_name", "") or ""
+    try:
+        result = await send_sms(
+            to_phone, compose_running_late(business, minutes, booking_label))
+    except Exception as e:  # noqa: BLE001
+        logger.warning("running-late SMS crashed: %s", e)
+        return {"sent": False, "reason": str(e)}
+
+    return {"sent": bool(result.get("sent")),
+            "reason": str(result.get("reason") or ""),
+            "minutes": minutes}

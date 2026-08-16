@@ -960,6 +960,17 @@ async function route(url: URL, init: RequestInit): Promise<Response> {
   }
 
   // — create —
+  // The demo sends nothing, and says so — a demo that claims to have texted
+  // a customer is a demo that lies about what it did.
+  if (seg.length === 2 && seg[1] === 'running-late' && method === 'POST') {
+    const row = bookings.find((b) => b.id === seg[0])
+    if (!row) return json({ detail: 'booking not found' }, 404)
+    const minutes = Number(body?.minutes || 0)
+    row.notes = [row.notes, `Told them we are ${minutes} min behind`]
+      .filter(Boolean).join(' · ')
+    return json({ sent: true, minutes, demo: true })
+  }
+
   if (path === '/create' && method === 'POST') {
     const row = makeBooking({
       startsAt: new Date(body.starts_at),

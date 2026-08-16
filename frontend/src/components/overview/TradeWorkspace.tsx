@@ -62,8 +62,17 @@ export interface WorkspaceData {
    *  reinvented — the product already forecasts revenue and the workspace
    *  should show it, not grow a second model beside it. */
   forecasts?: { period_start: string; predicted_cents: number; lower_bound_cents: number | null; upper_bound_cents: number | null; confidence: number | null }[]
-  /** From /api/dashboard/anomalies. */
-  anomalies?: { date: string; value_cents: number; expected_cents: number; description: string }[]
+  /**
+   * From /api/dashboard/anomalies, ALREADY NORMALISED by the caller.
+   *
+   * The endpoint and the demo return different shapes — the endpoint a
+   * revenue drop with cents, the demo a mixed bag of void spikes and refund
+   * surges with no cents at all. This component used to read the endpoint's
+   * fields directly and, fed the other shape, rendered five identical cards
+   * reading "undefined · took $0, expected $0". Normalising at the edge and
+   * carrying a title of its own is what stops that being possible.
+   */
+  anomalies?: { title: string; detail: string; row?: string; tone?: 'warn' | 'note' }[]
   /** The fortnight of bookings behind the trend, for the peak-hours heatmap. */
   fortnight?: Booking[]
 }
@@ -382,51 +391,14 @@ export default function TradeWorkspace(data: WorkspaceData) {
         ))}
       </div>
 
-      {/* The portal's own do-this-next panel, fed niche-specific actions from
-          /api/dashboard/actions. Not a lookalike — the same component, with its
-          reasoning chain, evidence and complete/reject behaviour intact. */}
-      <Top3ActionsPanel />
+      {/*
+        ── The work, and what needs a human ────────────────────────
 
-      {peakCells.length > 0 && (
-        <PeakHoursHeatmap
-          cells={peakCells}
-          title="When the work lands"
-          caption="Two weeks of bookings by day and hour — the shape you staff against."
-        />
-      )}
-
-      {forecast.total > 0 && (
-        <section className="rounded-xl border border-[#1F1F23] bg-[#111113] p-5">
-          <div className="flex flex-wrap items-baseline justify-between gap-3">
-            <div>
-              <h2 className="text-sm font-semibold text-[#F5F5F7]">Revenue: actual against forecast</h2>
-              <p className="mt-0.5 text-sm text-[#A1A1A8]">
-                Solid is what happened; dashed is projected from what this shop
-                normally takes on each day of the week — not a flat average,
-                which would forecast money on the days you are shut.
-              </p>
-            </div>
-            <div className="text-right">
-              <div className="font-mono text-2xl font-semibold text-[#F5F5F7]">
-                {money(forecast.total)}
-              </div>
-              <div className="text-[11px] uppercase tracking-wide text-[#6B6B73]">
-                next 7 days
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-4">
-            <ForecastChart
-              data={forecast.series}
-              height={240}
-              gradientId="workspace-forecast"
-            />
-          </div>
-        </section>
-      )}
-
-      {/* ── The work, and what needs a human ──────────────────────── */}
+        DIRECTLY UNDER THE MONEY LINE, above the actions and the charts. The
+        route and the book are what an owner opens the app to look at, and
+        they sat below two analysis panels and a forecast — so reaching the
+        doing meant scrolling past the thinking.
+      */}
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
         <section className="min-w-0 rounded-xl border border-[#1F1F23] bg-[#111113] p-5">
           <div className="mb-4 flex items-center justify-between gap-3">
@@ -493,6 +465,51 @@ export default function TradeWorkspace(data: WorkspaceData) {
           )}
         </aside>
       </div>
+
+      {/* The portal's own do-this-next panel, fed niche-specific actions from
+          /api/dashboard/actions. Not a lookalike — the same component, with its
+          reasoning chain, evidence and complete/reject behaviour intact. */}
+      <Top3ActionsPanel />
+
+      {peakCells.length > 0 && (
+        <PeakHoursHeatmap
+          cells={peakCells}
+          title="When the work lands"
+          caption="Two weeks of bookings by day and hour — the shape you staff against."
+        />
+      )}
+
+      {forecast.total > 0 && (
+        <section className="rounded-xl border border-[#1F1F23] bg-[#111113] p-5">
+          <div className="flex flex-wrap items-baseline justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold text-[#F5F5F7]">Revenue: actual against forecast</h2>
+              <p className="mt-0.5 text-sm text-[#A1A1A8]">
+                Solid is what happened; dashed is projected from what this shop
+                normally takes on each day of the week — not a flat average,
+                which would forecast money on the days you are shut.
+              </p>
+            </div>
+            <div className="text-right">
+              <div className="font-mono text-2xl font-semibold text-[#F5F5F7]">
+                {money(forecast.total)}
+              </div>
+              <div className="text-[11px] uppercase tracking-wide text-[#6B6B73]">
+                next 7 days
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-4">
+            <ForecastChart
+              data={forecast.series}
+              height={240}
+              gradientId="workspace-forecast"
+            />
+          </div>
+        </section>
+      )}
+
     </div>
   )
 }
@@ -654,10 +671,10 @@ function computeAttention(
   // them on a page nobody opens is most of the value of having them.
   for (const a of data.anomalies || []) {
     out.push({
-      title: 'A day came in low',
-      detail: a.description,
-      tone: 'warn',
-      rows: [`${a.date} · took ${money(a.value_cents)}, expected ${money(a.expected_cents)}`],
+      title: a.title,
+      detail: a.detail,
+      tone: a.tone === 'note' ? undefined : 'warn',
+      rows: a.row ? [a.row] : [],
     })
   }
   const active = resources.filter((r) => r.active)
