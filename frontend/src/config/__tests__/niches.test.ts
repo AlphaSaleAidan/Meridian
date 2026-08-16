@@ -31,12 +31,13 @@ describe('a merchant with no trade set', () => {
 })
 
 describe('the public demos', () => {
-  it('do not get a Bookings tab until it has demo data', () => {
-    // BookingsPage has no demo path yet: it would call the real API with the
-    // org id 'demo', be refused, and render an error on the surface a
-    // prospect is shown. Flip this on in the same change that gives it one.
+  it('get a Bookings tab, now that it has a book to show', () => {
+    // Gated off while BookingsPage had no demo path — it called the real API
+    // with the org id 'demo' and rendered an error in front of a prospect.
+    // lib/demo-bookings.ts answers those calls now, and Bookings is the
+    // pillar the service trades open on, so an absent tab is its own failure.
     for (const path of ['/demo', '/canada/demo']) {
-      expect(flagsForPath(path).bookings).toBe(false)
+      expect(flagsForPath(path).bookings).toBe(true)
     }
   })
 
@@ -46,12 +47,11 @@ describe('the public demos', () => {
     }
   })
 
-  it('keep the rest of the demo surface unchanged', () => {
-    const demo = flagsForPath('/demo')
-    const canada = flagsForPath('/canada/merchant')
-    const { bookings: _d, ...restDemo } = demo
-    const { bookings: _c, ...restCanada } = canada
-    expect(restDemo).toEqual(restCanada)
+  it('show exactly what the Canada portal shows', () => {
+    // The demo's whole claim is that it is the product. Any module that is
+    // on in one and off in the other makes that claim false.
+    expect(flagsForPath('/demo')).toEqual(flagsForPath('/canada/merchant'))
+    expect(flagsForPath('/canada/demo')).toEqual(flagsForPath('/canada/merchant'))
   })
 })
 

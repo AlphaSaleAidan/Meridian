@@ -12,8 +12,24 @@
  * would otherwise see every reservation shifted.
  */
 import { getAuthHeaders } from '@/lib/supabase'
+import { demoBookingsRoute } from '@/lib/demo-bookings'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
+
+/**
+ * The public demos have no merchant and no database, so bookings are served
+ * from an in-browser book instead (lib/demo-bookings.ts).
+ *
+ * PATH-BASED AND NOTHING ELSE, checked at call time. A signed-in merchant is
+ * never on one of these routes, so their portal cannot reach the demo book —
+ * which matters more than usual here, because the failure mode is invented
+ * guest names rendered inside a real reservation list.
+ */
+function onDemoPath(): boolean {
+  if (typeof window === 'undefined') return false
+  const p = window.location.pathname
+  return p.startsWith('/demo') || p.startsWith('/canada/demo')
+}
 
 async function call<T>(
   path: string,
@@ -23,6 +39,17 @@ async function call<T>(
   Object.entries(opts.params || {}).forEach(([k, v]) => {
     if (v !== undefined && v !== null && v !== '') url.searchParams.set(k, v)
   })
+  if (onDemoPath()) {
+    const demo = await demoBookingsRoute(url, {
+      method: opts.method || 'GET',
+      body: opts.body ? JSON.stringify(opts.body) : undefined,
+    })
+    if (demo) {
+      if (!demo.ok) throw new BookingsApiError(demo.status, await demo.text().catch(() => ''))
+      return demo.json() as Promise<T>
+    }
+  }
+
   const res = await fetch(url.toString(), {
     method: opts.method || 'GET',
     credentials: 'include',

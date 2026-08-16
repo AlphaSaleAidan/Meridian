@@ -5,8 +5,8 @@ import { useMobile } from '@/hooks/useMobile'
 import { PortalLoadingSkeleton } from '@/pages/canada/portal/PortalPage'
 import ComingSoonBanner from '@/components/ComingSoonBanner'
 import type { Pillar } from '@/config/merchantPillars'
-import { packFor } from '@/config/niches'
 import { useAuth } from '@/lib/auth'
+import { useTradePack } from '@/config/moduleFlags'
 
 /**
  * Generic pillar shell. Reads `?view=` to pick the active segment, renders a
@@ -33,7 +33,7 @@ export default function MerchantPillarPage({ pillar }: { pillar: Pillar }) {
    * A merchant with no trade set loses nothing: packFor() falls back to a pack
    * that hides nothing.
    */
-  const hidden = packFor(org?.business_type).hiddenViews || []
+  const hidden = useTradePack().hiddenViews || []
   const forTrade = pillar.segments.filter(
     s => !hidden.includes(`${pillar.path}/${s.view}`))
   const segments = isMobile ? forTrade.filter(s => !s.desktopOnly) : forTrade

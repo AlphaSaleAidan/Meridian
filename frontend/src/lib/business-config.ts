@@ -255,12 +255,204 @@ const SMOKE_SHOP: BusinessProfile = {
   ],
 }
 
+
+/**
+ * The service trades.
+ *
+ * Every one of these SELLS PRODUCT as well as time — which is the whole reason
+ * they keep the Inventory pillar. A barbershop's retail shelf and its blade
+ * consumption are real margin; a med spa's injectables are the most expensive
+ * stock in this file. Demoing them with a coffee shop's croissants would have
+ * told a prospect the product was not built for them.
+ *
+ * Prices are US cents. The Canadian demo multiplies them at read time
+ * (getCurrencyMultiplier), so nothing here is duplicated per market.
+ */
+const BARBERSHOP: BusinessProfile = {
+  businessName: 'The Fade Room',
+  businessNameCA: 'The Fade Room',
+  industryLabel: 'Barbershop / Salon',
+  peakLabel: '4:00–7:00 PM',
+  topBundlePair: ['Haircut', 'Beard Trim'],
+  deadStockItems: ['Hair Tonic', 'Straight Razor', 'Shave Brush'],
+  hourlyPattern: [
+    0, 0, 0, 0, 0, 0,
+    0, 0, 0, 35, 55, 60,
+    70, 65, 60, 70, 85, 95,
+    80, 45, 10, 0, 0, 0,
+  ],
+  revenue: {
+    weekdayMin: 90000, weekdayMax: 150000,
+    weekendMin: 160000, weekendMax: 240000,
+    avgTicketMin: 3500, avgTicketMax: 6500,
+  },
+  staff: [
+    { name: 'Marco R.', role: 'Master Barber' },
+    { name: 'Dee W.', role: 'Barber' },
+    { name: 'Sol P.', role: 'Barber' },
+    { name: 'Nia K.', role: 'Apprentice' },
+  ],
+  products: [
+    { name: 'Haircut', sku: 'CUT-001', price: 3500, category: 'services', popularity: 0.95 },
+    { name: 'Skin Fade', sku: 'FAD-001', price: 4500, category: 'services', popularity: 0.85 },
+    { name: 'Cut & Beard', sku: 'CBD-001', price: 5500, category: 'services', popularity: 0.75 },
+    { name: 'Beard Trim', sku: 'BRD-001', price: 2000, category: 'services', popularity: 0.70 },
+    { name: 'Hot Towel Shave', sku: 'SHV-001', price: 4000, category: 'services', popularity: 0.45 },
+    { name: 'Matte Pomade', sku: 'POM-001', price: 2200, category: 'retail', popularity: 0.60 },
+    { name: 'Beard Oil', sku: 'OIL-001', price: 2600, category: 'retail', popularity: 0.55 },
+    { name: 'Clay Paste', sku: 'CLY-001', price: 2400, category: 'retail', popularity: 0.50 },
+    { name: 'Shampoo 250ml', sku: 'SHP-001', price: 1900, category: 'retail', popularity: 0.45 },
+    { name: 'Hair Tonic', sku: 'TON-001', price: 2100, category: 'retail', popularity: 0.20 },
+    { name: 'Clipper Blades', sku: 'BLD-001', price: 3200, category: 'supplies', popularity: 0.35 },
+    { name: 'Straight Razor', sku: 'RAZ-001', price: 4800, category: 'retail', popularity: 0.15 },
+    { name: 'Shave Brush', sku: 'BRS-001', price: 2900, category: 'retail', popularity: 0.12 },
+  ],
+}
+
+const NAIL_STUDIO: BusinessProfile = {
+  businessName: 'Lacquer Lash Bar',
+  businessNameCA: 'Lacquer Lash Bar',
+  industryLabel: 'Nail & Lash Studio',
+  peakLabel: '11:00 AM–3:00 PM',
+  topBundlePair: ['Gel Manicure', 'Pedicure'],
+  deadStockItems: ['Nail Art Kit', 'Cuticle Oil', 'Toe Separators'],
+  hourlyPattern: [
+    0, 0, 0, 0, 0, 0,
+    0, 0, 0, 40, 65, 85,
+    90, 85, 80, 70, 65, 55,
+    40, 20, 5, 0, 0, 0,
+  ],
+  revenue: {
+    weekdayMin: 110000, weekdayMax: 190000,
+    weekendMin: 200000, weekendMax: 300000,
+    avgTicketMin: 5500, avgTicketMax: 11000,
+  },
+  staff: [
+    { name: 'Mia T.', role: 'Lead Technician' },
+    { name: 'Jordan A.', role: 'Nail Technician' },
+    { name: 'Alexis N.', role: 'Lash Technician' },
+    { name: 'Sam D.', role: 'Nail Technician' },
+  ],
+  products: [
+    { name: 'Gel Manicure', sku: 'GEL-001', price: 5500, category: 'services', popularity: 0.95 },
+    { name: 'Full Set', sku: 'SET-001', price: 9500, category: 'services', popularity: 0.80 },
+    { name: 'Fill', sku: 'FIL-001', price: 6500, category: 'services', popularity: 0.85 },
+    { name: 'Lash Extensions', sku: 'LSH-001', price: 15000, category: 'services', popularity: 0.60 },
+    { name: 'Pedicure', sku: 'PED-001', price: 6000, category: 'services', popularity: 0.70 },
+    { name: 'Gel Polish', sku: 'PLS-001', price: 1400, category: 'supplies', popularity: 0.65 },
+    { name: 'Acrylic Powder', sku: 'ACR-001', price: 3200, category: 'supplies', popularity: 0.60 },
+    { name: 'Lash Tray', sku: 'TRY-001', price: 2800, category: 'supplies', popularity: 0.50 },
+    { name: 'Cuticle Oil', sku: 'CUT-002', price: 1200, category: 'retail', popularity: 0.25 },
+    { name: 'Nail Art Kit', sku: 'ART-001', price: 3600, category: 'retail', popularity: 0.15 },
+    { name: 'Toe Separators', sku: 'SEP-001', price: 600, category: 'supplies', popularity: 0.18 },
+  ],
+}
+
+const MED_SPA: BusinessProfile = {
+  businessName: 'Northline Aesthetics',
+  businessNameCA: 'Northline Aesthetics',
+  industryLabel: 'Med Spa / Aesthetics',
+  peakLabel: '12:00–4:00 PM',
+  topBundlePair: ['Consultation', 'Injectables'],
+  deadStockItems: ['Body Wrap Kit', 'Peel Sample Pack'],
+  hourlyPattern: [
+    0, 0, 0, 0, 0, 0,
+    0, 0, 0, 45, 65, 75,
+    85, 90, 85, 75, 60, 40,
+    15, 0, 0, 0, 0, 0,
+  ],
+  revenue: {
+    weekdayMin: 280000, weekdayMax: 520000,
+    weekendMin: 320000, weekendMax: 600000,
+    avgTicketMin: 18000, avgTicketMax: 65000,
+  },
+  staff: [
+    { name: 'Dr. Elise F.', role: 'Medical Director' },
+    { name: 'Hana O.', role: 'Nurse Injector' },
+    { name: 'Ruth A.', role: 'Aesthetician' },
+    { name: 'Kit L.', role: 'Front of House' },
+  ],
+  products: [
+    { name: 'Consultation', sku: 'CON-001', price: 0, category: 'services', popularity: 0.90 },
+    { name: 'Injectables', sku: 'INJ-001', price: 65000, category: 'services', popularity: 0.70 },
+    { name: 'Laser Session', sku: 'LAS-001', price: 30000, category: 'services', popularity: 0.55 },
+    { name: 'Facial', sku: 'FAC-001', price: 18000, category: 'services', popularity: 0.80 },
+    { name: 'Chemical Peel', sku: 'PEL-001', price: 22000, category: 'services', popularity: 0.45 },
+    { name: 'Filler Syringe', sku: 'FLR-001', price: 42000, category: 'supplies', popularity: 0.60 },
+    { name: 'Serum 30ml', sku: 'SER-001', price: 9500, category: 'retail', popularity: 0.50 },
+    { name: 'SPF 50', sku: 'SPF-001', price: 4800, category: 'retail', popularity: 0.55 },
+    { name: 'Retinol Cream', sku: 'RET-001', price: 8800, category: 'retail', popularity: 0.40 },
+    { name: 'Peel Sample Pack', sku: 'PSP-001', price: 3200, category: 'retail', popularity: 0.10 },
+    { name: 'Body Wrap Kit', sku: 'WRP-001', price: 5400, category: 'retail', popularity: 0.08 },
+  ],
+}
+
+const DETAILING: BusinessProfile = {
+  businessName: 'Apex Auto Detail',
+  businessNameCA: 'Apex Auto Detail',
+  industryLabel: 'Auto Detailing',
+  peakLabel: '9:00 AM–2:00 PM',
+  topBundlePair: ['Full Detail', 'Ceramic Coating'],
+  deadStockItems: ['Trim Restorer', 'Headlight Kit'],
+  hourlyPattern: [
+    0, 0, 0, 0, 0, 0,
+    0, 25, 70, 90, 85, 80,
+    75, 70, 65, 55, 40, 20,
+    5, 0, 0, 0, 0, 0,
+  ],
+  revenue: {
+    weekdayMin: 150000, weekdayMax: 280000,
+    weekendMin: 260000, weekendMax: 420000,
+    avgTicketMin: 12000, avgTicketMax: 40000,
+  },
+  staff: [
+    { name: 'Cole B.', role: 'Lead Detailer' },
+    { name: 'Ravi M.', role: 'Detailer' },
+    { name: 'Tash G.', role: 'Detailer' },
+  ],
+  products: [
+    { name: 'Wash and Wax', sku: 'WSH-001', price: 12000, category: 'services', popularity: 0.90 },
+    { name: 'Interior and Exterior', sku: 'INT-001', price: 22000, category: 'services', popularity: 0.80 },
+    { name: 'Full Detail', sku: 'FUL-001', price: 40000, category: 'services', popularity: 0.55 },
+    { name: 'Ceramic Coating', sku: 'CER-001', price: 90000, category: 'services', popularity: 0.25 },
+    { name: 'Coating Bottle 50ml', sku: 'CTB-001', price: 22000, category: 'supplies', popularity: 0.30 },
+    { name: 'Clay Bar', sku: 'CLB-001', price: 1800, category: 'supplies', popularity: 0.55 },
+    { name: 'Polish Compound', sku: 'POL-001', price: 3400, category: 'supplies', popularity: 0.60 },
+    { name: 'Microfibre x12', sku: 'MFB-001', price: 2600, category: 'supplies', popularity: 0.70 },
+    { name: 'Tyre Dressing', sku: 'TYR-001', price: 1500, category: 'supplies', popularity: 0.50 },
+    { name: 'Trim Restorer', sku: 'TRM-001', price: 2200, category: 'retail', popularity: 0.12 },
+    { name: 'Headlight Kit', sku: 'HDL-001', price: 3900, category: 'retail', popularity: 0.10 },
+  ],
+}
+
+const MOBILE_DETAILING: BusinessProfile = {
+  ...DETAILING,
+  businessName: 'Roadside Shine Mobile',
+  businessNameCA: 'Roadside Shine Mobile',
+  industryLabel: 'Mobile Detailing',
+  // Fewer jobs a day than a two-bay shop: the van can only be in one place.
+  revenue: {
+    weekdayMin: 90000, weekdayMax: 180000,
+    weekendMin: 160000, weekendMax: 260000,
+    avgTicketMin: 12000, avgTicketMax: 38000,
+  },
+  staff: [
+    { name: 'Cole B.', role: 'Owner / Detailer' },
+    { name: 'Ravi M.', role: 'Detailer' },
+  ],
+}
+
 const PROFILES: Record<BusinessType, BusinessProfile> = {
   coffee_shop: COFFEE_SHOP,
   restaurant: RESTAURANT,
   fast_food: FAST_FOOD,
   auto_shop: AUTO_SHOP,
   smoke_shop: SMOKE_SHOP,
+  barbershop: BARBERSHOP,
+  nails: NAIL_STUDIO,
+  medspa: MED_SPA,
+  detailing: DETAILING,
+  mobile_detailing: MOBILE_DETAILING,
 }
 
 export function getBusinessProfile(type: BusinessType): BusinessProfile {

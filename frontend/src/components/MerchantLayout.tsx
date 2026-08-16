@@ -5,9 +5,8 @@ import { Menu, MapPin } from 'lucide-react'
 import { MeridianEmblem, MeridianWordmark } from './MeridianLogo'
 import { useUnreadNotifications } from '@/hooks/useUnreadNotifications'
 import { merchantPillars, comingSoonPillars, orderPillars, MERCHANT_BASE_PATH, type Pillar } from '@/config/merchantPillars'
-import { packFor } from '@/config/niches'
 import { useAuth } from '@/lib/auth'
-import { useModuleFlags } from '@/config/moduleFlags'
+import { useModuleFlags, useTradePack } from '@/config/moduleFlags'
 
 function PillarLink({ pillar, basePath, onNavigate }: { pillar: Pillar; basePath: string; onNavigate: () => void }) {
   const Icon = pillar.icon
@@ -54,7 +53,7 @@ export default function MerchantLayout({ basePath = MERCHANT_BASE_PATH }: { base
   // Filter pillars by their optional flag — disabled-never-delete pattern —
   // then put them in the order this merchant's TRADE cares about. A barber
   // opens on the book; a takeout shop opens on the phone.
-  const pack = packFor(org?.business_type)
+  const pack = useTradePack()
   const visiblePillars = orderPillars(
     merchantPillars.filter(p => !p.flag || flags[p.flag]),
     pack.pillarOrder,

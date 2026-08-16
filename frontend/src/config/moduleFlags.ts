@@ -1,6 +1,7 @@
 import { useLocation } from 'react-router-dom'
+import { useDemoContext } from '@/lib/demo-context'
 import { useAuth } from '@/lib/auth'
-import { packFor } from '@/config/niches'
+import { packFor, type NichePack } from '@/config/niches'
 
 /**
  * Module feature flags — disable-never-delete switchboard.
@@ -92,17 +93,15 @@ export const canadaModuleFlags: ModuleFlags = {
  * a market must keep trimming them whatever trade the merchant is in.
  */
 export function flagsForPath(pathname: string): ModuleFlags {
-  // PUBLIC DEMOS: bookings is off until it has demo data of its own.
+  // PUBLIC DEMOS mirror the Canada product, Bookings included.
   //
-  // demoMerchantPillars is derived from merchantPillars, so adding the
-  // Bookings pillar handed both public demos a tab whose page calls the real
-  // API with the org id 'demo', gets refused, and renders "Could not load
-  // bookings" — on the surface a prospect is shown. An empty tab is a bad
-  // demo; a broken one loses the meeting. Flip this back on in the same
-  // change that gives BookingsPage a demo path, the way api.ts already does
-  // for every other dataset.
+  // Bookings was gated off here while its page had no demo data: the tab
+  // called the real API with the org id 'demo', was refused, and rendered
+  // "Could not load bookings" in front of a prospect. lib/demo-bookings.ts
+  // now answers those calls with a real book, so the gate is gone — and it
+  // had to go, because Bookings is the pillar the service trades open on.
   const isDemoPath = pathname.startsWith('/demo') || pathname.startsWith('/canada/demo')
-  if (isDemoPath) return { ...canadaModuleFlags, bookings: false }
+  if (isDemoPath) return canadaModuleFlags
 
   if (pathname.startsWith('/canada')) return canadaModuleFlags
   // US merchant portal mirrors the Canada product exactly (same trimmed pillar
@@ -141,9 +140,33 @@ export function flagsForMerchant(
  * gets exactly what they got before, because packFor() falls back to a pack
  * that turns nothing off.
  */
-export function useModuleFlags(): ModuleFlags {
+/**
+ * The trade pack in force right now — the single answer three surfaces share.
+ *
+ * Module flags, pillar order and hidden views must all agree about which trade
+ * this is. When they were resolved separately, the demo could show a
+ * barbershop's numbers under a restaurant's navigation.
+ */
+export function useTradePack(): NichePack {
   const { pathname } = useLocation()
   const { org } = useAuth()
-  const pack = packFor(org?.business_type)
-  return flagsForMerchant(pathname, pack.modules)
+  const { businessType } = useDemoContext()
+
+  // On the public demos there is no org, so the trade comes from what the
+  // visitor picked on the opening screen — that pick is the entire point of
+  // the screen, and without this line it only changed the numbers.
+  //
+  // STRICTLY DEMO-ONLY. A signed-in merchant keeps resolving from their own
+  // record and nothing else: detectBusinessType() always returns something,
+  // so letting it through here would hand every merchant with a blank
+  // business_type the restaurant pack and quietly change their portal.
+  const isDemo = pathname.startsWith('/demo') || pathname.startsWith('/canada/demo')
+  const trade = org?.business_type || (isDemo ? businessType : null)
+
+  return packFor(trade)
+}
+
+export function useModuleFlags(): ModuleFlags {
+  const { pathname } = useLocation()
+  return flagsForMerchant(pathname, useTradePack().modules)
 }

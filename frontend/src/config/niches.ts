@@ -368,6 +368,30 @@ export const GENERIC_PACK: NichePack = {
 
 export const ALL_PACKS = [...NICHE_PACKS, GENERIC_PACK]
 
+/**
+ * Names for the same trade that are NOT the pack key.
+ *
+ * Two vocabularies grew up separately: the demo's BusinessType values
+ * ('fast_food', 'mobile_detailing') and these pack keys ('quickservice',
+ * 'mobiledetailing'). Rather than rename either — the demo values are already
+ * in visitors' localStorage and in saved merchant records — the two are
+ * reconciled here.
+ *
+ * DELIBERATELY AN EXPLICIT TABLE, not fuzzy matching. Unknown text must still
+ * fall through to the generic pack, because that fallback is what guarantees
+ * every existing merchant sees the portal they saw yesterday.
+ */
+const PACK_ALIASES: Record<string, string> = {
+  fast_food: 'quickservice',
+  mobile_detailing: 'mobiledetailing',
+  auto_detailing: 'detailing',
+  med_spa: 'medspa',
+  nail_salon: 'nails',
+  barber_shop: 'barbershop',
+}
+
 export function packFor(key: string | null | undefined): NichePack {
-  return ALL_PACKS.find((p) => p.key === key) || GENERIC_PACK
+  if (!key) return GENERIC_PACK
+  const resolved = PACK_ALIASES[key] || key
+  return ALL_PACKS.find((p) => p.key === resolved) || GENERIC_PACK
 }

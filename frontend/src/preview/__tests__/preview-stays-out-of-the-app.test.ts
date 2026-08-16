@@ -41,13 +41,21 @@ function appFiles(dir: string, out: string[] = []): string[] {
   return out
 }
 
-/** Names that exist only to demonstrate the product, never to run it. */
+/**
+ * Names that must never appear in the app.
+ *
+ * This list SHRANK when the demo book moved out of preview/ into
+ * lib/demo-bookings.ts — which is the outcome the header describes, not a
+ * loosening of it: the public demos legitimately need invented bookings, the
+ * same way lib/demo-data.ts already gives them invented sales.
+ *
+ * What stays is what a merchant must never see. `TradeVersions` compares
+ * their trade against five others; `installFixtureApi` patches window.fetch
+ * globally, which is safe in a harness and never in a portal.
+ */
 const HARNESS_ONLY = [
   'TradeVersions',       // the Compare trades screen — internal, not a merchant surface
-  'fixtureApi',          // invented bookings
-  'configureForTrade',   // rebuilds the whole merchant from a pack
-  'resetToNewMerchant',
-  'BASE_LOCATION',       // the fake depot the demo route starts from
+  'installFixtureApi',   // global fetch patch; the app intercepts in its own client instead
 ]
 
 describe('the preview harness stays out of the app', () => {
