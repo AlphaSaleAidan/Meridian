@@ -1,5 +1,6 @@
 import type { Insight } from './api'
 import { getActiveBusinessType, getCurrencyMultiplier } from './demo-context'
+import { currencyPrefix } from './format'
 import { getBusinessProfile, getProducts, getStaff } from './business-config'
 
 function cx(cents: number): number {
@@ -259,13 +260,19 @@ export function generateTopActions(): TopAction[] {
   const p = getProducts(bt)
   const bp = getBusinessProfile(bt)
   const peak = bp.peakLabel
-  const scaleMap: Record<string, number> = { coffee_shop: 1, restaurant: 3, fast_food: 2, auto_shop: 2.5, smoke_shop: 0.7 }
+  // Rough size of a day's trade relative to a cafe, so a med spa's actions
+  // are not quoted in cafe money. Every trade in the picker needs an entry;
+  // an unlisted one silently scales to 1 and under-quotes itself.
+  const scaleMap: Record<string, number> = {
+    coffee_shop: 1, restaurant: 3, fast_food: 2, auto_shop: 2.5, smoke_shop: 0.7,
+    barbershop: 1.2, nails: 1.6, medspa: 4, detailing: 2.2, mobile_detailing: 1.4,
+  }
   const m = scaleMap[bt] || 1
   // cx() applies the currency multiplier (1.38 on Canada, 1.0 elsewhere) so the
   // prose dollar figures match the CAD-scaled impactCents badges the panel renders.
-  const $s = (base: number) => `$${cx(base * m).toLocaleString()}`
+  const $s = (base: number) => `${currencyPrefix()}${cx(base * m).toLocaleString()}`
   const sm = (cents: number) => Math.round(cents * m)
-  const pFmt = (cents: number) => `$${(cx(cents) / 100).toFixed(2)}`
+  const pFmt = (cents: number) => `${currencyPrefix()}${(cx(cents) / 100).toFixed(2)}`
   const p4 = p[4] || { name: 'Item E', price: 625 }
   const p1 = p[1] || { name: 'Item B', price: 525 }
   const p9 = p[9] || { name: 'Item J', price: 425 }
@@ -282,6 +289,90 @@ export function generateTopActions(): TopAction[] {
   const bTotal = pFmt(p1.price + p9.price)
   const bBundle = pFmt(Math.round((p1.price + p9.price) * 0.90))
   const bSave = pFmt(Math.round((p1.price + p9.price) * 0.10))
+
+  /**
+   * The fourth action, per trade family.
+   *
+   * This slot used to be "Investigate Register 2 void spike" for everybody,
+   * which is a sentence a mobile detailer cannot act on — they have no
+   * Register 2, and no register. The other four actions are already built
+   * from the trade's own catalogue and hours; this one had a shop baked into
+   * its prose, so it is chosen rather than substituted.
+   */
+  const rank4 = (): TopAction => {
+    const bt2 = getActiveBusinessType()
+    const family =
+      bt2 === 'restaurant' || bt2 === 'fast_food' || bt2 === 'coffee_shop' ? 'food'
+      : bt2 === 'barbershop' || bt2 === 'nails' || bt2 === 'medspa' ? 'appointments'
+      : bt2 === 'detailing' || bt2 === 'mobile_detailing' || bt2 === 'auto_shop' ? 'vehicles'
+      : 'retail'
+
+    if (family === 'appointments') {
+      return {
+        rank: 4,
+        title: 'Take a deposit on bookings made more than two weeks out',
+        description: `Nine appointments went unfilled this week against a usual three, and every one was booked more than a fortnight ahead. A deposit on long-lead bookings is the single change that moves this.`,
+        expectedImpact: `+${$s(460)}/month in recovered appointment time`,
+        impactCents: cx(sm(46000)),
+        effort: 'Low', confidence: 88, priority: 'Critical',
+        agentSource: 'retention-strategist',
+        model: 'Survival model on lead time vs attendance',
+        reasoning: {
+          observation: '9 no-shows this week vs 3.1 trailing average. All had a lead time above 14 days.',
+          reasoning: 'Attendance falls off a cliff past a fortnight of lead time: 96% within 7 days, 71% beyond 14. A deposit re-prices the option to not turn up, and the shops that take one see the gap close rather than shrink.',
+          conclusion: 'Require a deposit on bookings more than 14 days out. Leave short-notice bookings alone — they already show up.',
+          impact: `+${$s(460)}/month if attendance on long-lead bookings returns to the short-lead rate`,
+          confidence: 88, priority: 'Critical',
+          rawData: { no_shows: 9, expected: 3.1, long_lead_share: 1.0, attendance_under_7d: 0.96, attendance_over_14d: 0.71 },
+          agentId: 'retention-strategist', agentName: 'Retention Strategist',
+        },
+      }
+    }
+
+    if (family === 'vehicles') {
+      return {
+        rank: 4,
+        title: 'Jobs are running 47 minutes past estimate',
+        description: `Work is finishing well past what was quoted, which is costing roughly a job and a half of bay time a week. The over-run is concentrated in one service rather than spread across the book.`,
+        expectedImpact: `+${$s(460)}/month from the recovered time`,
+        impactCents: cx(sm(46000)),
+        effort: 'Medium', confidence: 86, priority: 'Critical',
+        agentSource: 'peak-hour-optimizer',
+        model: 'Quantile regression on quoted vs actual duration',
+        reasoning: {
+          observation: 'Mean over-run 47 minutes against a 15-minute allowance. 78% of it sits on one service.',
+          reasoning: 'A quoted duration that is consistently wrong does not just lose the difference — it pushes every later job back, and the last one either gets rushed or gets cancelled. Re-quoting the one service that causes it is a smaller change than re-quoting the book.',
+          conclusion: 'Re-time that service against its actuals and rebuild the day around the real number.',
+          impact: `+${$s(460)}/month at current rates from time no longer lost to over-run`,
+          confidence: 86, priority: 'Critical',
+          rawData: { mean_overrun_min: 47, allowance_min: 15, share_one_service: 0.78 },
+          agentId: 'peak-hour-optimizer', agentName: 'Peak Hour Optimizer',
+        },
+      }
+    }
+
+    // Food and retail both run tills, so the void spike is a real finding for
+    // them and stays.
+    return {
+      rank: 4,
+      title: 'Investigate the void spike on one till',
+      description: 'Transaction-analyst flagged 14 voids on Tuesday evening against a 4-5 average, nearly all on one till. Ensemble confirmed 3/3. Possible training gap or policy abuse.',
+      expectedImpact: `+${$s(460)}/month from void reduction to baseline`,
+      impactCents: cx(sm(46000)),
+      effort: 'Low', confidence: 91, priority: 'Critical',
+      agentSource: 'transaction-analyst',
+      model: 'PyOD ensemble (IForest+LOF+KNN) + Luminol',
+      reasoning: {
+        observation: '14 void transactions Tuesday evening on one till vs 4.6 trailing average. Z-score: -3.8.',
+        reasoning: 'Three-model ensemble: IsolationForest 0.82 (threshold 0.65), LocalOutlierFactor 0.91 (0.70), KNN 0.78 (0.60). All three flagged. Luminol scored 142 against an 80 threshold, confirming a temporal anomaly rather than a busy night.',
+        conclusion: 'Review that till\'s operator logs for Tuesday evenings. Most likely a training gap — there is no cash drawer discrepancy, which fraud would usually leave.',
+        impact: `+${$s(460)}/month if the void rate returns to its 2% baseline from 5.8%`,
+        confidence: 91, priority: 'Critical',
+        rawData: { void_count: 14, expected_count: 4.6, z_score: -3.8, iforest_score: 0.82, lof_score: 0.91, knn_score: 0.78, luminol_score: 142, ensemble_vote: '3/3' },
+        agentId: 'transaction-analyst', agentName: 'Transaction Analyst',
+      },
+    }
+  }
 
   return [
     {
@@ -353,29 +444,7 @@ export function generateTopActions(): TopAction[] {
         agentName: 'Product Intelligence',
       },
     },
-    {
-      rank: 4,
-      title: 'Investigate Register 2 void spike — ensemble anomaly detected',
-      description: 'Transaction-analyst flagged 14 voids on Tuesday evening vs 4-5 average. PyOD ensemble (IForest + LOF + KNN) confirmed 3/3 majority vote. Luminol time-series score 142 (threshold: 80). Possible training gap or policy abuse.',
-      expectedImpact: `+${$s(460)}/month from void reduction to baseline`,
-      impactCents: cx(sm(46000)),
-      effort: 'Low',
-      confidence: 91,
-      priority: 'Critical',
-      agentSource: 'transaction-analyst',
-      model: 'PyOD ensemble (IForest+LOF+KNN) + Luminol',
-      reasoning: {
-        observation: '14 void transactions Tuesday evening on Register 2 vs 4.6 trailing average. Z-score: -3.8 (>3σ threshold).',
-        reasoning: 'Transaction-analyst ran 3-model ensemble: IsolationForest anomaly score 0.82 (threshold 0.65), LocalOutlierFactor score 0.91 (threshold 0.70), KNN distance score 0.78 (threshold 0.60). All 3 models flagged → majority vote = confirmed anomaly. Luminol time-series detector scored 142 vs 80 threshold, confirming temporal anomaly.',
-        conclusion: 'Review Register 2 operator logs for Tuesday PM shifts. Cross-reference with staff-performance-analyst for that shift. Likely training gap — not fraud (no cash drawer discrepancy).',
-        impact: `+${$s(460)}/month if void rate returns to baseline 2% from current 5.8%`,
-        confidence: 91,
-        priority: 'Critical',
-        rawData: { void_count: 14, expected_count: 4.6, z_score: -3.8, iforest_score: 0.82, lof_score: 0.91, knn_score: 0.78, luminol_score: 142, ensemble_vote: '3/3', register: 'Register 2' },
-        agentId: 'transaction-analyst',
-        agentName: 'Transaction Analyst',
-      },
-    },
+    rank4(),
     {
       rank: 5,
       title: 'Winback campaign for 12 lapsed high-value customers',
@@ -447,8 +516,8 @@ export function generateTopActions(): TopAction[] {
     },
     {
       rank: 8,
-      title: 'Shrinkage investigation — Register 2 waste rate 3.1% vs 2% target',
-      description: `Waste-shrinkage agent detected 3.1% shrinkage rate, 55% above the 2% target. Void pattern on Register 2 correlates with transaction-analyst anomaly finding. Combined waste + void leakage estimated at ${$s(380)}/month.`,
+      title: 'Shrinkage running at 3.1% against a 2% target',
+      description: `Stock is disappearing 55% faster than the target rate, and the void pattern on one till lines up with it. Combined leakage is around ${$s(380)}/month.`,
       expectedImpact: `+${$s(380)}/month from shrinkage reduction`,
       impactCents: cx(sm(38000)),
       effort: 'Medium',
@@ -457,9 +526,9 @@ export function generateTopActions(): TopAction[] {
       agentSource: 'waste-shrinkage',
       model: 'Multi-stream leakage correlation',
       reasoning: {
-        observation: 'Shrinkage rate 3.1% (target 2.0%). Register 2 accounts for 68% of all voids. Inventory-intelligence reports supply usage 40% above expected without matching sales increase.',
-        reasoning: `Waste-shrinkage agent correlated three data streams: (1) transaction-analyst void spike data, (2) inventory-intelligence usage anomaly, (3) daily cash reconciliation reports. Register 2 void-to-sale ratio is 2.4x other registers. Over-consumption maps to same Tuesday PM shift — likely over-portioning, not theft. Total monthly leakage: ${$s(220)} void-related + ${$s(160)} over-portioning = ${$s(380)}.`,
-        conclusion: 'Schedule retraining for Tuesday PM shift operator on portioning and void procedures. Install tracking on high-cost supplies. Re-measure in 30 days.',
+        observation: 'Shrinkage rate 3.1% against a 2.0% target. One till accounts for 68% of all voids. Stock usage is 40% above expected with no matching rise in sales.',
+        reasoning: `Three streams line up: the void spike, the usage anomaly, and daily cash reconciliation. One till's void-to-sale ratio is 2.4x the others, and the over-consumption maps to the same shift — which points at process rather than theft. Total monthly leakage: ${$s(220)} void-related plus ${$s(160)} in stock = ${$s(380)}.`,
+        conclusion: 'Retrain that shift on void procedure and stock handling, put tracking on the high-cost lines, and re-measure in 30 days.',
         impact: `+${$s(380)}/month from reducing shrinkage rate from 3.1% to target 2.0%`,
         confidence: 80,
         priority: 'High',
@@ -637,7 +706,7 @@ export function actionsFromInsights(rawActions: Array<Record<string, unknown>>):
 // Minimal cents formatter local to this module (the panel uses its own
 // `formatCents`; we only need a string for the synthesized reasoning rawData).
 function formatCentsLocal(cents: number): string {
-  return `$${Math.round(cents / 100).toLocaleString()}`
+  return `${currencyPrefix()}${Math.round(cents / 100).toLocaleString()}`
 }
 
 export function generateRFMSegments(): RFMSegment[] {
@@ -1047,14 +1116,166 @@ export interface Anomaly {
   detectionMethod?: 'zscore' | 'luminol' | 'ensemble'
 }
 
+/**
+ * Anomalies, per trade — not one shop's anomalies with the nouns swapped.
+ *
+ * These were five hand-written coffee-shop findings pushed through bizSub(),
+ * a find-and-replace over product names. Anything the table did not list
+ * survived verbatim, so an auto detailer opened the portal and read "oat milk
+ * consumption jumped 40%... possible over-portioning". The replacement table
+ * can never be complete, because the PHRASING is trade-specific too:
+ * over-portioning, ingredient ounces and register voids are things a cafe has
+ * and a detailer does not.
+ *
+ * So they are authored per trade family instead, and take their product names
+ * from that trade's real catalogue. Four families rather than ten sets:
+ * a barbershop and a nail studio genuinely do share their failure modes
+ * (retail shrink, over-running appointments, no-shows), and pretending
+ * otherwise would be ten copies of the same three ideas.
+ */
+type AnomalyFamily = 'food' | 'appointments' | 'vehicles' | 'retail'
+
+function anomalyFamily(): AnomalyFamily {
+  switch (getActiveBusinessType()) {
+    case 'restaurant': case 'fast_food': case 'coffee_shop':
+      return 'food'
+    case 'barbershop': case 'nails': case 'medspa':
+      return 'appointments'
+    case 'detailing': case 'mobile_detailing': case 'auto_shop':
+      return 'vehicles'
+    default:
+      return 'retail'
+  }
+}
+
 export function generateAnomalies(): Anomaly[] {
-  return [
-    { id: 'a1', type: 'void_spike', severity: 'critical', title: bizSub('Void transactions 3x normal'), description: bizSub('Tuesday 6-9PM saw 14 void transactions vs. 4-5 average. Concentrated on Register 2. Possible training issue or policy abuse.'), detectedAt: minutesAgo(45), metric: 'void_count', expected: 5, actual: 14, deviationPct: 180, agentSource: 'transaction-analyst', acknowledged: false, zScore: -3.8, luminolScore: 142, detectionMethod: 'ensemble' },
-    { id: 'a2', type: 'revenue_drop', severity: 'warning', title: bizSub('Morning revenue down 22%'), description: bizSub('Revenue between 7-9AM dropped 22% vs. prior 4-week average. Weather was clear, no holidays. Possible competitor event or staffing issue.'), detectedAt: hoursAgo(3), metric: 'peak_revenue', expected: 48000, actual: 37440, deviationPct: -22, agentSource: 'peak-hour-optimizer', acknowledged: false, zScore: -2.4, luminolScore: 87, detectionMethod: 'ensemble' },
-    { id: 'a3', type: 'cost_spike', severity: 'warning', title: bizSub('Oat milk usage up 40%'), description: bizSub('Oat milk consumption jumped 40% without corresponding sales increase. Possible over-portioning or waste issue.'), detectedAt: hoursAgo(8), metric: 'ingredient_usage_oz', expected: 320, actual: 448, deviationPct: 40, agentSource: 'inventory-intelligence', acknowledged: true, zScore: 2.1, detectionMethod: 'zscore' },
-    { id: 'a4', type: 'traffic_anomaly', severity: 'info', title: bizSub('Unusual Saturday surge'), description: bizSub('Transactions 35% above Saturday average. Nearby event (farmers market) likely driving foot traffic. Consider staffing up for recurring events.'), detectedAt: hoursAgo(26), metric: 'transaction_count', expected: 180, actual: 243, deviationPct: 35, agentSource: 'peak-hour-optimizer', acknowledged: true, zScore: 1.8, luminolScore: 64, detectionMethod: 'luminol' },
-    { id: 'a5', type: 'refund_surge', severity: 'warning', title: bizSub('Refund rate doubled this week'), description: bizSub('Refund rate hit 4.2% vs. 2.1% trailing average. 6 of 8 refunds were on Breakfast Sandwich — possible quality issue with current batch.'), detectedAt: hoursAgo(5), metric: 'refund_rate_pct', expected: 2.1, actual: 4.2, deviationPct: 100, agentSource: 'transaction-analyst', acknowledged: false, zScore: -2.8, luminolScore: 95, detectionMethod: 'ensemble' },
+  const p = getProducts(getActiveBusinessType())
+  // Index into the trade's own catalogue rather than naming anything: every
+  // profile has at least four products, and the names are already right.
+  const item = (i: number) => p[i % Math.max(1, p.length)]?.name || 'a line'
+  const family = anomalyFamily()
+
+  // A refund is the one finding every trade can have. Everything else is
+  // family-specific, INCLUDING the void spike: a mobile detailer takes payment
+  // on a handset and has no till to void on, so leading their portal with
+  // "voids on one till" is the same mistake as the oat milk.
+  const common: Anomaly[] = [
+    { id: 'a2', type: 'refund_surge', severity: 'warning',
+      title: 'Refund rate doubled this week',
+      description: `Refunds hit 4.2% against a 2.1% trailing average, and six of the eight were on ${item(2)}.`,
+      detectedAt: hoursAgo(5), metric: 'refund_rate_pct', expected: 2.1, actual: 4.2,
+      deviationPct: 100, agentSource: 'transaction-analyst', acknowledged: false,
+      zScore: -2.8, luminolScore: 95, detectionMethod: 'ensemble' },
   ]
+
+  const perFamily: Record<AnomalyFamily, Anomaly[]> = {
+    food: [
+      { id: 'a1', type: 'void_spike', severity: 'critical',
+        title: 'Voids running 3x normal',
+        description: `Tuesday evening saw 14 voided transactions against a usual 4 to 5, nearly all on one till. Worth asking whether it is a training gap or something else.`,
+        detectedAt: minutesAgo(45), metric: 'void_count', expected: 5, actual: 14,
+        deviationPct: 180, agentSource: 'transaction-analyst', acknowledged: false,
+        zScore: -3.8, luminolScore: 142, detectionMethod: 'ensemble' },
+      { id: 'a3', type: 'cost_spike', severity: 'warning',
+        title: 'Ingredient usage outrunning sales',
+        description: `Stock consumption is up 40% with no matching rise in sales. Usually portioning or waste rather than theft.`,
+        detectedAt: hoursAgo(8), metric: 'ingredient_usage_oz', expected: 320, actual: 448,
+        deviationPct: 40, agentSource: 'inventory-intelligence', acknowledged: true,
+        zScore: 2.1, detectionMethod: 'zscore' },
+      { id: 'a4', type: 'revenue_drop', severity: 'warning',
+        title: 'Morning trade down 22%',
+        description: `Revenue between 7 and 9am dropped 22% against the prior four weeks. Weather was clear and it was not a holiday.`,
+        detectedAt: hoursAgo(3), metric: 'peak_revenue', expected: 48000, actual: 37440,
+        deviationPct: -22, agentSource: 'peak-hour-optimizer', acknowledged: false,
+        zScore: -2.4, luminolScore: 87, detectionMethod: 'ensemble' },
+      { id: 'a5', type: 'traffic_anomaly', severity: 'info',
+        title: 'Unusual Saturday surge',
+        description: `Transactions ran 35% above a normal Saturday. A nearby event is the likely cause — worth staffing for if it recurs.`,
+        detectedAt: hoursAgo(26), metric: 'transaction_count', expected: 180, actual: 243,
+        deviationPct: 35, agentSource: 'peak-hour-optimizer', acknowledged: true,
+        zScore: 1.8, luminolScore: 64, detectionMethod: 'luminol' },
+    ],
+    appointments: [
+      { id: 'a1', type: 'traffic_anomaly', severity: 'critical',
+        title: 'Gaps between appointments have doubled',
+        description: `The average gap between bookings is 34 minutes against a usual 16. That is roughly two appointments a day of dead time nobody is paying for.`,
+        detectedAt: minutesAgo(45), metric: 'gap_minutes', expected: 16, actual: 34,
+        deviationPct: 113, agentSource: 'peak-hour-optimizer', acknowledged: false,
+        zScore: -3.2, luminolScore: 126, detectionMethod: 'ensemble' },
+      { id: 'a3', type: 'revenue_drop', severity: 'warning',
+        title: 'No-shows up sharply this week',
+        description: `Nine appointments went unfilled against a usual three. Every one of them was booked more than a fortnight ahead — the reminder window may be too early.`,
+        detectedAt: hoursAgo(4), metric: 'no_show_count', expected: 3, actual: 9,
+        deviationPct: 200, agentSource: 'retention-strategist', acknowledged: false,
+        zScore: -3.1, luminolScore: 118, detectionMethod: 'ensemble' },
+      { id: 'a4', type: 'cost_spike', severity: 'warning',
+        title: `${item(5)} leaving faster than it sells`,
+        description: `Retail stock is moving off the shelf faster than the till accounts for. Small numbers, but it is the shelf nobody counts.`,
+        detectedAt: hoursAgo(9), metric: 'retail_units_unaccounted', expected: 2, actual: 7,
+        deviationPct: 250, agentSource: 'inventory-intelligence', acknowledged: true,
+        zScore: 2.4, detectionMethod: 'zscore' },
+      { id: 'a5', type: 'traffic_anomaly', severity: 'info',
+        title: 'Appointments over-running by 12 minutes',
+        description: `The average booking is running twelve minutes past its slot, which is why the back half of the day keeps slipping.`,
+        detectedAt: hoursAgo(20), metric: 'overrun_minutes', expected: 3, actual: 12,
+        deviationPct: 300, agentSource: 'peak-hour-optimizer', acknowledged: false,
+        zScore: 2.2, luminolScore: 71, detectionMethod: 'luminol' },
+    ],
+    vehicles: [
+      { id: 'a1', type: 'traffic_anomaly', severity: 'critical',
+        title: 'Quoted work not converting to booked work',
+        description: `Fourteen quotes went out this week and four came back. The usual conversion is closer to nine, and the drop is concentrated in the higher-value jobs.`,
+        detectedAt: minutesAgo(45), metric: 'quote_conversion_pct', expected: 64, actual: 29,
+        deviationPct: -55, agentSource: 'retention-strategist', acknowledged: false,
+        zScore: -3.3, luminolScore: 133, detectionMethod: 'ensemble' },
+      { id: 'a3', type: 'cost_spike', severity: 'warning',
+        title: `${item(6)} usage up 38%`,
+        description: `Consumable use is well ahead of the jobs booked against it. Usually decanting or a job written up short.`,
+        detectedAt: hoursAgo(8), metric: 'consumable_units', expected: 26, actual: 36,
+        deviationPct: 38, agentSource: 'inventory-intelligence', acknowledged: true,
+        zScore: 2.1, detectionMethod: 'zscore' },
+      { id: 'a4', type: 'revenue_drop', severity: 'warning',
+        title: 'Jobs over-running their estimate',
+        description: `Work is averaging 47 minutes past estimate, which cost roughly a job and a half of bay time this week.`,
+        detectedAt: hoursAgo(6), metric: 'overrun_minutes', expected: 15, actual: 47,
+        deviationPct: 213, agentSource: 'peak-hour-optimizer', acknowledged: false,
+        zScore: -2.6, luminolScore: 103, detectionMethod: 'ensemble' },
+      { id: 'a5', type: 'traffic_anomaly', severity: 'info',
+        title: 'Comebacks concentrated on one job type',
+        description: `Five of six return visits this month were the same service. Either the write-up or the process needs a look.`,
+        detectedAt: hoursAgo(30), metric: 'comeback_count', expected: 1, actual: 6,
+        deviationPct: 500, agentSource: 'transaction-analyst', acknowledged: false,
+        zScore: 2.5, luminolScore: 88, detectionMethod: 'luminol' },
+    ],
+    retail: [
+      { id: 'a1', type: 'void_spike', severity: 'critical',
+        title: 'Voids running 3x normal',
+        description: `Tuesday evening saw 14 voided transactions against a usual 4 to 5, nearly all on one till. Worth asking whether it is a training gap or something else.`,
+        detectedAt: minutesAgo(45), metric: 'void_count', expected: 5, actual: 14,
+        deviationPct: 180, agentSource: 'transaction-analyst', acknowledged: false,
+        zScore: -3.8, luminolScore: 142, detectionMethod: 'ensemble' },
+      { id: 'a3', type: 'cost_spike', severity: 'critical',
+        title: `${item(1)} shrink above tolerance`,
+        description: `Counted stock is short against sales on a high-value line. Concentrated in one part of the day.`,
+        detectedAt: hoursAgo(7), metric: 'units_short', expected: 1, actual: 9,
+        deviationPct: 800, agentSource: 'inventory-intelligence', acknowledged: false,
+        zScore: -3.4, luminolScore: 131, detectionMethod: 'ensemble' },
+      { id: 'a4', type: 'traffic_anomaly', severity: 'info',
+        title: 'Basket size climbing on weekday evenings',
+        description: `Evening baskets are running 28% above average. Worth putting the higher-margin lines where those customers walk.`,
+        detectedAt: hoursAgo(22), metric: 'basket_value_cents', expected: 3120, actual: 3990,
+        deviationPct: 28, agentSource: 'peak-hour-optimizer', acknowledged: true,
+        zScore: 1.9, luminolScore: 62, detectionMethod: 'luminol' },
+      { id: 'a5', type: 'revenue_drop', severity: 'warning',
+        title: `${item(9)} has stopped moving`,
+        description: `No sale in thirty days on a line still taking shelf space and cash.`,
+        detectedAt: hoursAgo(34), metric: 'days_since_sale', expected: 7, actual: 30,
+        deviationPct: 329, agentSource: 'inventory-intelligence', acknowledged: false,
+        zScore: -2.2, detectionMethod: 'zscore' },
+    ],
+  }
+
+  return [...common, ...perFamily[family]]
 }
 
 // ─── #3 Cohort Analysis ─────────────────────────────────────

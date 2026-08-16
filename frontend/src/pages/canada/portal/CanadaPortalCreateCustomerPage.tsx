@@ -12,6 +12,7 @@ import { supabase, getAuthHeaders } from '@/lib/supabase'
 import { PLAN_TIERS, getPlan, REP_PRICE_HEADROOM_CAD, ZERO_PER_ORDER_CARDS, WEBSITE_MODULES, websiteMonthlyFree, CUSTOM_CRM_SERVICE, CRM_INTAKE_FIELDS, parseSetupServiceAmount, AD_SPOT_SERVICE, AD_SPOT_PLACEMENTS, AD_SPOT_AUDIO, type PlanTier } from '@/lib/canada-proposal-plans'
 import { downloadProposalPdf, type ProposalInput } from '@/lib/generate-proposal-pdf'
 import { verticalsByGroup, findVerticalBySlug, DECK_BASE_URL, buildPersonalizedDeckUrl } from '@/data/cadVerticals'
+import { SELLABLE_TRADES, SELLABLE_GROUPS, deckSlugFor } from '@/config/niches'
 
 type Step = 'details' | 'plan' | 'customize' | 'preview' | 'confirm'
 
@@ -618,7 +619,10 @@ export default function CanadaPortalCreateCustomerPage() {
 
   const buildProposalInput = useCallback((): ProposalInput | null => {
     if (!rep) return null
-    const vertical = findVerticalBySlug(form.vertical)
+    // form.vertical is a PACK KEY now, not a deck slug. The deck it links
+    // to is a property of the trade, which is what lets mobile detailing and
+    // shop detailing be different products sharing one proposal.
+    const vertical = findVerticalBySlug(deckSlugFor(form.vertical, 'ca') || '')
     const deckUrl = vertical
       ? buildPersonalizedDeckUrl(
           vertical.slug,
@@ -985,8 +989,21 @@ export default function CanadaPortalCreateCustomerPage() {
 
   // Grouped CAD verticals (43 total) — values are deck slugs (e.g. "ca-restaurant"),
   // matching the proposals catalog so the lead detail page can auto-link the right deck.
-  const verticalGroups = verticalsByGroup()
-  const selectedVertical = findVerticalBySlug(form.vertical)
+  // THE PICKER OFFERS WHAT WE ACTUALLY BUILD, and nothing else.
+  //
+  // It used to list all 43/45 proposal decks, so a rep could close an art
+  // gallery or a vet clinic — trades with a deck and no product version
+  // behind them. That merchant pays for a tailored portal and receives the
+  // generic one, which is a promise the rep did not know they were breaking.
+  //
+  // The value stored is the PACK KEY, not a deck slug: the thing the rep
+  // chose and the thing their portal renders are now the same string.
+  const sellableGroups = SELLABLE_GROUPS
+    .map((g) => ({ group: g, items: SELLABLE_TRADES.filter((t) => t.group === g) }))
+    .filter((g) => g.items.length > 0)
+  const selectedTrade = SELLABLE_TRADES.find((t) => t.key === form.vertical)
+  const selectedDeckSlug = deckSlugFor(form.vertical, 'ca')
+  const selectedVertical = findVerticalBySlug(selectedDeckSlug || '')
   const stepLabels = ['Details', 'Plan', 'Price', 'Proposal', 'Confirm']
   const steps: Step[] = ['details', 'plan', 'customize', 'preview', 'confirm']
   const currentIdx = steps.indexOf(step)
@@ -1078,18 +1095,18 @@ export default function CanadaPortalCreateCustomerPage() {
                   className="w-full px-3 py-2.5 text-sm-tight rounded-lg bg-pm-canada-bg border border-pm-canada-border text-white focus:border-pm-accent/50 focus:outline-none transition-colors"
                 >
                   <option value="">Select industry…</option>
-                  {verticalGroups.map(({ group, items }) => (
-                    <optgroup key={group.key} label={group.label}>
-                      {items.map(v => (
-                        <option key={v.slug} value={v.slug}>{v.title}</option>
+                  {sellableGroups.map(({ group, items }) => (
+                    <optgroup key={group} label={group}>
+                      {items.map(t => (
+                        <option key={t.key} value={t.key}>{t.label}</option>
                       ))}
                     </optgroup>
                   ))}
                 </select>
-                {selectedVertical && (
+                {selectedTrade && (
                   <p className="mt-1.5 text-2xs text-pm-accent/80 leading-snug">
-                    Deck linked: <span className="text-pm-accent font-medium">{selectedVertical.title}</span>
-                    <span className="text-pm-canada-text-faint"> — {selectedVertical.blurb}</span>
+                    Deck linked: <span className="text-pm-accent font-medium">{selectedVertical?.title || selectedTrade.label}</span>
+                    {selectedVertical && <span className="text-pm-canada-text-faint"> — {selectedVertical.blurb}</span>}
                   </p>
                 )}
               </div>

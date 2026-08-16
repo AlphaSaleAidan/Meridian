@@ -448,7 +448,13 @@ async def create_customer(req: CreateCustomerRequest, claims: dict = Depends(req
                     "email": req.email,
                     "phone": req.phone or "",
                     "plan_tier": "trial",
-                    "business_type": req.vertical or "restaurant",
+                    # Blank means UNKNOWN, not "restaurant". The rep picker stores a
+                    # trade key now, and defaulting a blank to restaurant handed
+                    # the merchant a tailored portal for a trade nobody chose —
+                    # silently, because it renders as a working product. Null
+                    # falls through to the untailored portal, which is the
+                    # honest answer to "we were not told".
+                    "business_type": req.vertical or None,
                     "pos_connected": False,
                     "onboarded": False,
                     "status": "active",
@@ -546,7 +552,13 @@ async def create_customer(req: CreateCustomerRequest, claims: dict = Depends(req
                             json={
                                 "merchant_id": org_id,
                                 "business_name": req.business_name,
-                                "business_type": req.vertical or "restaurant",
+                                # Blank means UNKNOWN, not "restaurant". The rep picker stores a
+                    # trade key now, and defaulting a blank to restaurant handed
+                    # the merchant a tailored portal for a trade nobody chose —
+                    # silently, because it renders as a working product. Null
+                    # falls through to the untailored portal, which is the
+                    # honest answer to "we were not told".
+                    "business_type": req.vertical or None,
                                 "active": False,
                                 **seed,
                             },

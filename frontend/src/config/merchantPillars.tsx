@@ -1,7 +1,7 @@
 import type { ComponentType, LazyExoticComponent } from 'react'
 import {
   LayoutDashboard, Zap, Layers, Users, Phone, Video, Settings, Receipt,
-  Contact, Lightbulb, Globe,
+  Contact, Lightbulb, Globe, CalendarClock,
 } from 'lucide-react'
 import { lazyRetry } from '@/components/ErrorBoundary'
 import type { ModuleFlags } from '@/config/moduleFlags'
@@ -36,6 +36,8 @@ const TimeClockPage = lazyRetry(() => import('@/pages/team/TimeClockPage'))
 const TeamChatPage = lazyRetry(() => import('@/pages/team/TeamChatPage'))
 const ChatbotConfigPage = lazyRetry(() => import('@/pages/team/ChatbotConfigPage'))
 const PhoneOrdersPage = lazyRetry(() => import('@/pages/PhoneOrdersPage'))
+const BookingsPage = lazyRetry(() => import('@/pages/BookingsPage'))
+const BookingsSetupPage = lazyRetry(() => import('@/pages/BookingsSetupPage'))
 const PhoneSetupWizard = lazyRetry(() => import('@/pages/canada/merchant/PhoneSetupWizard'))
 const CPAHandoffPage = lazyRetry(() => import('@/pages/canada/merchant/CPAHandoffPage'))
 // Point to the in-app analytics view, NOT the SEO marketing page.
@@ -78,6 +80,24 @@ export interface Pillar {
   flag?: keyof ModuleFlags
 }
 
+/**
+ * Reorder a pillar list for a trade.
+ *
+ * A barbershop's Meridian should open on the book, not on inventory it does
+ * not keep. Anything the pack does not name keeps its natural position after
+ * the ones it does, so a new pillar added here later cannot vanish from a
+ * trade's portal just because nobody updated the pack.
+ */
+export function orderPillars(pillars: Pillar[], order?: string[]): Pillar[] {
+  if (!order || order.length === 0) return pillars
+  const rank = new Map(order.map((path, i) => [path, i]))
+  return [...pillars].sort((a, b) => {
+    const ra = rank.has(a.path) ? rank.get(a.path)! : order.length + pillars.indexOf(a)
+    const rb = rank.has(b.path) ? rank.get(b.path)! : order.length + pillars.indexOf(b)
+    return ra - rb
+  })
+}
+
 export const merchantPillars: Pillar[] = [
   {
     path: '',
@@ -107,6 +127,7 @@ export const merchantPillars: Pillar[] = [
       { view: 'menu', label: 'Menu Matrix', Component: MenuEngineeringPage, desktopOnly: true },
       { view: 'anomalies', label: 'Anomalies', Component: AnomaliesPage },
     ],
+    flag: 'inventory',
   },
   {
     // Renamed from "Schedule" → the owner's control center for scheduling AND
@@ -124,6 +145,7 @@ export const merchantPillars: Pillar[] = [
       { view: 'chat', label: 'Chat', Component: TeamChatPage },
       { view: 'chatbot', label: 'Customer Bot', Component: ChatbotConfigPage },
     ],
+    flag: 'schedule',
   },
   {
     path: 'phone',
@@ -133,6 +155,19 @@ export const merchantPillars: Pillar[] = [
       { view: 'orders', label: 'Phone Orders', Component: PhoneOrdersPage },
       { view: 'setup', label: 'Set up', Component: PhoneSetupWizard },
     ],
+    flag: 'phoneCalls',
+  },
+  {
+    // Reservations and appointments. Sits next to Phone Calls because that is
+    // where most of them come from — the agent books straight into this book.
+    path: 'bookings',
+    label: 'Bookings',
+    icon: CalendarClock,
+    segments: [
+      { view: 'book', label: "Today's Book", Component: BookingsPage },
+      { view: 'setup', label: 'Set up', Component: BookingsSetupPage },
+    ],
+    flag: 'bookings',
   },
   {
     path: 'tax',
@@ -150,6 +185,7 @@ export const merchantPillars: Pillar[] = [
       { view: 'live', label: 'Live', Component: LiveCamerasPage },
       { view: 'intelligence', label: 'Analytics', Component: CameraIntelligencePage },
     ],
+    flag: 'camera',
   },
   {
     path: 'settings',
@@ -200,26 +236,12 @@ export const comingSoonPillars: Pillar[] = [
     sampleData: true,
     segments: [{ view: 'customers', label: 'Customers', Component: CustomersPage }],
   },
-  {
-    path: 'tax',
-    label: 'Taxes & Expenses',
-    icon: Receipt,
-    comingSoon: true,
-    sampleData: true,
-    segments: [{ view: 'handoff', label: 'CPA Handoff', Component: CPAHandoffPage }],
-  },
-  {
-    path: 'my-website',
-    label: 'My Website',
-    icon: Globe,
-    comingSoon: true,
-    segments: [
-      // Managed sites first — that is the offer. The DIY builder stays visible
-      // as the second segment; it is still under construction behind its own flag.
-      { view: 'care', label: 'Site Care', Component: SiteCarePage },
-      { view: 'builder', label: 'Builder', Component: MyWebsitePage },
-    ],
-  },
+  // Taxes & Expenses and My Website were here and are deliberately gone.
+  // Aidan's call: a demo is a pitch, and two roadmap tabs a prospect cannot
+  // buy today dilute the four that are actually the product. Neither page is
+  // deleted — Taxes & Expenses still ships to real merchants through the
+  // `taxExpenses` flag (on for /app, off for Canada), and the website pages
+  // are still routed. They just no longer sit in a demo sidebar.
 ]
 
 /** Public demo route set: the shipped demo pillars plus the roadmap previews. */

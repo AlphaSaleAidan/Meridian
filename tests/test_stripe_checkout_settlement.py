@@ -121,8 +121,16 @@ async def test_webhook_unrecords_and_500_on_activation_failure(monkeypatch):
         raise RuntimeError("activation write failed")
     monkeypatch.setattr(sc, "_activate_from_checkout", _boom)
 
+    # THE BODY IS THE EVENT, not the construct_event return value. The handler
+    # re-parses the signature-verified payload with json.loads because this
+    # SDK's StripeObject is not dict-subclassed and event.get() blows up on it.
+    # Stubbing only construct_event left this test driving an empty {} body, so
+    # the activation branch was never entered and the money-path guard it exists
+    # to protect had silently stopped being exercised.
+    body = json.dumps({"id": "evt_1", "type": "checkout.session.completed",
+                       "data": {"object": DATA}}).encode()
     with pytest.raises(HTTPException) as exc:
-        await sc.stripe_webhook(_Req())
+        await sc.stripe_webhook(_Req(body))
     assert exc.value.status_code == 500          # Stripe will retry
     assert forgot["eid"] == "evt_1"              # dedupe marker un-recorded
 

@@ -29,6 +29,10 @@ from .onnx_yolo import OnnxPersonModel, model_available as _onnx_available
 logger = logging.getLogger("meridian.camera.detector")
 
 PERSON_CLASS = 0
+# COCO "cell phone". The model already returns it — the person mask below was
+# discarding it. Keeping it costs no extra inference and is what lets the
+# connector detect a handset at the counter.
+PHONE_CLASS = 67
 
 # Person-detection confidence floor. Tuned on MOT17-09 (eval/camera): sweeping
 # 0.25→0.45 raised F1 0.712→0.750, MOTA 0.40→0.535 and IDF1 0.688→0.744 (higher
@@ -59,15 +63,26 @@ class MeridianDetector:
         self._tracker = sv.ByteTrack()
         self._confidence = DEFAULT_CONFIDENCE if confidence is None else confidence
         self._polygon_zone_cache: dict[str, Any] = {}
+        self._last_phones: list = []
 
     def _infer_persons(self, frame: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        """Run the active backend → (xyxy [N,4] px, confidence [N]) for persons."""
+        """Run the active backend → (xyxy [N,4] px, confidence [N]) for persons.
+
+        Also stashes any phone boxes from the SAME pass on self._last_phones,
+        rather than returning them — the return shape is depended on by the
+        ONNX path and by callers, and widening it would be a breaking change
+        for a value most of them do not want.
+        """
         if self._model is not None:
             results = self._model(frame, verbose=False)[0]
             boxes = results.boxes
-            mask = boxes.cls.cpu().numpy().astype(int) == PERSON_CLASS
-            person_boxes = boxes[mask]
+            cls = boxes.cls.cpu().numpy().astype(int)
+            phone_boxes = boxes[cls == PHONE_CLASS]
+            self._last_phones = phone_boxes.xyxy.cpu().numpy().tolist()
+            person_boxes = boxes[cls == PERSON_CLASS]
             return person_boxes.xyxy.cpu().numpy(), person_boxes.conf.cpu().numpy()
+        # The ONNX bundle is person-only, so there is nothing to keep.
+        self._last_phones = []
         return self._onnx.infer(frame)
 
     def process_frame(
@@ -115,6 +130,9 @@ class MeridianDetector:
             "merchant_id": merchant_id,
             "camera_id": camera_id,
             "persons": persons,
+            # Additive: existing callers ignore it, the connector uses it for
+            # phone-use detection.
+            "phones": list(self._last_phones),
             "total_detected": len(persons),
             "frame_shape": [frame_h, frame_w],
         }

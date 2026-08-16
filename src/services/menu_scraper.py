@@ -182,9 +182,22 @@ async def _fetch(client: httpx.AsyncClient, url: str) -> tuple[str, bytes]:
 
 
 def _pdf_to_text(data: bytes) -> str | None:
-    """Best-effort PDF text. pypdf/pdfminer are NOT in requirements.txt —
-    runtime import so an env that happens to have one still works; otherwise
-    None → the caller flags pdf_unsupported instead of pulling heavy deps."""
+    """Best-effort PDF text.
+
+    pypdf IS in requirements.txt now. It was deliberately left out to avoid
+    "heavy deps", but that did not make PDFs unsupported — it made support
+    ACCIDENTAL, because pypdf arrives transitively via browser-use in some
+    environments and not others. The same menu upload parsed in dev and was
+    flagged pdf_unsupported in production.
+
+    The import stays at runtime and the fallbacks stay in place, so a stripped
+    install still degrades instead of crashing. Three distinct answers, and
+    the caller depends on the difference:
+
+        text  the PDF was read
+        ""    it was read and there was nothing usable in it (or it is corrupt)
+        None  no PDF library at all → the caller flags pdf_unsupported
+    """
     try:
         import io as _io
 

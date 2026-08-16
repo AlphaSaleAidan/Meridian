@@ -10,16 +10,38 @@ function getLocaleConfig(): { locale: string; currency: string } {
   return { locale: 'en-US', currency: 'USD' }
 }
 
+/**
+ * The symbol this portal quotes prices in.
+ *
+ * Exported because several modules synthesize their own money strings, and
+ * every one of them hardcoded "$" while already converting the amount to
+ * Canadian dollars — a Canadian figure under a US sign, which is worse than
+ * an unqualified one. One source for the symbol, one answer.
+ */
+export function currencyPrefix(): string {
+  return getLocaleConfig().currency === 'CAD' ? 'CA$' : '$'
+}
+
 export function formatCents(cents: number | null | undefined): string {
-  if (cents == null) return '$0.00'
   const { locale, currency } = getLocaleConfig()
+  // `Intl` renders CAD under en-CA as a BARE "$" — the same defect
+  // formatCentsCompact already carries a note about, and the reason a Canadian
+  // screen could show "CA$1.4K" as its headline and "$1,159.20" directly
+  // underneath. On a portal that quotes Canadian prices to Canadian merchants
+  // an unqualified "$" is not a formatting slip, it is an ambiguous price.
+  const prefix = currencyPrefix()
+  if (cents == null) return `${prefix}0.00`
   const dollars = cents / 100
-  return dollars.toLocaleString(locale, { style: 'currency', currency, minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  const sign = dollars < 0 ? '-' : ''
+  const amount = Math.abs(dollars).toLocaleString(locale, {
+    minimumFractionDigits: 2, maximumFractionDigits: 2,
+  })
+  return `${sign}${prefix}${amount}`
 }
 
 export function formatCentsCompact(cents: number | null | undefined): string {
-  const { locale, currency } = getLocaleConfig()
-  const prefix = currency === 'CAD' ? 'CA$' : '$'
+  const { locale } = getLocaleConfig()
+  const prefix = currencyPrefix()
   if (cents == null) return `${prefix}0`
   const dollars = cents / 100
   // Magnitude drives the unit, sign is re-applied outside the prefix, so

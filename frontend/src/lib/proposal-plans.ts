@@ -5,10 +5,17 @@
  * the AI phone agent and the per-order service fee:
  *   Standard $250 — everything except the phone agent, no per-order fee
  *   Premium  $350 — phone agent included, $0.65 service fee per order
- *   Command  $500 — phone agent included, $0.45 service fee per order
+ *   Command  $500 — phone agent included, $0.35 service fee per order
  *
  * 2026-08-06 (Aidan): per-order fees adjusted DOWN to the former redlines and
  * FIXED — the rep fee slider is retired, so orderFee === orderFeeFloor.
+ * 2026-08-16 (Aidan): cut again to BREAK-EVEN. US$0.35 is the measured
+ * marginal cost of a phone order rounded up to 5c — voice US$0.104/min x the
+ * 3-minute included block, plus two SMS at US$0.008. Stripe is neutral
+ * (grossup passes its cut to the merchant). Both paid tiers now share the
+ * rate; the tiers differentiate on the monthly fee. Mirrored in
+ * src/billing/fee_terms.py CANONICAL_FEE_TERMS — tests/test_fee_parity_terms.py
+ * fails if these two ever disagree.
  *
  * Reps may add up to REP_PRICE_HEADROOM on top of any tier via the price
  * slider — the base prices above are floors, never discounted.
@@ -90,8 +97,8 @@ export const PLAN_TIERS: PlanTier[] = [
     interval: 'month',
     tag: 'MOST POPULAR',
     phoneAgent: true,
-    orderFee: 0.65,
-    orderFeeFloor: 0.65,
+    orderFee: 0.35,
+    orderFeeFloor: 0.35,
     features: [
       'Everything in Standard',
       'AI phone agent — answers calls + takes orders',
@@ -106,8 +113,8 @@ export const PLAN_TIERS: PlanTier[] = [
     price: 500,
     interval: 'month',
     phoneAgent: true,
-    orderFee: 0.45,
-    orderFeeFloor: 0.45,
+    orderFee: 0.35,
+    orderFeeFloor: 0.35,
     features: [
       'Everything in Premium',
       'Lowest per-order rate — $0.45 service fee per order',

@@ -71,6 +71,27 @@ class IngestClient:
             log.warning("ingest/traffic failed: %s", e)
             return False
 
+    def post_events(self, org_id: str, camera_id: str, events: list) -> bool:
+        """Report what the camera SAW, as opposed to how many walked past.
+
+        Swallows failures like the other posts do: a connector that cannot
+        reach the API must keep counting rather than die on a merchant's
+        back-office PC where nobody will see the traceback. The dedupe key
+        means a later retry of the same detection collapses to one row.
+        """
+        if not events:
+            return True
+        try:
+            r = self._http.post("/api/vision/ingest/events", json={
+                "org_id": org_id, "camera_id": camera_id, "events": events,
+            })
+            if r.status_code >= 300:
+                log.warning("ingest/events -> %s %s", r.status_code, r.text[:160])
+            return r.status_code < 300
+        except Exception as e:
+            log.warning("ingest/events failed: %s", e)
+            return False
+
     def post_visit(self, visit: dict) -> bool:
         try:
             r = self._http.post("/api/vision/ingest/visits", json=visit)
@@ -197,6 +218,11 @@ class CameraWorker:
         self._counter = _counter
         self._zone_config = zone_config or {}
         self._checkout_zone_ids: list[str] = []
+        # Spills, product loss, phones at the counter. Created here rather
+        # than lazily because it is cheap and stateful — it has to remember
+        # what it saw on the previous frame to know what PERSISTED.
+        from event_detectors import EventDetectors
+        self._events = EventDetectors(camera_id, self._zone_config, None)
 
     def _ensure_pipeline(self):
         if self._detector is not None and self._counter is not None:
@@ -245,6 +271,15 @@ class CameraWorker:
 
         queue = sum(cr.zone_counts.get(z, 0) for z in self._checkout_zone_ids)
         self.bucket.add(cr.total_count, cr.entries_this_frame, cr.exits_this_frame, queue, now)
+
+        # Events post as soon as they are confirmed rather than waiting for the
+        # 5-minute traffic bucket: the detectors have already held each
+        # candidate for 25-180 seconds, and another five minutes on top means
+        # hearing about a spill after somebody has slipped on it.
+        person_boxes = [p["bbox"] for p in det.get("persons", [])]
+        events = self._events.run(frame, person_boxes, det.get("phones", []))
+        if events:
+            self.ingest.post_events(self.org_id, self.camera_id, events)
 
         # Completed dwell records → anonymous visit rows.
         for comp in self._counter.flush_dwell(cr.tracked_ids):

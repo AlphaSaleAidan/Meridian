@@ -37,6 +37,8 @@ passes them in as strings.
 """
 from __future__ import annotations
 
+import os
+
 from dataclasses import dataclass
 
 from script_pack_defs import PACK_DEFS, ScriptPackDef
@@ -69,6 +71,167 @@ def resolve_pack_id(raw: object) -> str | None:
     if not pack_id or pack_id == LEGACY_PACK_ID:
         return None
     return pack_id if pack_id in PACK_DEFS else None
+
+
+# ── trade → pack ─────────────────────────────────────────────────────
+#
+# The rep already chose the trade when they closed the deal, and it is stored
+# on the organization. Making somebody ALSO pick a script pack by hand is how
+# you end up where we were: twelve packs written, zero merchants using one.
+#
+# Keys are the pack keys from frontend/src/config/niches.ts, which is the same
+# string organizations.business_type now holds.
+TRADE_PACKS: dict[str, str] = {
+    "restaurant": "restaurant_v1",
+    # NOT pizzeria_v1. "Quick service" covers burgers, subs, chicken and
+    # Indian takeaway as much as pizza, and pizzeria_v1 is genuinely
+    # pizza-specific — size-first topping grammar, half-and-half handling.
+    # Handing all of them a pizza script is the coarse-mapping bug Aidan
+    # caught. cafe_quickserve_v1 is the counter-service pack and has beaten
+    # the control; CUISINE_PACKS below promotes the ones we can actually
+    # identify.
+    "quickservice": "cafe_quickserve_v1",
+    "coffeeshop": "cafe_quickserve_v1",
+    "barbershop": "barbershop_v1",
+    "nails": "nails_v1",
+    "medspa": "medspa_v1",
+    "detailing": "detailing_v1",
+    "mobiledetailing": "mobiledetailing_v1",
+    "autoshop": "autoshop_v1",
+    "smokeshop": "smokeshop_v1",
+}
+
+
+# The older vocabularies the same column still holds. Rep portals wrote a
+# proposal DECK SLUG before the trade key existed, and Square detection writes
+# its own BusinessType values — live data has all three. Same reconciliation
+# the portal does in config/niches.ts; without it a merchant sold as "ca-qsr"
+# silently gets no pack at all.
+_TRADE_ALIASES: dict[str, str] = {
+    "ca-qsr": "quickservice", "us-qsr": "quickservice", "fast_food": "quickservice",
+    "ca-coffee": "coffeeshop", "us-coffee": "coffeeshop", "coffee_shop": "coffeeshop",
+    "ca-salon": "barbershop", "us-salon": "barbershop", "barber_shop": "barbershop",
+    "ca-nailsalon": "nails", "us-nailsalon": "nails", "nail_salon": "nails",
+    "ca-spa": "medspa", "us-spa": "medspa", "med_spa": "medspa",
+    "ca-detailing": "detailing", "us-detailing": "detailing",
+    "ca-carwash": "detailing", "us-carwash": "detailing",
+    "mobile_detailing": "mobiledetailing",
+    "autoshop": "autoshop", "auto_shop": "autoshop",
+    "ca-smokeshop": "smokeshop", "us-smokeshop": "smokeshop", "smoke_shop": "smokeshop",
+}
+
+
+def pack_for_trade(trade: object) -> str | None:
+    """The pack this trade would use, benchmarked or not. None if unmapped."""
+    if not isinstance(trade, str):
+        return None
+    key = trade.strip().lower()
+    return TRADE_PACKS.get(_TRADE_ALIASES.get(key, key))
+
+
+def auto_pack_for_trade(trade: object) -> str | None:
+    """The pack to APPLY for a trade with no explicit choice — or None.
+
+    THE TRADE'S PACK APPLIES, benchmarked or not (Aidan 2026-08-16, after I
+    argued for gating it). The reasoning is sound: a barbershop answered by a
+    prompt written for takeaway food is a worse call than one answered by an
+    un-benchmarked barbershop prompt, and waiting for a bench run before any
+    merchant sees a trade-specific script means none of them ever do.
+
+    `status` therefore becomes information rather than a gate — the settings
+    UI and the rep still see which packs have out-scored the control, and the
+    bench still decides what we RECOMMEND. It no longer decides what runs.
+
+    Two things stay, because this changes what a live agent says to a paying
+    merchant's customers:
+      · an explicit script_pack on the merchant always wins (see caller);
+      · MERIDIAN_TRADE_PACK_AUTO=0 turns the whole behaviour off without a
+        deploy, so a pack misbehaving on real calls is one env var from the
+        proven legacy prompt rather than a release.
+    """
+    if os.environ.get("MERIDIAN_TRADE_PACK_AUTO", "1").strip().lower() in ("0", "false", "no"):
+        return None
+    return pack_for_trade(trade)
+
+
+def auto_pack_for_config(config: object) -> str | None:
+    """The pack to apply for a merchant, trade first then cuisine.
+
+    The one callers should use: the trade decides the shape of the call, the
+    menu decides the food. Anything unrecognised still falls through to the
+    legacy prompt.
+    """
+    base = auto_pack_for_trade(getattr(config, "business_type", None))
+    if not base:
+        return None
+    return refine_pack_for_cuisine(
+        base,
+        getattr(config, "business_name", None),
+        getattr(config, "menu_items", None),
+    )
+
+
+# ── cuisine refinement ───────────────────────────────────────────────
+#
+# A trade is as specific as the rep's picker gets, and for food it is not
+# specific enough: "restaurant" covers Maple Tandoor and Tony's Pizzeria
+# alike, and there is no cuisine column anywhere to tell them apart.
+#
+# The MENU tells them apart, and we already hold it. A menu of samosas,
+# pakora and tikka masala is not ambiguous, and neither is one of pepperoni
+# pizza and garlic knots. This promotes a merchant from the generic trade
+# pack onto the specific pack built for their food — both of which have
+# out-scored the control, so a promotion is always onto proven ground.
+#
+# Deliberately conservative. It only ever runs on food packs, it needs real
+# evidence rather than one word, and when unsure it leaves the trade's pack
+# alone. Getting this wrong means an Indian restaurant answered in pizza
+# grammar, which is the failure it exists to prevent.
+_CUISINE_TERMS: dict[str, tuple[str, ...]] = {
+    "indian_v1": (
+        "tikka", "masala", "samosa", "pakora", "paneer", "naan", "biryani",
+        "korma", "vindaloo", "tandoori", "saag", "dal", "curry", "chutney",
+        "bhaji", "raita", "roti", "papadum",
+    ),
+    "pizzeria_v1": (
+        "pizza", "pepperoni", "calzone", "margherita", "stromboli",
+        "garlic knot", "marinara", "sicilian",
+    ),
+}
+
+# Packs generic enough to be worth refining. Never a barbershop.
+_REFINABLE = {"restaurant_v1", "cafe_quickserve_v1", "efficient_v1"}
+
+
+def refine_pack_for_cuisine(pack_id: str | None, business_name: object,
+                            menu_items: object) -> str | None:
+    """Promote a generic food pack to the cuisine-specific one, if it is clear.
+
+    Menu terms are the evidence; two or more distinct hits is the bar, because
+    one "curry" on a pub menu does not make it an Indian restaurant. The
+    business NAME can carry it alone, since a shop called "Heritage Indian
+    Cuisine" has told us plainly — that is the case with no menu loaded at
+    all, which is exactly when the menu signal is unavailable.
+    """
+    if pack_id not in _REFINABLE:
+        return pack_id
+
+    name = business_name.lower() if isinstance(business_name, str) else ""
+    items = menu_items if isinstance(menu_items, list) else []
+    haystack = " ".join(
+        str(i.get("name", "")) if isinstance(i, dict) else str(i) for i in items
+    ).lower()
+
+    best, best_score = pack_id, 0
+    for candidate, terms in _CUISINE_TERMS.items():
+        hits = {t for t in terms if t in haystack}
+        score = len(hits)
+        # The name is decisive on its own — "Tony's Pizzeria", "Indian Cuisine".
+        if any(t in name for t in terms) or ("indian" in name and candidate == "indian_v1"):
+            score += 2
+        if score >= 2 and score > best_score:
+            best, best_score = candidate, score
+    return best
 
 
 def get_pack(pack_id: str) -> ScriptPackDef:
@@ -137,6 +300,8 @@ def compose(
     menu_link_line: str = "",
     pacing_line: str = "",
     menu_block: str = "",
+    sms_consent_block: str = "",
+    cash_block: str = "",
 ) -> str:
     """Compose a pack's guidelines + the shared hard rules into a prompt.
 
@@ -146,6 +311,21 @@ def compose(
     personality, reservations, transfer, menu link, cap pacing, sold-out
     menu — behaves identically regardless of pack. The keyword blocks are
     rendered by the caller with the SAME helpers the legacy prompt uses.
+
+    cash_block is "PAY WITH CASH" (migration 047) and belongs with the hard
+    rules for the same reason as the consent block: it is a MERCHANT-level
+    setting, not a pack's business. Without it, switching a merchant who
+    accepts cash onto a pack silently stopped their agent offering it —
+    exactly the failure the A2P disclosure had, found the same way, by a test
+    that already existed.
+
+    sms_consent_block is the A2P 10DLC verbal opt-in, and it belongs with the
+    HARD RULES rather than the merchant blocks. It was missing entirely: the
+    legacy prompt carried it and no pack did, so the day a merchant was moved
+    onto a pack their agent would have started texting customers with none of
+    the disclosure the Telnyx campaign is filed on — brand, frequency, rates,
+    STOP, HELP, no-share. Nobody is on a pack yet, so nothing shipped that
+    way; the point is that switching one on must not be able to drop it.
     """
     pack = get_pack(pack_id)
     guidelines = "\n".join(
@@ -153,6 +333,28 @@ def compose(
     )
     extra_rules = pack.hard_rules(ctx)
     extra_rules_block = ("\n" + "\n".join(extra_rules)) if extra_rules else ""
+
+    # ── the trade knowledge blocks ──────────────────────────────────────
+    #
+    # Rendered AFTER the hard rules and before the menu, so the agent reads
+    # them as reference rather than as steps. Each is omitted entirely when a
+    # pack does not define it — an empty heading is worse than no heading,
+    # because the model will try to fill it.
+    upsells = pack.upsells(ctx)
+    upsell_block = ("\n\nWORTH OFFERING (once, by name, only when it genuinely "
+                    "fits what they asked for — never a vague 'anything else?'):\n"
+                    + "\n".join(f"- {u}" for u in upsells)) if upsells else ""
+
+    faqs = pack.faqs(ctx)
+    faq_block = ("\n\nWHAT CALLERS ASK (answer in ONE sentence, then carry on "
+                 "with what you were doing):\n"
+                 + "\n".join(f"- \"{q}\" → {a}" for q, a in faqs)) if faqs else ""
+
+    objections = pack.objections(ctx)
+    objection_block = ("\n\nIF THEY HESITATE (use the short handle, ONCE — a "
+                       "second attempt is pressure, and pressure loses the "
+                       "booking a single honest sentence would have kept):\n"
+                       + "\n".join(f"- \"{o}\" → {h}" for o, h in objections)) if objections else ""
 
     return (
         f"You are the AI phone order-taker for {ctx.business_name}.\n"
@@ -167,9 +369,14 @@ def compose(
         # line with no newline; packs are new text, so terminate it cleanly)
         f"{reservation_lines + chr(10) if reservation_lines else ''}"
         f"{_SHARED_HARD_RULES}"
+        f"{cash_block}"
+        f"{sms_consent_block}"
         f"{extra_rules_block}"
         f"{menu_link_line}"
         f"{pacing_line}"
         f"{transfer_block}"
+        f"{upsell_block}"
+        f"{faq_block}"
+        f"{objection_block}"
         f"{menu_block}"
     )

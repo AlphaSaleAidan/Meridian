@@ -18,18 +18,27 @@ export const REP_PRICE_HEADROOM_CAD = 150
 
 export type { PlanTier }
 
+// 2026-08-16 (Aidan): BREAK-EVEN. Our cost per phone order is US$0.328
+// (voice US$0.104/min x 3 min + 2 SMS), which is CA$0.459 at the x1.4 rate —
+// so CA$0.50 is the smallest 5c step that still covers it. Note the
+// derivation would round US$0.35 DOWN to CA$0.45 and land BELOW cost, which
+// is why both CAD tiers are explicit overrides rather than derived.
 const CAD_ORDER_FEES: Record<PlanTier['id'], number> = {
   standard: 0,
-  premium: 0.75,
-  command: 0.6,
+  premium: 0.5,
+  command: 0.5,
 }
 
 // CAD overrides that deliberately BREAK the x1.4 derivation (Aidan 2026-08-07).
 // CA premium is CA$0.75 ALL-IN — the merchant's total per-order cost including
 // Stripe's flat 30c, which Meridian absorbs rather than passing through.
 // Derivation would say CA$0.90. Mirrors fee_terms.ORDER_FEE_FLOOR_CENTS_CAD_OVERRIDE.
+// Both paid tiers override the derivation, for the arithmetic reason above:
+// rounding US$0.35 x 1.4 DOWN to 5c gives CA$0.45, which is below our
+// CA$0.459 cost. The fee IS the floor now — the rep slider is retired.
 const CAD_ORDER_FEE_FLOOR_OVERRIDE: Partial<Record<PlanTier['id'], number>> = {
-  premium: 0.75,
+  premium: 0.5,
+  command: 0.5,
 }
 
 // REDLINES for the rep fee slider — DERIVED from the US floors ($0.65/$0.45)

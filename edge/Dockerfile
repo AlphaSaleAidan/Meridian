@@ -13,7 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl xz-utils c
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY edge_agent.py live_publisher.py .
+COPY edge_agent.py live_publisher.py event_detectors.py .
 COPY config/ config/
 
 CMD ["python", "edge_agent.py"]

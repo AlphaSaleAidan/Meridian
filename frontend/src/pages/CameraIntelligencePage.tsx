@@ -5,6 +5,7 @@ import { getActiveBusinessType } from '@/lib/demo-context'
 import { api } from '@/lib/api'
 import { getAuthHeaders } from '@/lib/supabase'
 import CameraSetupWizard from '@/components/vision/CameraSetupWizard'
+import CameraEventFeed from '@/components/camera/CameraEventFeed'
 import ScrollReveal from '@/components/ScrollReveal'
 
 interface CameraDevice {
@@ -59,12 +60,21 @@ function heartbeatLabel(iso: string | null): string {
 
 function generateDemoCameras(): CameraDevice[] {
   const biz = getActiveBusinessType()
+  // Every trade in the picker needs an entry. Without one a barbershop was
+  // shown "Dining Room" and "Kitchen Pass", which tells a prospect the product
+  // was built for somebody else.
   const locations: Record<string, string[]> = {
     restaurant: ['Front Entrance', 'Dining Room', 'Bar Area', 'Kitchen Pass'],
     coffee_shop: ['Main Door', 'Counter Area', 'Seating Zone', 'Drive-Through'],
     fast_food: ['Entrance', 'Order Counter', 'Drive-Through Lane', 'Parking Lot'],
     auto_shop: ['Service Bay 1', 'Waiting Room', 'Front Desk', 'Parking'],
     smoke_shop: ['Entry Door', 'Display Wall', 'Checkout', 'Back Room'],
+    barbershop: ['Front Door', 'Chair Row', 'Wash Basin', 'Retail Shelf'],
+    nails: ['Entrance', 'Manicure Stations', 'Pedicure Row', 'Front Desk'],
+    medspa: ['Reception', 'Treatment Room 1', 'Treatment Room 2', 'Stock Cabinet'],
+    detailing: ['Bay 1', 'Bay 2', 'Wash Area', 'Parts and Chemicals'],
+    mobile_detailing: ['Van Loading Bay', 'Chemical Store', 'Yard Gate'],
+    pizzeria: ['Front Counter', 'Oven Line', 'Driver Dispatch', 'Car Park'],
   }
   const locs = locations[biz] || locations.restaurant
 
@@ -266,6 +276,13 @@ export default function CameraIntelligencePage() {
           </div>
         ))}
       </div>
+
+      {/* The event recorder sits directly under the counts, because it is the
+          only part of this page anybody acts on TODAY. The numbers above it
+          are read at the end of a week; a spill is read now. */}
+      <ScrollReveal variant="fadeUp">
+        <CameraEventFeed />
+      </ScrollReveal>
 
       {!isDemo && !hasTraffic && !loading && (
         <div className="bg-[#111113] rounded-xl p-5 border border-[#1F1F23] text-center">

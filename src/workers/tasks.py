@@ -446,6 +446,75 @@ def send_daily_burn_rate():
     return run_async(_send())
 
 
+@shared_task(name="src.workers.tasks.expire_waitlist_offers", rate_limit="20/m")
+def expire_waitlist_offers():
+    """Release expired waitlist holds and offer the slot to the next guest.
+
+    Runs every 2 minutes. This is what turns one cancellation into a chain: an
+    offer that goes unanswered rolls down the ranked list on its own, so a 4pm
+    cancellation can still fill a 7pm table without anyone touching it. The
+    interval has to be well under the offer window (default 15 min) or a
+    declined slot sits idle for most of its remaining life.
+    """
+
+    async def _sweep():
+        from .. import config  # noqa: F401  (loads .env for a cold worker)
+        from ..db import init_db, close_db
+        await init_db()
+        try:
+            from ..services.booking_waitlist import expire_offers
+            return await expire_offers()
+        finally:
+            await close_db()
+
+    return run_async(_sweep())
+
+
+@shared_task(name="src.workers.tasks.sync_booking_calendars", rate_limit="4/m")
+def sync_booking_calendars():
+    """Import busy time from every merchant's own booking tool.
+
+    Runs every 20 minutes. Faster would not help: the upstream feeds are
+    themselves refreshed on their vendors' schedules, so polling harder buys
+    staleness we cannot remove. Fail-soft — one broken connection is recorded
+    on that connection and never stops the sweep.
+    """
+
+    async def _sync():
+        from .. import config  # noqa: F401  (loads .env for a cold worker)
+        from ..db import init_db, close_db
+        await init_db()
+        try:
+            from ..services.booking_sync import sync_all
+            return await sync_all()
+        finally:
+            await close_db()
+
+    return run_async(_sync())
+
+
+@shared_task(name="src.workers.tasks.send_booking_reminders", rate_limit="6/m")
+def send_booking_reminders():
+    """Text customers ahead of their reservation or appointment.
+
+    Runs every 15 minutes rather than on the hour: reminders are sent against
+    a window around T-24h and T-2h, and a coarse beat would push some texts
+    far enough off that a 2-hour warning arrives with 20 minutes to spare.
+    """
+
+    async def _send():
+        from .. import config  # noqa: F401  (loads .env for a cold worker)
+        from ..db import init_db, close_db
+        await init_db()
+        try:
+            from ..services.booking_reminders import run_reminder_sweep
+            return await run_reminder_sweep()
+        finally:
+            await close_db()
+
+    return run_async(_send())
+
+
 @shared_task(name="src.workers.tasks.ingest_scraped_data")
 def ingest_scraped_data():
     """Ingest scraped articles into vector store for RAG."""

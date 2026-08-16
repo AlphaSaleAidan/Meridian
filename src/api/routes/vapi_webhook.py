@@ -330,7 +330,20 @@ def _display_order_types(config) -> list[str]:
 
 def _reservation_block(config, display_types: list[str]) -> str:
     """RESERVATIONS prompt lines — shared by the legacy prompt and every
-    script pack. "" when reservations aren't an order type."""
+    script pack. "" when reservations aren't an order type.
+
+    A merchant running booking_mode='native' gets the real booking block
+    instead, regardless of order_types: a barbershop books appointments
+    without "reservation" ever being one of its order types. Every other
+    merchant — which today is every merchant in production — takes the
+    original path below unchanged, byte for byte, because booking_mode
+    defaults to 'off'. tests/api/test_script_packs.py asserts that.
+    """
+    if _booking_enabled(config):
+        return _native_booking_block(config)
+    if _link_mode(config):
+        return _link_booking_block(config)
+
     reservation_lines = ""
     if "reservation" in display_types:
         resv = getattr(config, "reservation_config", None) or {}
@@ -348,6 +361,78 @@ def _reservation_block(config, display_types: list[str]) -> str:
                 "the notes."
             )
     return reservation_lines
+
+
+def _native_booking_block(config) -> str:
+    """The booking instructions for merchants we actually book for.
+
+    Two things here are load-bearing:
+
+    TODAY'S LOCAL DATE. Without it the model cannot turn "Friday at seven"
+    into a date, and will either ask needlessly or invent one. It is computed
+    in the merchant's timezone, not the server's — the box runs on CEST, which
+    is already tomorrow for a North American merchant for part of every
+    evening.
+
+    NEVER PROMISE BEFORE CHECKING. A voice model will happily agree that
+    seven o'clock is fine. The instruction to call check_availability first,
+    and to say only what the tool returned, is what keeps the agent's mouth
+    tied to the database.
+    """
+    from datetime import datetime as _dt
+
+    from src.services.booking_engine import resolve_timezone
+
+    noun = (getattr(config, "booking_noun", "") or "reservation").strip()
+    tz, _name = resolve_timezone(getattr(config, "business_timezone", "") or "")
+    local_now = _dt.now(tz)
+    # Built by hand rather than with %-d, which is a glibc extension and
+    # raises on non-Linux runners.
+    today = (f"{local_now.strftime('%A')}, {local_now.strftime('%B')} "
+             f"{local_now.day}, {local_now.year}")
+
+    return (
+        f"\nBOOKINGS: You can book a {noun} on this call."
+        f"\n- Today is {today}. Work out dates from that."
+        f"\n- ALWAYS call check_availability before you say a time is open. "
+        f"Never promise a time the tool did not give you."
+        f"\n- Offer at most three times. If none suit, ask for another day and check again."
+        f"\n- Before booking, get their name and how many people, then read the day, "
+        f"time and name back and wait for a yes."
+        f"\n- Then call book_reservation. Read the confirmation code back slowly."
+        f"\n- To cancel, ask for the confirmation code and call cancel_reservation."
+        f"\n- If a tool says a time is gone, say so plainly and offer what it returned instead."
+    )
+
+
+def _link_booking_block(config) -> str:
+    """BOOKINGS prompt for merchants who keep their own booking system.
+
+    The old version of this block put the URL in the prompt, which meant the
+    agent read it out: "book online at w-w-w dot maple tandoor dot c-a slash
+    reservations". Callers are driving. Slashes and hyphens get mangled, a
+    mis-heard character is a 404, and nobody ever finds out whether the caller
+    arrived.
+
+    THE URL IS DELIBERATELY ABSENT FROM THIS TEXT. If the model cannot see the
+    address it cannot recite it, so the tool is the only way out and the text
+    goes every time — which is the whole point. It reappears only in the
+    tool's failure path, where reading it aloud is genuinely the best
+    remaining option.
+    """
+    noun = (getattr(config, "booking_noun", "") or "reservation").strip()
+    return (
+        f"\nBOOKINGS: This business takes its own {noun}s online."
+        f"\n- The moment a caller mentions booking, a table or an appointment, "
+        f"call text_booking_link. Do it straight away — do not ask whether they "
+        f"want the link, and do not ask for their number first."
+        f"\n- Then say you have just texted it to them, and stay on the line in "
+        f"case they have another question."
+        f"\n- NEVER say the web address out loud. You do not have it."
+        f"\n- If the tool reports the text could not be sent, say so, read out "
+        f"the address it returns slowly, and offer to take their name and time "
+        f"as a backup so the shop can call them back."
+    )
 
 
 def _transfer_block(transfer_number: str) -> str:
@@ -377,8 +462,23 @@ def _resolve_script_pack(config) -> str | None:
     has the proven generic prompt as its floor.
     """
     try:
-        from script_packs import resolve_pack_id
-        return resolve_pack_id(getattr(config, "script_pack", None))
+        from script_packs import auto_pack_for_config, resolve_pack_id
+
+        explicit = resolve_pack_id(getattr(config, "script_pack", None))
+        if explicit:
+            return explicit
+
+        # No explicit choice: fall back to the merchant's TRADE. The rep
+        # already picked it at close and it is on the organization, so making
+        # somebody separately pick a script pack by hand is how twelve packs
+        # ended up written and zero merchants using one.
+        #
+        # auto_pack_for_trade only returns a pack that has out-scored the
+        # legacy control on the bench, so an unproven pack is never pointed at
+        # a live call by this path — it stays selectable, not automatic.
+        # Trade first, then cuisine: "restaurant" covers a tandoori kitchen
+        # and a pizzeria alike, and their menus do not.
+        return auto_pack_for_config(config)
     except Exception:  # noqa: BLE001 — pack selection never breaks a call
         return None
 
@@ -413,6 +513,13 @@ def _pack_system_prompt(pack_id: str, config, transfer_number: str) -> str:
         menu_link_line=_menu_link_line(config),
         pacing_line=_pacing_line(_effective_cap_min(config)),
         menu_block=_menu_block(config) + _smart_upsell_block(config),
+        # A2P 10DLC opt-in. Rendered with the same helper the legacy prompt
+        # uses, because a pack changing the CALL FLOW must never change what
+        # the campaign is filed on.
+        sms_consent_block=_sms_consent_step(config),
+        # "PAY WITH CASH" is the merchant's setting, not the pack's. Renders
+        # empty for the merchants who have not enabled it.
+        cash_block=_cash_offer_step(config) + _cash_guard_line(config),
     )
 
 
@@ -791,6 +898,218 @@ _SUBMIT_ORDER_TOOL = {
 }
 
 
+# ─── BOOKING TOOLS ────────────────────────────────────────────
+# Only attached when the merchant runs booking_mode='native'
+# (migrations/081_bookings.sql). Merchants without it get a byte-identical
+# assistant payload, which is what the golden-prompt tests assert.
+#
+# The date/time contract is deliberately strict — ISO date, 24-hour time —
+# because the model is told today's local date in the prompt and can compute
+# it. src/services/booking_agent.py still parses loose forms rather than
+# failing a caller over the model's formatting.
+
+_CHECK_AVAILABILITY_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "check_availability",
+        "description": (
+            "Look up open times before promising anything. Call this whenever "
+            "the caller asks about a day or time. NEVER state a time is "
+            "available without calling this first."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "date": {"type": "string",
+                         "description": "YYYY-MM-DD in the business's local date."},
+                "time": {"type": "string",
+                         "description": "24-hour HH:MM if the caller named one. Omit otherwise."},
+                "party_size": {"type": "integer",
+                               "description": "How many people. 1 if not a group booking."},
+            },
+            "required": ["date"],
+        },
+    },
+    "server": {"url": WEBHOOK_URL},
+}
+
+_BOOK_RESERVATION_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "book_reservation",
+        "description": (
+            "Create the booking. Call ONLY after the caller has confirmed the "
+            "day, the time and the name back to you."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "customer_name": {"type": "string"},
+                "date": {"type": "string", "description": "YYYY-MM-DD, business local date."},
+                "time": {"type": "string", "description": "24-hour HH:MM."},
+                "party_size": {"type": "integer"},
+                "phone": {"type": "string",
+                          "description": "Only if the caller gives a different callback number."},
+                "notes": {"type": "string",
+                          "description": "Requests like a high chair, a specific barber, allergies."},
+            },
+            "required": ["customer_name", "date", "time"],
+        },
+    },
+    "server": {"url": WEBHOOK_URL},
+}
+
+_CANCEL_BOOKING_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "cancel_reservation",
+        "description": "Cancel an existing booking the caller asks to cancel.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "confirmation_code": {"type": "string",
+                                      "description": "The code they were given. Ask for it if unsure."},
+            },
+        },
+    },
+    "server": {"url": WEBHOOK_URL},
+}
+
+_LOOKUP_BOOKING_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "lookup_reservation",
+        "description": "Check the details of a booking the caller already has.",
+        "parameters": {
+            "type": "object",
+            "properties": {"confirmation_code": {"type": "string"}},
+        },
+    },
+    "server": {"url": WEBHOOK_URL},
+}
+
+_JOIN_WAITLIST_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "join_waitlist",
+        "description": (
+            "Call when nothing is open at the time the caller wants and they'd "
+            "like to be told if something frees up. Always offer this before "
+            "letting a caller go — a freed table is worth nothing if nobody "
+            "knows who wanted it."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "customer_name": {"type": "string"},
+                "date": {"type": "string", "description": "YYYY-MM-DD, business local date."},
+                "earliest": {"type": "string",
+                             "description": "Earliest 24-hour HH:MM they'd accept."},
+                "latest": {"type": "string",
+                           "description": "Latest 24-hour HH:MM they'd accept."},
+                "party_size": {"type": "integer"},
+                "phone": {"type": "string",
+                          "description": "Only if different from the number they're calling from."},
+                "notes": {"type": "string"},
+            },
+            "required": ["customer_name", "date"],
+        },
+    },
+    "server": {"url": WEBHOOK_URL},
+}
+
+_CLAIM_WAITLIST_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "claim_waitlist_offer",
+        "description": (
+            "Call when the caller says they got a text about a spot opening up "
+            "and wants to take it. Ask for the short code in the message."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {"claim_code": {"type": "string"}},
+            "required": ["claim_code"],
+        },
+    },
+    "server": {"url": WEBHOOK_URL},
+}
+
+
+_TEXT_BOOKING_LINK_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "text_booking_link",
+        "description": (
+            "Text the caller this restaurant's booking link. Call this as soon "
+            "as the caller mentions booking, a table, a reservation or an "
+            "appointment — before discussing times, and without asking "
+            "permission first. Never read the web address out loud unless this "
+            "tool tells you the text could not be delivered."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "phone": {
+                    "type": "string",
+                    "description": (
+                        "Only if the caller asks for it to go to a different "
+                        "number. Leave empty to text the number they are "
+                        "calling from."
+                    ),
+                },
+            },
+            "required": [],
+        },
+    },
+    "server": {"url": WEBHOOK_URL},
+}
+
+
+_BOOKING_TOOL_NAMES = frozenset(
+    {"check_availability", "book_reservation", "cancel_reservation",
+     "lookup_reservation", "join_waitlist", "claim_waitlist_offer",
+     "text_booking_link"}
+)
+
+
+def _booking_enabled(config) -> bool:
+    """True when this merchant books through us, not through a link.
+
+    Read straight off the already-fetched merchant config: the
+    assistant-request hot path has a hard query budget
+    (tests/test_vapi_hotpath_perf.py asserts the exact count), so booking must
+    never cost an extra round trip here.
+    """
+    return (getattr(config, "booking_mode", "off") or "off") in ("native", "provider")
+
+
+def _link_mode(config) -> bool:
+    """True when this merchant keeps their own booking system and we hand the
+    caller off to it by text.
+
+    Same hot-path rule as _booking_enabled: read off the fetched config, never
+    a query. Requires a destination — a link mode with nowhere to send anyone
+    is just the old take-a-message path, so it stays off.
+    """
+    if (getattr(config, "booking_mode", "off") or "off") != "external_link":
+        return False
+    from src.services.booking_links import configured_url
+    return bool(configured_url(config))
+
+
+def _booking_tools(config) -> list[dict]:
+    if _link_mode(config):
+        return [_TEXT_BOOKING_LINK_TOOL]
+    if not _booking_enabled(config):
+        return []
+    tools = [_CHECK_AVAILABILITY_TOOL, _BOOK_RESERVATION_TOOL,
+             _CANCEL_BOOKING_TOOL, _LOOKUP_BOOKING_TOOL]
+    if getattr(config, "waitlist_enabled", False):
+        tools += [_JOIN_WAITLIST_TOOL, _CLAIM_WAITLIST_TOOL]
+    return tools
+
+
 def _safe_transfer_number(config) -> str:
     """The merchant's transfer number, normalized — or "" when unset OR when it
     would guarantee a loop (equals the merchant's own agent DID). The async
@@ -877,6 +1196,7 @@ def _assistant_for(config, transfer_number: str | None = None,
     if transfer_number is None:
         transfer_number = _safe_transfer_number(config)
     tools = [_SUBMIT_ORDER_TOOL]
+    tools.extend(_booking_tools(config))
     if transfer_number:
         tools.append(_transfer_tool(transfer_number))
     system_content = (
@@ -1075,6 +1395,92 @@ def _order_failed_message(mode: str) -> str:
     return ("I'm so sorry — I'm having trouble sending your order to the kitchen "
             "right now, so it hasn't gone through. I've flagged it for the team. "
             "Please try calling back in a few minutes and we'll take care of you.")
+
+
+async def _handle_text_booking_link(args: dict, config, caller_phone: str = "",
+                                    vapi_call_id: str | None = None) -> str:
+    """Text the merchant's booking link and tell the agent what to say.
+
+    The returned copy is the honesty contract for this tool: it says "I've
+    texted it" ONLY when a provider accepted the message. Every failure path
+    hands back the address so the agent can fall back to reading it — which is
+    the one situation where speaking a URL is the right answer.
+    """
+    from src.services.booking_links import configured_url, text_booking_link
+
+    if not _link_mode(config):
+        return ("I can't send a booking link on this line, but I can take your "
+                "name and number and have someone call you back.")
+
+    to = (args.get("phone") or "").strip() or (caller_phone or "").strip()
+    result = await text_booking_link(
+        config, to, vapi_call_id=vapi_call_id or "",
+    )
+
+    if result.get("sent"):
+        return ("Sent. Tell them you've just texted the booking link to their "
+                "phone and it should arrive in a few seconds. Do not read the "
+                "address out.")
+
+    target = result.get("target") or configured_url(config)
+    reason = result.get("reason") or ""
+    if reason == "no_phone":
+        return ("No number to text. Ask them for a mobile number to send the "
+                "booking link to, then call this tool again with it.")
+    # Everything else — a landline, a provider outage, no SMS configured —
+    # produces the same recovery, because from the caller's side it is the
+    # same problem: the text is not coming.
+    return (
+        "The text could not be delivered. Apologise briefly, then read this "
+        f"address out slowly and clearly: {target}. Offer to take their name, "
+        "party size and preferred time so the shop can call them back."
+    )
+
+
+async def _handle_booking_tool(name: str, args: dict, config,
+                               caller_phone: str = "",
+                               vapi_call_id: str | None = None) -> str:
+    """Route a booking tool call to the engine and return spoken copy.
+
+    Guarded on the merchant's mode as well as on the tool name: a stale Vapi
+    assistant could still carry the tools after a merchant switches booking
+    off, and honouring them would book against a calendar nobody is watching.
+    """
+    from src.services import booking_agent
+    from src.services.booking_engine import load_setup
+
+    if name == "text_booking_link":
+        return await _handle_text_booking_link(
+            args, config, caller_phone, vapi_call_id,
+        )
+
+    if not _booking_enabled(config):
+        return ("I can't take bookings on this line, but I can help you with "
+                "an order or put you through to someone.")
+
+    setup = await load_setup(
+        config.merchant_id,
+        getattr(config, "business_timezone", "") or "",
+        noun=(getattr(config, "booking_noun", "") or "reservation"),
+        mode=(getattr(config, "booking_mode", "native") or "native"),
+    )
+
+    if name == "check_availability":
+        return await booking_agent.handle_check_availability(args, setup)
+    if name == "book_reservation":
+        return await booking_agent.handle_book(
+            args, setup, caller_phone=caller_phone, vapi_call_id=vapi_call_id)
+    if name == "cancel_reservation":
+        return await booking_agent.handle_cancel(args, setup, caller_phone=caller_phone)
+    if name == "lookup_reservation":
+        return await booking_agent.handle_lookup(args, setup, caller_phone=caller_phone)
+    if name == "join_waitlist":
+        return await booking_agent.handle_join_waitlist(
+            args, setup, caller_phone=caller_phone, vapi_call_id=vapi_call_id)
+    if name == "claim_waitlist_offer":
+        return await booking_agent.handle_claim_waitlist(
+            args, setup, caller_phone=caller_phone)
+    return "ok"
 
 
 async def _place_order(args: dict, config, caller_phone: str) -> str:
@@ -1309,6 +1715,23 @@ async def vapi_webhook(request: Request):
                            "so it hasn't gone through. Please give us a call back "
                            "in a moment and we'll get you taken care of.")
                 results.append({"toolCallId": tc.get("id"), "result": res})
+            elif fn.get("name") in _BOOKING_TOOL_NAMES:
+                try:
+                    if config is None:
+                        config = await _resolve_config(_dialed_number(msg))
+                    res = await _handle_booking_tool(
+                        fn.get("name", ""), args, config,
+                        caller_phone=_caller_number(msg),
+                        vapi_call_id=(msg.get("call", {}) or {}).get("id"),
+                    )
+                except Exception as e:  # noqa: BLE001
+                    logger.error("%s failed: %s", fn.get("name"), e)
+                    # Same contract as submit_order: the pipeline threw, so
+                    # nothing was booked — never speak a confirmation.
+                    res = ("I'm sorry — I couldn't get to the booking system just "
+                           "then, so nothing has been booked. Please try us again "
+                           "in a moment.")
+                results.append({"toolCallId": tc.get("id"), "result": res})
             else:
                 results.append({"toolCallId": tc.get("id"), "result": "ok"})
         return {"results": results}
@@ -1440,8 +1863,8 @@ async def vapi_webhook(request: Request):
     return {"received": True}
 
 
-def _had_order(msg: dict) -> bool | None:
-    """Best-effort: did a submit_order tool call land during this call?
+def _tool_fired(msg: dict, names: frozenset[str]) -> bool | None:
+    """Best-effort: did any of `names` fire during this call?
     True/False when the report carries the conversation messages; None when
     it can't be determined from the payload."""
     artifact = msg.get("artifact") or {}
@@ -1452,13 +1875,29 @@ def _had_order(msg: dict) -> bool | None:
         if not isinstance(m, dict):
             continue
         candidates = m.get("toolCalls") or []
-        if m.get("name") == "submit_order":  # tool-result message shape
+        if m.get("name") in names:  # tool-result message shape
             return True
         for tc in candidates if isinstance(candidates, list) else []:
             fn = (tc or {}).get("function", {}) or {}
-            if fn.get("name") == "submit_order":
+            if fn.get("name") in names:
                 return True
     return False
+
+
+_SUBMIT_ORDER_NAMES = frozenset({"submit_order"})
+_BOOK_NAMES = frozenset({"book_reservation"})
+
+
+def _had_order(msg: dict) -> bool | None:
+    """Did a submit_order tool call land during this call?"""
+    return _tool_fired(msg, _SUBMIT_ORDER_NAMES)
+
+
+def _had_booking(msg: dict) -> bool | None:
+    """Did a booking actually get made? Kept separate from _had_order so a
+    barbershop's appointments are never counted as food orders (and a
+    restaurant's reservations never inflate its order count)."""
+    return _tool_fired(msg, _BOOK_NAMES)
 
 
 def _caller_turns(msg: dict) -> list[str]:
@@ -1561,4 +2000,5 @@ async def _record_call_ending(msg: dict, call_id: str, ended: str | None,
         "disposition": map_ended_reason(ended),
         "duration_seconds": duration_seconds,
         "had_order": _had_order(msg),
+        "had_booking": _had_booking(msg),
     }, ignore_duplicates=True)

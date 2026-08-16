@@ -5,7 +5,8 @@ import {
 } from 'recharts'
 import { useApi } from '@/hooks/useApi'
 import { api } from '@/lib/api'
-import { formatCents, formatCentsCompact, formatDate, formatConfidence, formatChartTick } from '@/lib/format'
+import { formatCents, formatCentsCompact, formatDate, formatConfidence } from '@/lib/format'
+import ForecastChart from '@/components/ForecastChart'
 import { LoadingPage, ErrorState, EmptyState } from '@/components/LoadingState'
 import DashboardTiltCard from '@/components/DashboardTiltCard'
 import ScrollReveal, { StaggerContainer, StaggerItem } from '@/components/ScrollReveal'
@@ -220,36 +221,7 @@ export default function ForecastsPage() {
         <ScrollReveal variant="fadeUp" delay={0.1}>
           <div className="card p-4 sm:p-5" data-walkthrough="revenue-forecast-chart">
             <h3 className="text-sm font-semibold text-[#F5F5F7] mb-4">Revenue: Actual vs Forecast</h3>
-            <ResponsiveContainer width="100%" height={300}>
-              <AreaChart data={chartData} margin={{ top: 5, right: 5, left: -10, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="actualGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#1A8FD6" stopOpacity={0.2} />
-                    <stop offset="100%" stopColor="#1A8FD6" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="forecastGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#17C5B0" stopOpacity={0.2} />
-                    <stop offset="100%" stopColor="#17C5B0" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1F1F23" vertical={false} />
-                <XAxis dataKey="date" tick={{ fill: '#A1A1A8', fontSize: 10, fontFamily: 'Geist Mono' }} axisLine={false} tickLine={false}
-                  tickFormatter={(v: string) => { const d = new Date(v); return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); }}
-                  interval="preserveStartEnd" />
-                <YAxis tick={{ fill: '#A1A1A8', fontSize: 10, fontFamily: 'Geist Mono' }} axisLine={false} tickLine={false}
-                  tickFormatter={formatChartTick} width={55} />
-                <Tooltip contentStyle={tooltipStyle} itemStyle={{ color: '#F5F5F7' }} labelStyle={{ color: '#A1A1A8' }}
-                  formatter={(v: any, name: string) => [v != null ? formatCents(v * 100) : '—', name]}
-                  cursor={{ stroke: '#1A8FD6', strokeWidth: 1, strokeDasharray: '4 4' }} />
-                <Area type="monotone" dataKey="actual" stroke="#1A8FD6" strokeWidth={2} fill="url(#actualGrad)" dot={false}
-                  activeDot={{ r: 4, fill: '#1A8FD6', stroke: '#0A0A0B', strokeWidth: 2 }} name="Actual" connectNulls={false} />
-                <Area type="monotone" dataKey="predicted" stroke="#17C5B0" strokeWidth={2} strokeDasharray="6 3" fill="url(#forecastGrad)" dot={false}
-                  activeDot={{ r: 4, fill: '#17C5B0', stroke: '#0A0A0B', strokeWidth: 2 }} name="Forecast" connectNulls={false} />
-                {forecastData.some(d => d.upper != null) && (
-                  <Area type="monotone" dataKey="upper" stroke="none" fill="#17C5B0" fillOpacity={0.04} dot={false} name="Upper Bound" connectNulls={false} />
-                )}
-              </AreaChart>
-            </ResponsiveContainer>
+            <ForecastChart data={chartData} height={300} gradientId="forecasts-page" />
           </div>
         </ScrollReveal>
       )}

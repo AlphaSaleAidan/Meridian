@@ -33,6 +33,16 @@ oauth:
   - "GET /api/pos/providers"
   - "GET /api/pos/{provider}/authorize"
   - "GET /api/pos/{provider}/callback"
+  # Square Appointments BOOKING authorization — deliberately separate from the
+  # Square POS connection so a merchant granting booking-write is a distinct
+  # decision (src/config.py:232 keeps the POS scopes read-only). The callback is
+  # a browser redirect from Square with no session, so it is unauthenticated by
+  # necessity and protected exactly as the Clover/POS callbacks are: an
+  # HMAC-signed, expiring `state` carrying the merchant id
+  # (src/pos_connect/oauth.py:68 verify_state -> None on tamper or expiry), and
+  # src/api/routes/bookings_square.py:callback redirects to an error page
+  # without touching the database when verification fails.
+  - "GET /api/bookings/square/callback"
   # Framework-provider twin of /api/square/status and /api/clover/status:
   # the frontend's post-OAuth poller reads `connected` before a session
   # exists; org ids are validated and unknown orgs return not_connected.
@@ -124,6 +134,30 @@ inline-auth:
   # returns None when GATEWAY_JWT_SECRET is unset). Minting the code itself is
   # require_org_access (camera_connect.py:164).
   - "POST /api/connector/pair"
+  #
+  # Calendar-feed subscription. The 32-hex token in the path IS the credential:
+  # calendar clients (Google/Outlook/Apple) cannot send an Authorization header,
+  # which is the whole reason this endpoint is public. feed_for_token()
+  # (src/services/booking_feed.py) rejects anything that is not exactly 32 hex
+  # characters BEFORE querying, looks the token up against a unique partial
+  # index on phone_agent_config.booking_feed_token, and returns 404 — never 403 —
+  # so probing reveals nothing about which merchants exist. The token is minted
+  # only on explicit merchant request (POST /api/bookings/feed/{merchant_id}/enable,
+  # require_service_auth) and rotating it revokes the old URL immediately. The
+  # feed body carries only what is already in a booking confirmation.
+  - "GET /api/bookings/feed/{token}.ics"
+  # Texted booking-link redirect (migrations/083). Public by construction: the
+  # code arrives in an SMS and is tapped from a phone with no session, so there
+  # is nothing to authenticate against. It is NOT a credential and grants
+  # nothing — the only effect of resolving one is a 302 to a URL the merchant
+  # already publishes on their own website, plus a click counter. The handler
+  # (src/api/routes/booking_link_redirect.py) rejects anything non-alphanumeric
+  # or over 16 chars before querying, returns the same 404 page for unknown and
+  # malformed codes alike, and puts no merchant, caller or booking data in any
+  # response. The redirect target is snapshotted from merchant config at send
+  # time, never taken from the request, so this cannot be used as an open
+  # redirect.
+  - "GET /b/{code}"
   # Browser/phone camera frame ingest. Per-camera HMAC frame token bound to
   # (camera_id, org_id): verify_frame_token() at
   # src/api/routes/browser_camera.py:50 → 401 (src/camera/frame_ingest.py:73 —

@@ -1,10 +1,13 @@
 import { Suspense } from 'react'
-import { useParams, useSearchParams } from 'react-router-dom'
+import { useLocation, useParams, useSearchParams } from 'react-router-dom'
 import { clsx } from 'clsx'
 import { useMobile } from '@/hooks/useMobile'
 import { PortalLoadingSkeleton } from '@/pages/canada/portal/PortalPage'
 import ComingSoonBanner from '@/components/ComingSoonBanner'
 import type { Pillar } from '@/config/merchantPillars'
+import { useAuth } from '@/lib/auth'
+import { useTradePack } from '@/config/moduleFlags'
+import TradeHomePage from '@/pages/TradeHomePage'
 
 /**
  * Generic pillar shell. Reads `?view=` to pick the active segment, renders a
@@ -14,13 +17,43 @@ import type { Pillar } from '@/config/merchantPillars'
 export default function MerchantPillarPage({ pillar }: { pillar: Pillar }) {
   const [params, setParams] = useSearchParams()
   const { isMobile } = useMobile()
+  const { org } = useAuth()
 
   // Deep links use a path segment (/camera/live); in-app tabs use ?view=.
   const splat = (useParams()['*'] || '').split('/')[0]
-  const segments = isMobile ? pillar.segments.filter(s => !s.desktopOnly) : pillar.segments
+
+  /**
+   * Drop the segments this merchant's TRADE does not use.
+   *
+   * Pillar-level on/off was too blunt: switching Inventory off for a barbershop
+   * to "simplify" it also removed margin tracking, which they very much need —
+   * they sell retail and burn through consumables. What they do not need is
+   * Menu Matrix. Keeping the pillar and dropping the foreign segment is the
+   * difference between a tailored product and a smaller one.
+   *
+   * A merchant with no trade set loses nothing: packFor() falls back to a pack
+   * that hides nothing.
+   */
+  const hidden = useTradePack().hiddenViews || []
+
+  /**
+   * On the demos, home IS the trade workspace.
+   *
+   * Not a segment beside Revenue — a two-tab bar above it is exactly what
+   * made the overview read as "the first tab" rather than the focal screen.
+   * The workspace already carries the money band, the trend and the
+   * forecast, so Revenue is not lost, it is inlined.
+   */
+  const { pathname } = useLocation()
+  const isDemo = pathname.startsWith('/demo') || pathname.startsWith('/canada/demo')
+  const workspaceHome = isDemo && pillar.path === ''
+
+  const forTrade = pillar.segments.filter(
+    s => !hidden.includes(`${pillar.path}/${s.view}`) && !(workspaceHome && s.view !== 'home'))
+  const segments = isMobile ? forTrade.filter(s => !s.desktopOnly) : forTrade
   const requested = params.get('view') || splat
   const active = segments.find(s => s.view === requested) ?? segments[0]
-  const Active = active.Component
+  const Active = workspaceHome ? TradeHomePage : active.Component
 
   const selectView = (view: string) => {
     const next = new URLSearchParams(params)

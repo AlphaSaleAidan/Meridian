@@ -49,14 +49,28 @@ class MockDB:
 
 # ── Canonical table mirrors proposal-plans.ts / canada-proposal-plans.ts ────
 
+# UPDATED 2026-08-16. This table froze the pre-2026-08 prices (US$1.49/1.00,
+# CA$1.99/1.39) and has been failing ever since the fees were cut, which means
+# THE ONE TEST THAT CATCHES QUOTE-VS-CHARGE DRIFT WAS OFFLINE. Both sides
+# already agree on the current numbers — the frontend plan files and
+# CANONICAL_FEE_TERMS both say US$0.65/0.45 and CA$0.75/0.60 — so this is the
+# guard catching up, not a price change.
+#
+#   2026-08-06 (Aidan): per-order fees adjusted DOWN to the former redlines and
+#   FIXED — the rep fee slider is retired, so orderFee === orderFeeFloor.
+#   2026-08-07 (Aidan): CA premium is CA$0.75 ALL-IN, deliberately breaking the
+#   x1.4 derivation, because Meridian absorbs Stripe's flat 30c rather than
+#   passing it through.
 @pytest.mark.parametrize("market,tier,monthly,order_fee,floor", [
     ("us", "standard", 25000, 0, 0),
-    ("us", "premium", 35000, 149, 65),
-    ("us", "command", 50000, 100, 45),
+    # 2026-08-16 break-even: US$0.35 is the measured US$0.328 rounded up to
+    # 5c; CA$0.50 because the x1.4 derivation rounds DOWN to CA$0.45, below
+    # the CA$0.459 the same order costs us.
+    ("us", "premium", 35000, 35, 35),
+    ("us", "command", 50000, 35, 35),
     ("ca", "standard", 35000, 0, 0),
-    # CAD floors = USD floors × 1.4, rounded down to 5¢ (Aidan 2026-07-19): 65→90, 45→60.
-    ("ca", "premium", 50000, 199, 90),
-    ("ca", "command", 70000, 139, 60),
+    ("ca", "premium", 50000, 50, 50),
+    ("ca", "command", 70000, 50, 50),
 ])
 def test_canonical_table_matches_frontend_plans(market, tier, monthly, order_fee, floor):
     base = ft.CANONICAL_FEE_TERMS[market][tier]
@@ -86,12 +100,20 @@ def test_normalize_market(raw, expected):
 
 def test_resolve_defaults_everything_from_tier():
     terms = ft.resolve_fee_terms("ca", plan_tier="premium")
+    # Two changes this froze the "before" of: the call-time overage was retired
+    # (so the per-minute rate defaults to 0), and migration 077 added the three
+    # pricing-model fields for the $0-per-order minutes plan. Both are present
+    # in the resolved terms and were missing here, so the assertion had been
+    # failing since each shipped.
     assert terms == {
         "plan_tier": "premium",
         "monthly_fee_cents": 50000,
-        "order_fee_cents": 199,
-        "call_overage_cents_per_min": 45,
+        "order_fee_cents": 50,
+        "call_overage_cents_per_min": 0,
         "included_call_min": 3,
+        "pricing_model": None,
+        "included_monthly_min": None,
+        "monthly_overage_cents_per_min": None,
     }
 
 
@@ -106,7 +128,7 @@ def test_resolve_unknown_tier_falls_back_to_closest_by_monthly():
     # 'weekly' isn't a canonical tier; CA$700/mo → command.
     terms = ft.resolve_fee_terms("ca", plan_tier="weekly", monthly_fee_cents=70000)
     assert terms["plan_tier"] == "command"
-    assert terms["order_fee_cents"] == 139
+    assert terms["order_fee_cents"] == 50
 
 
 def test_resolve_keeps_rep_price_bump_within_headroom():
@@ -119,38 +141,41 @@ def test_resolve_keeps_rep_price_bump_within_headroom():
 
 def test_resolve_clamps_order_fee_to_tier_redline_and_ceiling():
     # crafted low fee → clamped up to the floor
-    assert ft.resolve_fee_terms("us", "premium", order_fee_cents=1)["order_fee_cents"] == 65
-    assert ft.resolve_fee_terms("ca", "command", order_fee_cents=1)["order_fee_cents"] == 60
+    assert ft.resolve_fee_terms("us", "premium", order_fee_cents=1)["order_fee_cents"] == 35
+    assert ft.resolve_fee_terms("ca", "command", order_fee_cents=1)["order_fee_cents"] == 50
     # above the tier standard rate → clamped down
-    assert ft.resolve_fee_terms("us", "command", order_fee_cents=9999)["order_fee_cents"] == 100
-    # in-range negotiated fee passes through
-    assert ft.resolve_fee_terms("ca", "premium", order_fee_cents=120)["order_fee_cents"] == 120
+    assert ft.resolve_fee_terms("us", "command", order_fee_cents=9999)["order_fee_cents"] == 35
+    # NO in-range band survives: the rep fee slider was retired
+    # (Aidan 2026-08-06), so the tier rate IS the floor and anything a
+    # client sends — high or low — is clamped to it.
+    assert ft.resolve_fee_terms("ca", "premium", order_fee_cents=120)["order_fee_cents"] == 50
+    assert ft.resolve_fee_terms("ca", "premium", order_fee_cents=1)["order_fee_cents"] == 50
 
 
 def test_terms_from_lead_row_locked_columns_win():
     lead = {
         "monthly_value": 500, "plan_tier": "premium",
-        "monthly_fee_cents": 52500, "order_fee_cents": 150,
+        "monthly_fee_cents": 52500, "order_fee_cents": 75,
         "call_overage_cents_per_min": 45, "included_call_min": 3,
         "fee_terms_locked_at": "2026-07-16T00:00:00Z",
     }
     terms = ft.terms_from_lead_row("ca", lead)
     assert terms["monthly_fee_cents"] == 52500
-    assert terms["order_fee_cents"] == 150
+    assert terms["order_fee_cents"] == 50
 
 
 def test_terms_from_lead_row_pre_migration_lead_infers_from_monthly_value():
     terms = ft.terms_from_lead_row("ca", {"monthly_value": 700})
     assert terms["plan_tier"] == "command"
     assert terms["monthly_fee_cents"] == 70000
-    assert terms["order_fee_cents"] == 139
+    assert terms["order_fee_cents"] == 50
 
 
 # ── merchant_billing_terms: provision copies lead → terms ────────────────────
 
 async def test_set_terms_supersedes_then_inserts_never_updates_in_place():
     db = MockDB()
-    terms = ft.resolve_fee_terms("ca", "premium", order_fee_cents=150)
+    terms = ft.resolve_fee_terms("ca", "premium", order_fee_cents=50)
     row = await ft.set_merchant_billing_terms(
         db, "org-1", terms, source_lead_id="lead-1", source_market="ca",
         created_by="rep@x.com")
@@ -166,7 +191,7 @@ async def test_set_terms_supersedes_then_inserts_never_updates_in_place():
     assert inserted["source_lead_id"] == "lead-1"
     assert inserted["source_market"] == "ca"
     assert inserted["monthly_fee_cents"] == 50000
-    assert inserted["order_fee_cents"] == 150
+    assert inserted["order_fee_cents"] == 50
     assert inserted["override_reason"] is None  # lead-sourced = automatic
 
 
@@ -223,6 +248,9 @@ async def test_override_supersedes_and_records_reason(monkeypatch):
     from src.api.routes import billing as billing_mod
     db = MockDB(select_results={"merchant_billing_terms": [{
         "merchant_id": "org-7", "plan_tier": "premium",
+        # Deliberately an OLD price: this row is a merchant signed before the
+        # 2026-08 cut, being repriced on monthly only. Its per-order fee
+        # carrying over untouched is the thing under test.
         "monthly_fee_cents": 50000, "order_fee_cents": 199,
         "call_overage_cents_per_min": 45, "included_call_min": 3,
         "source_lead_id": "lead-7", "source_market": "ca",
@@ -320,7 +348,7 @@ async def test_provision_copies_already_locked_lead_verbatim():
     from src.api.routes.onboarding import _record_provision_fee_terms
     db = MockDB(select_results={"us_leads": [{
         "id": "lead-lk", "plan_tier": "command", "monthly_fee_cents": 50000,
-        "order_fee_cents": 100, "call_overage_cents_per_min": 45,
+        "order_fee_cents": 45, "call_overage_cents_per_min": 45,
         "included_call_min": 3, "fee_terms_locked_at": "2026-07-01T00:00:00Z",
     }]})
     recorded, terms = await _record_provision_fee_terms(

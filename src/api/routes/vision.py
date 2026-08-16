@@ -507,6 +507,106 @@ async def get_traffic(
     }
 
 
+# ─── Event recorder ───────────────────────────────────────────────────
+#
+# Read and act. The write path is device-authenticated and lives in
+# vision_ingest.py, for the same reason the traffic ingest does: the caller is
+# a headless on-site agent with no user login.
+
+
+@router.get("/events/{org_id}")
+async def list_vision_events(
+    org_id: str,
+    hours: int = Query(48, ge=1, le=720),
+    kind: Optional[str] = Query(None),
+    status: Optional[str] = Query(None),
+    camera_id: Optional[str] = Query(None),
+):
+    """The event feed: what happened, newest first.
+
+    Defaults to 48 hours rather than the traffic endpoint's week. An event is
+    something somebody should act on, and a spill from nine days ago is
+    history — including it by default buries the one from this morning.
+    """
+    from ...services.vision_events import describe, summarise, window_start
+
+    db = _get_db()
+    if not db:
+        return {"org_id": org_id, "events": [], "summary": {}}
+
+    filters = {"org_id": f"eq.{org_id}",
+               "detected_at": f"gte.{vision_events_window(hours)}"}
+    if kind:
+        filters["kind"] = f"eq.{kind}"
+    if status:
+        filters["status"] = f"eq.{status}"
+    if camera_id:
+        filters["camera_id"] = f"eq.{camera_id}"
+
+    try:
+        rows = await db.select("vision_events", filters=filters,
+                               order="detected_at.desc", limit=200)
+    except Exception as e:
+        logger.warning("Vision event query failed: %s", e)
+        rows = []
+
+    # The copy travels with the row so the portal and any future channel — a
+    # digest email, a push — say the same thing about the same event.
+    for r in rows:
+        meta = describe(r.get("kind", ""))
+        r["title"] = meta["title"]
+        r["why"] = meta["why"]
+
+    return {
+        "org_id": org_id,
+        "hours": hours,
+        "events": rows,
+        "summary": summarise(rows),
+        "since": window_start(hours),
+    }
+
+
+class EventResolution(BaseModel):
+    status: str
+    note: Optional[str] = None
+
+
+@router.patch("/events/{event_id}")
+async def resolve_vision_event(event_id: str, body: EventResolution):
+    """Acknowledge, resolve or dismiss one event.
+
+    DISMISSED IS NOT RESOLVED and the two are kept apart deliberately: one
+    means the mop came out, the other means the camera was wrong. Collapsing
+    them would destroy the only signal available for telling whether a
+    detector is worth leaving switched on.
+    """
+    from ...services.vision_events import STATUSES
+
+    db = _get_db()
+    if not db:
+        raise HTTPException(status_code=503, detail="Database not available")
+    if body.status not in STATUSES:
+        raise HTTPException(status_code=400, detail=f"status must be one of {STATUSES}")
+
+    fields: dict = {"status": body.status}
+    if body.note:
+        fields["resolved_note"] = body.note[:500]
+    if body.status in ("resolved", "dismissed"):
+        fields["resolved_at"] = datetime.now(timezone.utc).isoformat()
+
+    try:
+        await db.update("vision_events", fields, filters={"id": f"eq.{event_id}"})
+    except Exception as e:
+        logger.warning("Vision event update failed: %s", e)
+        raise HTTPException(status_code=500, detail="Could not update event")
+    return {"id": event_id, "status": body.status}
+
+
+def vision_events_window(hours: int) -> str:
+    from ...services.vision_events import window_start
+    return window_start(hours)
+
+
 @router.get("/agents/{org_id}")
 async def run_vision_agents(org_id: str, days: int = Query(7, ge=1, le=90)):
     import asyncio

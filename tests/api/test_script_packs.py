@@ -5,10 +5,20 @@ Two contracts under test:
 
 1. ZERO DEFAULT CHANGE (byte identity): a merchant whose
    phone_agent_config.script_pack is NULL / absent / '' / 'legacy' / unknown
-   gets the EXACT pre-pack generic prompt. Proven against golden snapshots
-   (golden_vapi_legacy_prompts.json) captured from the prompt builder BEFORE
-   the pack layer existed. Any error inside the pack layer must also fall
-   back to the legacy prompt (fail-legacy).
+   gets the EXACT generic prompt. Proven against golden snapshots
+   (golden_vapi_legacy_prompts.json). Any error inside the pack layer must
+   also fall back to the legacy prompt (fail-legacy).
+
+   RE-CAPTURED 2026-08-16. The snapshots were taken before the pack layer
+   existed and had been failing since the A2P/10DLC consent work (#488) added
+   the "1 to 3 texts per order... reply STOP" disclosure and the pay-choice
+   rule to the prompt. The prompt was RIGHT and the snapshot was stale, so
+   this guard had been dead for weeks — which is the actual cost, because it
+   is what catches an ACCIDENTAL prompt change. Regenerate with:
+
+       python3 -m pytest tests/api/test_script_packs.py   # see what differs
+       # then, after confirming every diff is deliberate, re-capture from the
+       # same fixtures this module defines — never hand-edit the JSON.
 
 2. PACK COMPOSITION: packs render as CONVERSATION GUIDELINES (principles the
    agent adapts — not a numbered script) plus non-negotiable HARD RULES:
@@ -40,6 +50,14 @@ GOLDEN = json.loads(
     (Path(__file__).parent / "golden_vapi_legacy_prompts.json").read_text()
 )
 PACK_IDS = sorted(PACK_DEFS)
+
+# Packs whose call is somebody buying items now. A lot below assumes exactly
+# that — order types, menu upsells, the item read-back — and it stopped being
+# true when the appointment trades arrived: a barbershop never says "pickup or
+# delivery", so asserting it does would force the wrong prompt onto the right
+# pack. The pack declares its own call_kind; this reads it rather than keeping
+# a second list in the tests that would drift.
+ORDER_PACK_IDS = sorted(k for k, p in PACK_DEFS.items() if p.call_kind == "order")
 
 
 def _cfg(**overrides) -> SimpleNamespace:
@@ -146,7 +164,7 @@ def test_list_packs_legacy_control_first():
 
 # ── 3. pack composition keeps every merchant-level block ─────────────
 
-@pytest.mark.parametrize("pack_id", PACK_IDS)
+@pytest.mark.parametrize("pack_id", ORDER_PACK_IDS)
 def test_pack_keeps_shared_safety_and_merchant_blocks(pack_id):
     prompt = vw._system_prompt(
         _full_cfg(script_pack=pack_id, language="multi"),
@@ -182,7 +200,7 @@ def test_pack_keeps_shared_safety_and_merchant_blocks(pack_id):
     assert "Group orders:" in prompt
 
 
-@pytest.mark.parametrize("pack_id", PACK_IDS)
+@pytest.mark.parametrize("pack_id", ORDER_PACK_IDS)
 def test_pack_order_type_priority_before_readback(pack_id):
     """The whole point: establishing order type is prioritized EARLY in the
     guidelines, ahead of the read-back guidance."""
@@ -193,7 +211,7 @@ def test_pack_order_type_priority_before_readback(pack_id):
     assert 0 < type_pos < readback_pos
 
 
-@pytest.mark.parametrize("pack_id", PACK_IDS)
+@pytest.mark.parametrize("pack_id", ORDER_PACK_IDS)
 def test_merchant_upsell_none_overrides_pack(pack_id):
     prompt = vw._system_prompt(_cfg(script_pack=pack_id,
                                     personality={"upsell": "none"}))
@@ -203,7 +221,7 @@ def test_merchant_upsell_none_overrides_pack(pack_id):
     assert "suggestion" not in guidelines_after.lower()
 
 
-@pytest.mark.parametrize("pack_id", PACK_IDS)
+@pytest.mark.parametrize("pack_id", ORDER_PACK_IDS)
 def test_merchant_upsell_active_overrides_pack(pack_id):
     prompt = vw._system_prompt(_cfg(script_pack=pack_id,
                                     personality={"upsell": "active"}))
@@ -254,3 +272,99 @@ def test_config_request_rejects_unknown_pack_id():
     from src.api.routes.phone_dashboard import PhoneConfigRequest
     with pytest.raises(ValidationError):
         PhoneConfigRequest(merchant_id="biz_" + "a" * 16, script_pack="no_such_pack")
+
+
+# ── A2P 10DLC: the disclosure is not a pack's to change ──────────────────────
+
+# Filed verbatim in the Telnyx campaign's message flow. TCR requires brand,
+# message types, frequency, rates, STOP, HELP and no-share language, so these
+# are not stylistic strings — a pack dropping one is a campaign vetting
+# failure, and the campaign is what makes texting work at all.
+A2P_REQUIRED = [
+    "Message and data rates may apply",
+    "reply STOP",
+    "from Meridian on behalf of",
+    "never share your mobile information",
+    "pay_at_pickup",          # the decline path, which sends no text by design
+]
+
+
+@pytest.mark.parametrize("pack_id", PACK_IDS)
+def test_every_pack_carries_the_full_a2p_disclosure(pack_id):
+    """A pack changes the CALL FLOW. It must not change what we disclose.
+
+    This is the gap the test caught: the consent step was passed to the legacy
+    prompt and to nothing else, so all four packs rendered without it. No
+    merchant was on a pack, so nothing shipped that way — but enabling one for
+    a merchant would have silently started texting their customers with none
+    of the language the campaign is filed on.
+    """
+    prompt = vw._system_prompt(_cfg(script_pack=pack_id))
+    missing = [needle for needle in A2P_REQUIRED if needle not in prompt]
+    assert not missing, f"{pack_id} drops the A2P disclosure: {missing}"
+
+
+def test_the_legacy_prompt_carries_it_too():
+    prompt = vw._system_prompt(_cfg())
+    assert not [n for n in A2P_REQUIRED if n not in prompt]
+
+
+@pytest.mark.parametrize("pack_id", PACK_IDS)
+def test_the_disclosure_names_the_merchant_not_a_placeholder(pack_id):
+    # "on behalf of {business}" is the brand identification TCR vets. A pack
+    # rendering it with an unfilled template would pass the substring check
+    # above and still fail vetting.
+    prompt = vw._system_prompt(_cfg(script_pack=pack_id))
+    assert "on behalf of Golden Diner" in prompt
+    assert "{business}" not in prompt
+
+
+# ── merchant settings are not a pack's to drop ───────────────────────────────
+
+# Twice now a MERCHANT-level setting reached the legacy prompt and no pack:
+# the A2P 10DLC consent disclosure, and "PAY WITH CASH". Both were found by
+# accident — the first by auditing the packs, the second by an unrelated test
+# failing when trade packs started auto-applying. Both would have shipped
+# silently, because a pack rendering without a feature looks like a working
+# prompt.
+#
+# (setting, config kwargs, a marker that must appear). A pack changes the CALL
+# FLOW; it never decides whether a merchant's paid-for setting applies.
+MERCHANT_SETTINGS = [
+    ("A2P SMS consent", {}, "Message and data rates may apply"),
+    ("pay with cash", {"accept_cash": True}, "cash"),
+    ("reservations", {"reservation_config": {"on_website": True,
+                                             "website_url": "https://x.test/book"}},
+     "RESERVATIONS"),
+    ("menu link", {"menu_public_url": "https://meridian.tips/m/golden"},
+     "meridian.tips/m/golden"),
+    ("sold-out items", {"sold_out_items": ["Calzone"]}, "Calzone"),
+    ("call cap pacing", {"max_call_minutes": 4}, "4"),
+]
+
+
+@pytest.mark.parametrize("pack_id", PACK_IDS)
+@pytest.mark.parametrize("label,kwargs,marker", MERCHANT_SETTINGS,
+                         ids=[s[0] for s in MERCHANT_SETTINGS])
+def test_every_pack_carries_every_merchant_setting(pack_id, label, kwargs, marker):
+    prompt = vw._system_prompt(_cfg(script_pack=pack_id, **kwargs))
+    assert marker.lower() in prompt.lower(), (
+        f"{pack_id} drops the merchant's {label} setting"
+    )
+
+
+@pytest.mark.parametrize("label,kwargs,marker", MERCHANT_SETTINGS,
+                         ids=[s[0] for s in MERCHANT_SETTINGS])
+def test_the_legacy_prompt_carries_them_too(label, kwargs, marker):
+    # The control. If this fails the marker is wrong, not the pack layer.
+    prompt = vw._system_prompt(_cfg(**kwargs))
+    assert marker.lower() in prompt.lower()
+
+
+@pytest.mark.parametrize("pack_id", PACK_IDS)
+def test_a_setting_left_off_stays_off(pack_id):
+    # The other half: a pack must not switch a merchant's setting ON either.
+    # Cash is the clearest case — offering it where the merchant has not
+    # enabled it sends an unpaid order to the kitchen.
+    prompt = vw._system_prompt(_cfg(script_pack=pack_id))
+    assert "cash" not in prompt.lower()

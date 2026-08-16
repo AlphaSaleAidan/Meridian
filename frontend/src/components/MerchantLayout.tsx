@@ -1,11 +1,13 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { clsx } from 'clsx'
 import { Menu, MapPin } from 'lucide-react'
 import { MeridianEmblem, MeridianWordmark } from './MeridianLogo'
 import { useUnreadNotifications } from '@/hooks/useUnreadNotifications'
-import { merchantPillars, comingSoonPillars, MERCHANT_BASE_PATH, type Pillar } from '@/config/merchantPillars'
-import { useModuleFlags } from '@/config/moduleFlags'
+import { merchantPillars, comingSoonPillars, orderPillars, MERCHANT_BASE_PATH, type Pillar } from '@/config/merchantPillars'
+import { useAuth } from '@/lib/auth'
+import { useModuleFlags, useTradePack } from '@/config/moduleFlags'
+import { usePublishHeight } from '@/hooks/usePublishHeight'
 
 function PillarLink({ pillar, basePath, onNavigate }: { pillar: Pillar; basePath: string; onNavigate: () => void }) {
   const Icon = pillar.icon
@@ -38,8 +40,14 @@ function PillarLink({ pillar, basePath, onNavigate }: { pillar: Pillar; basePath
 
 export default function MerchantLayout({ basePath = MERCHANT_BASE_PATH }: { basePath?: string } = {}) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  // The mobile tab bar is permanent chrome under lg; above lg it is display:
+  // none and measures zero, which is the right answer without a breakpoint
+  // check here.
+  const bottomNavRef = useRef<HTMLElement>(null)
+  usePublishHeight(bottomNavRef, '--bottom-nav-h')
   const closeSidebar = () => setSidebarOpen(false)
   const flags = useModuleFlags()
+  const { org } = useAuth()
   // Same chrome serves both regions: /canada/* keeps its existing branding,
   // the US mounts (/us/merchant, /demo) show no region chip at all.
   const isCanada = useLocation().pathname.startsWith('/canada')
@@ -48,21 +56,51 @@ export default function MerchantLayout({ basePath = MERCHANT_BASE_PATH }: { base
   // tab, Camera included) — real merchant portals keep the hamburger.
   const isDemo = basePath === '/demo' || basePath === '/canada/demo'
 
-  // Filter pillars by their optional flag — disabled-never-delete pattern.
-  const visiblePillars = merchantPillars.filter(p => !p.flag || flags[p.flag])
-  const moneyPillars = visiblePillars.filter(p => !p.secondary && p.path !== 'settings')
+  // Filter pillars by their optional flag — disabled-never-delete pattern —
+  // then put them in the order this merchant's TRADE cares about. A barber
+  // opens on the book; a takeout shop opens on the phone.
+  const pack = useTradePack()
+  /**
+   * Roadmap previews ride along in BOTH public demos — never in a paying
+   * merchant's portal. This was pinned to the Canada demo path, so a US
+   * prospect saw four fewer tabs than a Canadian one despite /demo being
+   * documented as a mirror of /canada/demo.
+   *
+   * They sit in the ONE list now rather than under a "Coming Soon" heading.
+   * They follow Camera at the end of Everything else.
+   * The heading sorted the navigation by our build status, which is our
+   * problem and not the merchant's — and it did it twice over, since each of
+   * those pages already says so in a banner at the top. Sorting by what a
+   * trade uses is the only order that means anything to them.
+   */
+  const roadmapPillars = isDemo ? comingSoonPillars : []
+  const visiblePillars = orderPillars(
+    merchantPillars.filter(p => !p.flag || flags[p.flag]),
+    pack.pillarOrder,
+  )
+  /**
+   * On the demos the workspace is lifted out of the list and pinned to the
+   * top as "Today".
+   *
+   * The trade's own screen sitting fourth in a flat list of pillars said the
+   * opposite of what the product does — it is where a merchant lives, and the
+   * rest is where they go occasionally. Everything below the divider stays in
+   * this trade's order, which is why a barber's Bookings sits above a
+   * takeaway's Phone Calls.
+   */
+  const homePillar = isDemo ? visiblePillars.find(p => p.path === '') : undefined
+  const moneyPillars = visiblePillars
+    .filter(p => !p.secondary && p.path !== 'settings')
+    .filter(p => !(homePillar && p.path === ''))
   const secondaryPillars = visiblePillars.filter(p => p.secondary)
   const settingsPillar = visiblePillars.find(p => p.path === 'settings')
-  // Roadmap previews ride along in BOTH public demos — never in a paying
-  // merchant's portal. This was pinned to the Canada demo path, so a US
-  // prospect saw four fewer tabs (Insights, Customers, Taxes & Expenses,
-  // My Website) than a Canadian one despite /demo being documented as a
-  // mirror of /canada/demo.
-  const roadmapPillars = isDemo ? comingSoonPillars : []
   // Mobile bottom-nav: money pillars + settings only (no secondary tabs, no
   // overflow) — except in the demo, where the secondary tabs (Camera) join the
   // bar so the sidebar isn't needed at all on mobile.
   const mobileNavPillars = [
+    // Today leads on mobile too — it is lifted out of moneyPillars above, so
+    // without this the bottom bar loses the home tab entirely.
+    ...(homePillar ? [{ ...homePillar, label: 'Today' }] : []),
     ...moneyPillars,
     ...(isDemo ? secondaryPillars : []),
     ...(settingsPillar ? [settingsPillar] : []),
@@ -98,22 +136,27 @@ export default function MerchantLayout({ basePath = MERCHANT_BASE_PATH }: { base
         </div>
 
         <nav className="flex-1 overflow-y-auto py-2 px-2 space-y-0.5 no-scrollbar">
+          {homePillar && (
+            <>
+              <PillarLink
+                pillar={{ ...homePillar, label: 'Today' }}
+                basePath={basePath}
+                onNavigate={closeSidebar}
+              />
+              <div className="pt-3 pb-1 px-3 text-[10px] uppercase tracking-wide text-[#4A4A52]">
+                Everything else
+              </div>
+            </>
+          )}
           {moneyPillars.map(p => (
             <PillarLink key={p.path || '_home'} pillar={p} basePath={basePath} onNavigate={closeSidebar} />
           ))}
-          {secondaryPillars.length > 0 && (
+          {[...secondaryPillars, ...roadmapPillars].length > 0 && (
             <div className="pt-2 mt-2 border-t border-[#1F1F23] space-y-0.5">
-              {secondaryPillars.map(p => (
-                <PillarLink key={p.path} pillar={p} basePath={basePath} onNavigate={closeSidebar} />
-              ))}
-            </div>
-          )}
-          {roadmapPillars.length > 0 && (
-            <div className="pt-2 mt-2 border-t border-[#1F1F23] space-y-0.5">
-              <p className="px-3 pt-1 pb-1.5 text-[9px] font-semibold uppercase tracking-[0.16em] text-[#A1A1A8]/45">
-                Coming Soon
-              </p>
-              {roadmapPillars.map(p => (
+              {/* Camera first, then the roadmap previews — one continuous list
+                  under Everything else. Camera below "My Website" read as an
+                  afterthought when the roadmap items were merged above it. */}
+              {[...secondaryPillars, ...roadmapPillars].map(p => (
                 <PillarLink key={p.path} pillar={p} basePath={basePath} onNavigate={closeSidebar} />
               ))}
             </div>
@@ -137,11 +180,25 @@ export default function MerchantLayout({ basePath = MERCHANT_BASE_PATH }: { base
       </aside>
 
       {/* Main content */}
-      <main id="main-content" className="flex-1 overflow-y-auto">
+      {/*
+        The scroll container reserves room for the bars fixed OVER it.
+
+        Fixed elements are out of flow, so <main> gave itself no room for the
+        mobile tab bar or the cookie banner: you could scroll to the true end
+        and still have the last 150-200 pixels sitting behind one of them,
+        unreachable by any means. Each bar publishes its own height (they
+        change with wrapping, and the banner is dismissible), and this adds
+        them up.
+      */}
+      <main
+        id="main-content"
+        className="flex-1 overflow-y-auto"
+        style={{ paddingBottom: 'calc(var(--cookie-bar-h, 0px) + var(--bottom-nav-h, 0px))' }}
+      >
         <div className="lg:hidden sticky top-0 z-30 h-14 bg-[#0A0A0B]/95 backdrop-blur-sm border-b border-[#1F1F23] flex items-center gap-3 px-4">
           {/* Demos normally drop the hamburger because the bottom bar carries
-              every tab — but the Coming Soon group lives only in the sidebar,
-              so the Canada demo keeps a way to open it. */}
+              every tab — but the roadmap previews are sidebar-only (four more
+              tabs will not fit in a bottom bar), so a demo keeps a way in. */}
           {(!isDemo || roadmapPillars.length > 0) && (
             <button aria-label="Open menu" onClick={() => setSidebarOpen(true)} className="p-1.5 rounded-lg hover:bg-[#111113]">
               <Menu size={20} className="text-[#A1A1A8]" />
@@ -165,7 +222,10 @@ export default function MerchantLayout({ basePath = MERCHANT_BASE_PATH }: { base
       </main>
 
       {/* Mobile pillar bar — money pillars + settings only, respects module flags */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 lg:hidden bg-[#0A0A0B]/95 backdrop-blur-lg border-t border-[#1F1F23]">
+      <nav
+        ref={bottomNavRef}
+        className="fixed bottom-0 left-0 right-0 z-50 lg:hidden bg-[#0A0A0B]/95 backdrop-blur-lg border-t border-[#1F1F23]"
+      >
         <div className="flex items-stretch justify-around px-2 pb-[max(env(safe-area-inset-bottom),4px)]">
           {mobileNavPillars.map(p => {
             const Icon = p.icon

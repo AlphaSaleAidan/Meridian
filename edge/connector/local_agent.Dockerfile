@@ -33,6 +33,10 @@ COPY src/camera/ /app/src/camera/
 # Bake the model into the image (version-matched to ultralytics) so there's no
 # runtime download on the merchant's network.
 RUN python3 -c "from ultralytics import YOLO; YOLO('yolo11n.pt')"
+# The event detectors ship with the connector too — this is the agent that
+# actually reaches merchants (Docker on a POS back-office PC they already
+# own), so detection that only exists in the other agent reaches nobody.
+COPY edge/event_detectors.py ./
 COPY edge/connector/local_agent.py edge/connector/go2rtc.yaml edge/connector/entrypoint-local.sh ./
 RUN chmod +x entrypoint-local.sh
 

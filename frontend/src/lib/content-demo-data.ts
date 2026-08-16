@@ -118,6 +118,226 @@ interface DemoBusiness {
 }
 
 const DEMO_BUSINESSES: Record<BusinessType, DemoBusiness> = {
+  pizzeria: {
+    brand: {
+      business_name: "Tony's Pizzeria",
+      business_type: 'pizzeria',
+      content_tier: 'growth',
+      ayrshare_connected_platforms: ['instagram', 'facebook', 'google_business'],
+      voice_profile: {
+        tone: 'friendly',
+        emoji_usage: 'minimal',
+        top_products: ['Large Pepperoni', 'Family Deal', 'Garlic Knots'],
+        keywords: ['pizza delivery near me', 'best pizza', 'family deal'],
+      },
+    },
+    post: {
+      id: 'demo-pizzeria-ad',
+      post_type: 'social',
+      platform: 'instagram',
+      status: 'published',
+      hook: 'Friday night: 41 deliveries, none of them late.',
+      body: "Three drivers, one route, and the kitchen knows what is going out before it comes off the peel.\n\nFamily Deal is still the fastest thing to order and the easiest thing to feed four people with.",
+      hashtags: ['#PizzaDelivery', '#FamilyDeal', '#TonysPizzeria', '#FridayNight'],
+      call_to_action: 'Order for delivery — link in bio',
+      pos_data_reference: { item: 'Family Deal', peak: '7:00 PM', deliveries: 41 },
+      published_at: daysAgo(2),
+      publish_url: 'https://instagram.com/p/demo',
+      created_at: daysAgo(3),
+    },
+    rankings: [
+      { keyword: 'pizza delivery near me', rank_position: 3, rank_change: 5, checked_at: daysAgo(0), ai_citation_count: 3, ai_platforms_cited: ['chatgpt', 'claude', 'perplexity'] },
+      { keyword: 'best pizza', rank_position: 7, rank_change: 2, checked_at: daysAgo(0), ai_citation_count: 1, ai_platforms_cited: ['perplexity'] },
+      { keyword: 'family deal pizza', rank_position: 5, rank_change: 4, checked_at: daysAgo(0), ai_citation_count: 2, ai_platforms_cited: ['chatgpt', 'claude'] },
+      { keyword: 'late night pizza', rank_position: 11, rank_change: -1, checked_at: daysAgo(0), ai_citation_count: 0, ai_platforms_cited: [] },
+    ],
+  },
+
+  barbershop: {
+    brand: {
+      business_name: 'The Fade Room',
+      business_type: 'barbershop',
+      content_tier: 'growth',
+      ayrshare_connected_platforms: ['instagram', 'facebook', 'google_business'],
+      voice_profile: {
+        tone: 'confident',
+        emoji_usage: 'minimal',
+        top_products: ['Skin Fade', 'Cut & Beard', 'Matte Pomade'],
+        keywords: ['barber near me', 'skin fade', 'walk in barber'],
+      },
+    },
+    post: {
+      id: 'demo-barbershop-ad',
+      post_type: 'social',
+      platform: 'instagram',
+      status: 'published',
+      hook: 'Thursday evenings book out first. Here is why.',
+      body: 'Four chairs, and the 5pm slot is the first one gone every week. If you want it, Thursday opens for booking on Sunday night.\n\nCut and beard, thirty-five minutes, out the door.',
+      hashtags: ['#SkinFade', '#BarberLife', '#TheFadeRoom', '#FreshCut'],
+      call_to_action: 'Book Thursday — link in bio',
+      // No image_url: inventing an Unsplash photo id gives a broken tile, which
+      // reads worse on a demo than a text post does.
+      pos_data_reference: { item: 'Cut & Beard', peak_slot: '5:00 PM', day: 'Thursday' },
+      published_at: daysAgo(2),
+      publish_url: 'https://instagram.com/p/demo',
+      created_at: daysAgo(3),
+    },
+    rankings: [
+      { keyword: 'barber near me', rank_position: 3, rank_change: 4, checked_at: daysAgo(0), ai_citation_count: 2, ai_platforms_cited: ['chatgpt', 'perplexity'] },
+      { keyword: 'skin fade', rank_position: 6, rank_change: 2, checked_at: daysAgo(0), ai_citation_count: 1, ai_platforms_cited: ['perplexity'] },
+      { keyword: 'walk in barber', rank_position: 11, rank_change: -1, checked_at: daysAgo(0), ai_citation_count: 0, ai_platforms_cited: [] },
+      { keyword: 'beard trim', rank_position: 8, rank_change: 3, checked_at: daysAgo(0), ai_citation_count: 1, ai_platforms_cited: ['chatgpt'] },
+    ],
+  },
+
+  nails: {
+    brand: {
+      business_name: 'Lacquer Lash Bar',
+      business_type: 'nails',
+      content_tier: 'growth',
+      ayrshare_connected_platforms: ['instagram', 'facebook', 'google_business'],
+      voice_profile: {
+        tone: 'polished',
+        emoji_usage: 'moderate',
+        top_products: ['Gel Manicure', 'Full Set', 'Lash Extensions'],
+        keywords: ['nail salon near me', 'gel manicure', 'lash extensions'],
+      },
+    },
+    post: {
+      id: 'demo-nails-ad',
+      post_type: 'social',
+      platform: 'instagram',
+      status: 'published',
+      hook: 'Fills booked back-to-back last week. Three slots left.',
+      body: 'Two technicians, one lash bed, and a book that filled by Wednesday. If you are due for a fill, this week still has room on Friday afternoon.',
+      hashtags: ['#GelManicure', '#LashExtensions', '#NailSalon', '#LacquerLash'],
+      call_to_action: 'Book a fill — link in bio',
+      // No image_url: inventing an Unsplash photo id gives a broken tile, which
+      // reads worse on a demo than a text post does.
+      pos_data_reference: { item: 'Fill', repeat_rate: '68%', day: 'Friday' },
+      published_at: daysAgo(2),
+      publish_url: 'https://instagram.com/p/demo',
+      created_at: daysAgo(3),
+    },
+    rankings: [
+      { keyword: 'nail salon near me', rank_position: 5, rank_change: 3, checked_at: daysAgo(0), ai_citation_count: 2, ai_platforms_cited: ['chatgpt', 'perplexity'] },
+      { keyword: 'gel manicure', rank_position: 4, rank_change: 6, checked_at: daysAgo(0), ai_citation_count: 3, ai_platforms_cited: ['chatgpt', 'claude', 'perplexity'] },
+      { keyword: 'lash extensions', rank_position: 9, rank_change: 1, checked_at: daysAgo(0), ai_citation_count: 1, ai_platforms_cited: ['perplexity'] },
+      { keyword: 'acrylic full set', rank_position: 13, rank_change: -2, checked_at: daysAgo(0), ai_citation_count: 0, ai_platforms_cited: [] },
+    ],
+  },
+
+  medspa: {
+    brand: {
+      business_name: 'Northline Aesthetics',
+      business_type: 'medspa',
+      content_tier: 'growth',
+      ayrshare_connected_platforms: ['instagram', 'facebook', 'google_business'],
+      voice_profile: {
+        tone: 'clinical',
+        emoji_usage: 'none',
+        top_products: ['Facial', 'Injectables', 'Laser Session'],
+        keywords: ['med spa near me', 'botox consultation', 'hydrafacial'],
+      },
+    },
+    post: {
+      id: 'demo-medspa-ad',
+      post_type: 'social',
+      platform: 'instagram',
+      status: 'published',
+      hook: 'Consultations are free. Most of ours turn into a plan, not a sale.',
+      body: 'Twenty minutes with our nurse injector, a look at what you actually want changed, and a written plan you can take away and think about.\n\nNo pressure to book anything on the day.',
+      hashtags: ['#MedSpa', '#Aesthetics', '#SkinHealth', '#Northline'],
+      call_to_action: 'Book a consultation — link in bio',
+      // No image_url: inventing an Unsplash photo id gives a broken tile, which
+      // reads worse on a demo than a text post does.
+      pos_data_reference: { item: 'Consultation', conversion: '54%', window: '14 days' },
+      published_at: daysAgo(2),
+      publish_url: 'https://instagram.com/p/demo',
+      created_at: daysAgo(3),
+    },
+    rankings: [
+      { keyword: 'med spa near me', rank_position: 6, rank_change: 4, checked_at: daysAgo(0), ai_citation_count: 3, ai_platforms_cited: ['chatgpt', 'claude', 'perplexity'] },
+      { keyword: 'botox consultation', rank_position: 8, rank_change: 2, checked_at: daysAgo(0), ai_citation_count: 2, ai_platforms_cited: ['chatgpt', 'perplexity'] },
+      { keyword: 'hydrafacial', rank_position: 5, rank_change: 5, checked_at: daysAgo(0), ai_citation_count: 1, ai_platforms_cited: ['claude'] },
+      { keyword: 'laser hair removal', rank_position: 14, rank_change: -3, checked_at: daysAgo(0), ai_citation_count: 0, ai_platforms_cited: [] },
+    ],
+  },
+
+  detailing: {
+    brand: {
+      business_name: 'Apex Auto Detail',
+      business_type: 'detailing',
+      content_tier: 'growth',
+      ayrshare_connected_platforms: ['instagram', 'facebook', 'google_business'],
+      voice_profile: {
+        tone: 'straightforward',
+        emoji_usage: 'none',
+        top_products: ['Full Detail', 'Ceramic Coating', 'Wash and Wax'],
+        keywords: ['car detailing near me', 'ceramic coating', 'interior detail'],
+      },
+    },
+    post: {
+      id: 'demo-detailing-ad',
+      post_type: 'social',
+      platform: 'instagram',
+      status: 'published',
+      hook: 'A ceramic coating is a two-day job. Here is what those two days buy you.',
+      body: 'Decontamination, a paint correction pass, then the coating itself with a cure overnight. Three to five years of a finish that rinses clean instead of scrubbing clean.',
+      hashtags: ['#CeramicCoating', '#AutoDetailing', '#PaintCorrection', '#ApexDetail'],
+      call_to_action: 'Get a quote — link in bio',
+      // No image_url: inventing an Unsplash photo id gives a broken tile, which
+      // reads worse on a demo than a text post does.
+      pos_data_reference: { item: 'Ceramic Coating', ticket: 'highest', share: '31%' },
+      published_at: daysAgo(2),
+      publish_url: 'https://instagram.com/p/demo',
+      created_at: daysAgo(3),
+    },
+    rankings: [
+      { keyword: 'car detailing near me', rank_position: 4, rank_change: 5, checked_at: daysAgo(0), ai_citation_count: 2, ai_platforms_cited: ['chatgpt', 'perplexity'] },
+      { keyword: 'ceramic coating', rank_position: 7, rank_change: 3, checked_at: daysAgo(0), ai_citation_count: 2, ai_platforms_cited: ['chatgpt', 'claude'] },
+      { keyword: 'interior detail', rank_position: 10, rank_change: 1, checked_at: daysAgo(0), ai_citation_count: 0, ai_platforms_cited: [] },
+      { keyword: 'paint correction', rank_position: 12, rank_change: 2, checked_at: daysAgo(0), ai_citation_count: 1, ai_platforms_cited: ['perplexity'] },
+    ],
+  },
+
+  mobile_detailing: {
+    brand: {
+      business_name: 'Roadside Shine Mobile',
+      business_type: 'mobile_detailing',
+      content_tier: 'growth',
+      ayrshare_connected_platforms: ['instagram', 'facebook', 'google_business'],
+      voice_profile: {
+        tone: 'straightforward',
+        emoji_usage: 'none',
+        top_products: ['Interior and Exterior', 'Wash and Wax', 'Full Detail'],
+        keywords: ['mobile detailing near me', 'car detailing at home', 'mobile car wash'],
+      },
+    },
+    post: {
+      id: 'demo-mobile_detailing-ad',
+      post_type: 'social',
+      platform: 'instagram',
+      status: 'published',
+      hook: 'We come to your driveway. You do not move the car.',
+      body: 'Water, power and everything else travels with the van. Book a window, leave the keys, and the car is done where it sits.\n\nWe cover the north side of the city six days a week.',
+      hashtags: ['#MobileDetailing', '#CarCare', '#RoadsideShine', '#DetailingAtHome'],
+      call_to_action: 'Book a window — link in bio',
+      // No image_url: inventing an Unsplash photo id gives a broken tile, which
+      // reads worse on a demo than a text post does.
+      pos_data_reference: { item: 'Interior and Exterior', radius_km: 25, jobs_per_day: 4 },
+      published_at: daysAgo(2),
+      publish_url: 'https://instagram.com/p/demo',
+      created_at: daysAgo(3),
+    },
+    rankings: [
+      { keyword: 'mobile detailing near me', rank_position: 3, rank_change: 6, checked_at: daysAgo(0), ai_citation_count: 3, ai_platforms_cited: ['chatgpt', 'claude', 'perplexity'] },
+      { keyword: 'car detailing at home', rank_position: 5, rank_change: 4, checked_at: daysAgo(0), ai_citation_count: 1, ai_platforms_cited: ['perplexity'] },
+      { keyword: 'mobile car wash', rank_position: 9, rank_change: 2, checked_at: daysAgo(0), ai_citation_count: 1, ai_platforms_cited: ['chatgpt'] },
+      { keyword: 'detailing prices', rank_position: 15, rank_change: -1, checked_at: daysAgo(0), ai_citation_count: 0, ai_platforms_cited: [] },
+    ],
+  },
+
   restaurant: {
     brand: {
       business_name: 'The Corner Bistro',
