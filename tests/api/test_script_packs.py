@@ -5,10 +5,20 @@ Two contracts under test:
 
 1. ZERO DEFAULT CHANGE (byte identity): a merchant whose
    phone_agent_config.script_pack is NULL / absent / '' / 'legacy' / unknown
-   gets the EXACT pre-pack generic prompt. Proven against golden snapshots
-   (golden_vapi_legacy_prompts.json) captured from the prompt builder BEFORE
-   the pack layer existed. Any error inside the pack layer must also fall
-   back to the legacy prompt (fail-legacy).
+   gets the EXACT generic prompt. Proven against golden snapshots
+   (golden_vapi_legacy_prompts.json). Any error inside the pack layer must
+   also fall back to the legacy prompt (fail-legacy).
+
+   RE-CAPTURED 2026-08-16. The snapshots were taken before the pack layer
+   existed and had been failing since the A2P/10DLC consent work (#488) added
+   the "1 to 3 texts per order... reply STOP" disclosure and the pay-choice
+   rule to the prompt. The prompt was RIGHT and the snapshot was stale, so
+   this guard had been dead for weeks — which is the actual cost, because it
+   is what catches an ACCIDENTAL prompt change. Regenerate with:
+
+       python3 -m pytest tests/api/test_script_packs.py   # see what differs
+       # then, after confirming every diff is deliberate, re-capture from the
+       # same fixtures this module defines — never hand-edit the JSON.
 
 2. PACK COMPOSITION: packs render as CONVERSATION GUIDELINES (principles the
    agent adapts — not a numbered script) plus non-negotiable HARD RULES:

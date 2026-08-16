@@ -128,10 +128,21 @@ def test_parse_llm_items_garbage_raises():
         menu_scraper.parse_llm_items("sorry, here is the menu: ...")
 
 
-def test_pdf_text_unavailable_in_this_env():
-    # pypdf/pdfminer are intentionally NOT in requirements — the scraper must
-    # flag pdf_unsupported rather than crash or add heavy deps.
-    assert menu_scraper._pdf_to_text(b"%PDF-1.4 fake") is None
+def test_pdf_text_handles_a_corrupt_pdf_either_way():
+    """Never crash on a corrupt PDF — and say which kind of nothing it is.
+
+    This asserted `is None` unconditionally, which only holds when no PDF
+    library is installed. pypdf IS present in some environments (it arrives as
+    a transitive dependency), and there a corrupt file takes the parse-failed
+    branch and returns "". So the test passed or failed on what happened to be
+    installed rather than on behaviour.
+
+    The distinction is real and worth keeping: None means "we cannot read PDFs
+    at all" and the caller flags pdf_unsupported; "" means "we read it and it
+    was junk". Both are valid; crashing is not.
+    """
+    out = menu_scraper._pdf_to_text(b"%PDF-1.4 fake")
+    assert out is None or out == "", f"expected None or empty, got {out!r}"
 
 
 # ── 3. ingestion routes → review gate ────────────────────────────────────
