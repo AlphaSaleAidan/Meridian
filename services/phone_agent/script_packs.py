@@ -137,6 +137,7 @@ def compose(
     menu_link_line: str = "",
     pacing_line: str = "",
     menu_block: str = "",
+    sms_consent_block: str = "",
 ) -> str:
     """Compose a pack's guidelines + the shared hard rules into a prompt.
 
@@ -146,6 +147,14 @@ def compose(
     personality, reservations, transfer, menu link, cap pacing, sold-out
     menu — behaves identically regardless of pack. The keyword blocks are
     rendered by the caller with the SAME helpers the legacy prompt uses.
+
+    sms_consent_block is the A2P 10DLC verbal opt-in, and it belongs with the
+    HARD RULES rather than the merchant blocks. It was missing entirely: the
+    legacy prompt carried it and no pack did, so the day a merchant was moved
+    onto a pack their agent would have started texting customers with none of
+    the disclosure the Telnyx campaign is filed on — brand, frequency, rates,
+    STOP, HELP, no-share. Nobody is on a pack yet, so nothing shipped that
+    way; the point is that switching one on must not be able to drop it.
     """
     pack = get_pack(pack_id)
     guidelines = "\n".join(
@@ -167,6 +176,7 @@ def compose(
         # line with no newline; packs are new text, so terminate it cleanly)
         f"{reservation_lines + chr(10) if reservation_lines else ''}"
         f"{_SHARED_HARD_RULES}"
+        f"{sms_consent_block}"
         f"{extra_rules_block}"
         f"{menu_link_line}"
         f"{pacing_line}"

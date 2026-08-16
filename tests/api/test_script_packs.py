@@ -264,3 +264,48 @@ def test_config_request_rejects_unknown_pack_id():
     from src.api.routes.phone_dashboard import PhoneConfigRequest
     with pytest.raises(ValidationError):
         PhoneConfigRequest(merchant_id="biz_" + "a" * 16, script_pack="no_such_pack")
+
+
+# ── A2P 10DLC: the disclosure is not a pack's to change ──────────────────────
+
+# Filed verbatim in the Telnyx campaign's message flow. TCR requires brand,
+# message types, frequency, rates, STOP, HELP and no-share language, so these
+# are not stylistic strings — a pack dropping one is a campaign vetting
+# failure, and the campaign is what makes texting work at all.
+A2P_REQUIRED = [
+    "Message and data rates may apply",
+    "reply STOP",
+    "from Meridian on behalf of",
+    "never share your mobile information",
+    "pay_at_pickup",          # the decline path, which sends no text by design
+]
+
+
+@pytest.mark.parametrize("pack_id", PACK_IDS)
+def test_every_pack_carries_the_full_a2p_disclosure(pack_id):
+    """A pack changes the CALL FLOW. It must not change what we disclose.
+
+    This is the gap the test caught: the consent step was passed to the legacy
+    prompt and to nothing else, so all four packs rendered without it. No
+    merchant was on a pack, so nothing shipped that way — but enabling one for
+    a merchant would have silently started texting their customers with none
+    of the language the campaign is filed on.
+    """
+    prompt = vw._system_prompt(_cfg(script_pack=pack_id))
+    missing = [needle for needle in A2P_REQUIRED if needle not in prompt]
+    assert not missing, f"{pack_id} drops the A2P disclosure: {missing}"
+
+
+def test_the_legacy_prompt_carries_it_too():
+    prompt = vw._system_prompt(_cfg())
+    assert not [n for n in A2P_REQUIRED if n not in prompt]
+
+
+@pytest.mark.parametrize("pack_id", PACK_IDS)
+def test_the_disclosure_names_the_merchant_not_a_placeholder(pack_id):
+    # "on behalf of {business}" is the brand identification TCR vets. A pack
+    # rendering it with an unfilled template would pass the substring check
+    # above and still fail vetting.
+    prompt = vw._system_prompt(_cfg(script_pack=pack_id))
+    assert "on behalf of Golden Diner" in prompt
+    assert "{business}" not in prompt

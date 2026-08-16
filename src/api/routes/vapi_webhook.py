@@ -498,6 +498,10 @@ def _pack_system_prompt(pack_id: str, config, transfer_number: str) -> str:
         menu_link_line=_menu_link_line(config),
         pacing_line=_pacing_line(_effective_cap_min(config)),
         menu_block=_menu_block(config) + _smart_upsell_block(config),
+        # A2P 10DLC opt-in. Rendered with the same helper the legacy prompt
+        # uses, because a pack changing the CALL FLOW must never change what
+        # the campaign is filed on.
+        sms_consent_block=_sms_consent_step(config),
     )
 
 

@@ -41,3 +41,12 @@ sentry-sdk[fastapi]>=2.0.0
 posthog>=3.0.0
 
 # AI Generation
+
+# Menu ingestion reads PDF menus — plenty of restaurants have nothing else.
+# It was left out deliberately ("don't pull heavy deps"), but pypdf is pure
+# Python and about a megabyte, and leaving it out did not make PDFs
+# unsupported — it made support ACCIDENTAL: it arrives transitively via
+# browser-use in some environments and not in others, so the same upload
+# parsed in dev and was flagged pdf_unsupported in production. Pinned here so
+# the behaviour is the same everywhere.
+pypdf>=5.0.0
