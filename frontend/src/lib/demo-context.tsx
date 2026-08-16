@@ -94,6 +94,18 @@ function writeStoredBusinessType(type: BusinessType): void {
 let _activeBusinessType: BusinessType = readStoredBusinessType() ?? 'restaurant'
 export function getActiveBusinessType(): BusinessType { return _activeBusinessType }
 
+/**
+ * Set the active trade without a React tree.
+ *
+ * Exists for tests that walk every trade and read the generated demo copy —
+ * the alternative is mounting a provider per trade to assert on strings. Not
+ * called by the app: the app sets this through setBusinessType, which also
+ * persists the choice and closes the picker.
+ */
+export function setActiveBusinessTypeForTest(type: BusinessType): void {
+  _activeBusinessType = type
+}
+
 export function isCanadaPath(): boolean {
   return typeof window !== 'undefined' && window.location.pathname.startsWith('/canada')
 }

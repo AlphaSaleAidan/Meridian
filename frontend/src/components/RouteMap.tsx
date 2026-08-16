@@ -118,7 +118,14 @@ export default function RouteMap({
 
   return (
     <div
-      className="overflow-hidden rounded-lg border border-[#1F1F23]"
+      // `isolate` is load-bearing, not decoration. Leaflet gives its own panes
+      // and controls z-index values in the 400-700 range, which are absolute
+      // page-wide without a stacking context to contain them — so the map
+      // painted OVER the demo's business-type modal (z-100) and the switch
+      // badge. Isolating here keeps leaflet's internal ordering intact while
+      // making the whole map a single layer the rest of the page can stack
+      // against.
+      className="relative isolate z-0 overflow-hidden rounded-lg border border-[#1F1F23]"
       style={{ height }}
     >
       <MapContainer

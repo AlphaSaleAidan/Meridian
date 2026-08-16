@@ -181,7 +181,12 @@ export const NICHE_PACKS: NichePack[] = [
     // Inventory stays ON: a barbershop sells pomade and burns through blades,
     // and margin on the retail shelf is a real number to them. Menu Matrix is
     // a restaurant instrument and goes.
-    modules: { camera: false, taxExpenses: false, topActions: false },
+    // Camera stays ON now that it records EVENTS rather than only counting
+    // heads. A spill by the basin, product leaving the retail shelf without
+    // a sale, a front desk empty while somebody waits to pay — all three
+    // happen here, and none of them were worth a camera when the pillar
+    // could only report footfall.
+    modules: { taxExpenses: false, topActions: false },
     hiddenViews: ['inventory/menu'],
     pillarOrder: ['bookings', 'phone', '', 'inventory', 'schedule'],
     homeMetric: { label: 'Chair hours filled today',
@@ -211,7 +216,12 @@ export const NICHE_PACKS: NichePack[] = [
     closes: '19:00',
     // Gel, tips, lash trays — consumable cost per service is the whole margin
     // question in this trade.
-    modules: { camera: false, taxExpenses: false, topActions: false },
+    // Camera stays ON now that it records EVENTS rather than only counting
+    // heads. A spill by the basin, product leaving the retail shelf without
+    // a sale, a front desk empty while somebody waits to pay — all three
+    // happen here, and none of them were worth a camera when the pillar
+    // could only report footfall.
+    modules: { taxExpenses: false, topActions: false },
     hiddenViews: ['inventory/menu'],
     pillarOrder: ['bookings', 'phone', '', 'inventory', 'schedule'],
     homeMetric: { label: 'Clients rebooked before they left',
@@ -369,7 +379,12 @@ export const NICHE_PACKS: NichePack[] = [
     closes: '18:00',
     // Injectables and skincare are the most expensive stock in any of these
     // trades, with expiry dates attached. Inventory is not optional here.
-    modules: { camera: false, taxExpenses: false, topActions: false },
+    // Camera stays ON now that it records EVENTS rather than only counting
+    // heads. A spill by the basin, product leaving the retail shelf without
+    // a sale, a front desk empty while somebody waits to pay — all three
+    // happen here, and none of them were worth a camera when the pillar
+    // could only report footfall.
+    modules: { taxExpenses: false, topActions: false },
     hiddenViews: ['inventory/menu'],
     pillarOrder: ['bookings', 'phone', '', 'inventory', 'schedule'],
     homeMetric: { label: 'Consultations booked this week',

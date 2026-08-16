@@ -28,6 +28,8 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Header, HTTPException
 
 from ...camera.device_tokens import enforce_org_match, resolve_device_token
+from pydantic import BaseModel
+
 from .vision import (
     TrafficIngestRequest,
     VisitIngestRequest,
@@ -187,3 +189,66 @@ async def ingest_visits(
     except Exception as e:
         logger.warning("Visit insert failed: %s", e)
         return {"status": "ok", "visit_id": None}
+
+
+class EventIngestRequest(BaseModel):
+    """A batch of detections from one camera.
+
+    Batched because the edge agent runs its detectors on a loop and a spill,
+    a blocked aisle and a phone at the till can all fall out of the same pass.
+    One request per event would triple the round trips for no benefit.
+    """
+    org_id: str
+    camera_id: str
+    location_id: Optional[str] = None
+    events: list[dict] = []
+
+
+@router.post("/ingest/events")
+async def ingest_events(
+    req: EventIngestRequest,
+    principal: dict = Depends(require_device_principal),
+):
+    """Record what the cameras SAW, as opposed to how many people walked past.
+
+    Nothing here identifies a person and nothing here can: the row has no
+    column for it. That holds even when the identity tier is enabled, unlike
+    the traffic and visit paths above — "someone at the till" is enough to go
+    and look, and it is the version of this a merchant can run without first
+    taking advice about monitoring staff.
+
+    Malformed events are DROPPED, not rejected. The device is on a loop with
+    no operator; failing the batch because one detector emitted a bad
+    confidence would lose the spill that came with it.
+    """
+    from ...services.vision_events import normalise
+
+    enforce_org_match(principal, req.org_id)
+
+    db = _get_db()
+    if not db:
+        raise HTTPException(status_code=503, detail="Database not available")
+
+    accepted, dropped = 0, 0
+    for payload in (req.events or [])[:100]:
+        row = normalise(payload if isinstance(payload, dict) else {})
+        if row is None:
+            dropped += 1
+            continue
+        row.update({
+            "org_id": req.org_id,
+            "camera_id": req.camera_id,
+            "location_id": req.location_id,
+        })
+        try:
+            # Upsert on the dedupe key: a detector re-firing across frames in
+            # the same window updates one row instead of flooding the feed.
+            await db.upsert("vision_events", row, on_conflict="org_id,dedupe_key")
+            accepted += 1
+        except Exception as e:
+            logger.warning("Vision event insert failed for %s: %s", req.org_id, e)
+            dropped += 1
+
+    if accepted:
+        logger.info("Recorded %d vision events for %s", accepted, req.org_id)
+    return {"status": "ok", "accepted": accepted, "dropped": dropped}

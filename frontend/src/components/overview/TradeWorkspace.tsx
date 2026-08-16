@@ -392,84 +392,176 @@ export default function TradeWorkspace(data: WorkspaceData) {
       </div>
 
       {/*
-        ── The work, and what needs a human ────────────────────────
+        ORDER DEPENDS ON THE TRADE.
 
-        DIRECTLY UNDER THE MONEY LINE, above the actions and the charts. The
-        route and the book are what an owner opens the app to look at, and
-        they sat below two analysis panels and a forecast — so reaching the
-        doing meant scrolling past the thinking.
+        A mobile detailer's day IS the route — it is what they open the app
+        to look at, so it stays directly under the money line. Every other
+        trade opens on a book they already know the shape of, and for them
+        the useful thing above the fold is what to do about it.
       */}
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-        <section className="min-w-0 rounded-xl border border-[#1F1F23] bg-[#111113] p-5">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <h2 className="text-sm font-semibold text-[#F5F5F7]">{mainTitle(pack)}</h2>
-          </div>
+      {pack.travels ? (
+        <>
+        {/*
+          ── The work, and what needs a human ────────────────────────
 
-          {!pack.booksAtAll ? (
-            <PhoneVolume />
-          ) : pack.travels && stops && origin ? (
-            <RouteDay stops={stops} origin={origin} timezone={timezone} />
-          ) : live.length === 0 ? (
-            <p className="py-10 text-center text-sm text-[#6B6B73]">
-              Nothing on the book for this day.
-            </p>
-          ) : (
-            <BookingCalendar
-              bookings={today}
-              resources={resources}
-              busy={busy}
-              timezone={timezone}
-              openMinutes={[open, close]}
-            />
-          )}
-        </section>
-
-        <aside className="space-y-3">
-          <h2 className="px-1 text-xs font-semibold uppercase tracking-wide text-[#6B6B73]">
-            Needs you
-          </h2>
-          {attention.length === 0 ? (
-            <div className="rounded-xl border border-[#17C5B0]/25 bg-[#17C5B0]/5 p-4 text-sm text-[#D4D4D8]">
-              Nothing needs you. The day runs itself.
+          DIRECTLY UNDER THE MONEY LINE, above the actions and the charts. The
+          route and the book are what an owner opens the app to look at, and
+          they sat below two analysis panels and a forecast — so reaching the
+          doing meant scrolling past the thinking.
+        */}
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+          <section className="min-w-0 rounded-xl border border-[#1F1F23] bg-[#111113] p-5">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <h2 className="text-sm font-semibold text-[#F5F5F7]">{mainTitle(pack)}</h2>
             </div>
-          ) : (
-            attention.map((item) => (
-              <div
-                key={item.title}
-                className={`rounded-xl border p-4 ${
-                  item.tone === 'warn'
-                    ? 'border-[#E5484D]/30 bg-[#E5484D]/5'
-                    : 'border-[#1F1F23] bg-[#111113]'
-                }`}
-              >
-                <div className="flex items-baseline gap-2">
-                  {item.tone === 'warn' && (
-                    <AlertTriangle className="h-3.5 w-3.5 shrink-0 translate-y-0.5 text-[#E5484D]" />
-                  )}
-                  <h3 className={`text-sm font-medium ${
-                    item.tone === 'warn' ? 'text-[#E5484D]' : 'text-[#F5F5F7]'
-                  }`}>
-                    {item.title}
-                  </h3>
-                </div>
-                <p className="mt-1 text-xs text-[#A1A1A8]">{item.detail}</p>
-                {item.rows && item.rows.length > 0 && (
-                  <ul className="mt-2.5 space-y-1">
-                    {item.rows.slice(0, 6).map((r) => (
-                      <li key={r} className="font-mono text-[11px] text-[#D4D4D8]">{r}</li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            ))
-          )}
-        </aside>
-      </div>
 
-      {/* The portal's own do-this-next panel, fed niche-specific actions from
-          /api/dashboard/actions. Not a lookalike — the same component, with its
-          reasoning chain, evidence and complete/reject behaviour intact. */}
-      <Top3ActionsPanel />
+            {!pack.booksAtAll ? (
+              <PhoneVolume />
+            ) : pack.travels && stops && origin ? (
+              <RouteDay stops={stops} origin={origin} timezone={timezone} />
+            ) : live.length === 0 ? (
+              <p className="py-10 text-center text-sm text-[#6B6B73]">
+                Nothing on the book for this day.
+              </p>
+            ) : (
+              <BookingCalendar
+                bookings={today}
+                resources={resources}
+                busy={busy}
+                timezone={timezone}
+                openMinutes={[open, close]}
+              />
+            )}
+          </section>
+
+          <aside className="space-y-3">
+            <h2 className="px-1 text-xs font-semibold uppercase tracking-wide text-[#6B6B73]">
+              Needs you
+            </h2>
+            {attention.length === 0 ? (
+              <div className="rounded-xl border border-[#17C5B0]/25 bg-[#17C5B0]/5 p-4 text-sm text-[#D4D4D8]">
+                Nothing needs you. The day runs itself.
+              </div>
+            ) : (
+              attention.map((item) => (
+                <div
+                  key={item.title}
+                  className={`rounded-xl border p-4 ${
+                    item.tone === 'warn'
+                      ? 'border-[#E5484D]/30 bg-[#E5484D]/5'
+                      : 'border-[#1F1F23] bg-[#111113]'
+                  }`}
+                >
+                  <div className="flex items-baseline gap-2">
+                    {item.tone === 'warn' && (
+                      <AlertTriangle className="h-3.5 w-3.5 shrink-0 translate-y-0.5 text-[#E5484D]" />
+                    )}
+                    <h3 className={`text-sm font-medium ${
+                      item.tone === 'warn' ? 'text-[#E5484D]' : 'text-[#F5F5F7]'
+                    }`}>
+                      {item.title}
+                    </h3>
+                  </div>
+                  <p className="mt-1 text-xs text-[#A1A1A8]">{item.detail}</p>
+                  {item.rows && item.rows.length > 0 && (
+                    <ul className="mt-2.5 space-y-1">
+                      {item.rows.slice(0, 6).map((r) => (
+                        <li key={r} className="font-mono text-[11px] text-[#D4D4D8]">{r}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              ))
+            )}
+          </aside>
+        </div>
+        {/* The portal's own do-this-next panel, fed niche-specific actions from
+            /api/dashboard/actions. Not a lookalike — the same component, with its
+            reasoning chain, evidence and complete/reject behaviour intact. */}
+        <Top3ActionsPanel />
+        </>
+      ) : (
+        <>
+        {/* The portal's own do-this-next panel, fed niche-specific actions from
+            /api/dashboard/actions. Not a lookalike — the same component, with its
+            reasoning chain, evidence and complete/reject behaviour intact. */}
+        <Top3ActionsPanel />
+        {/*
+          ── The work, and what needs a human ────────────────────────
+
+          DIRECTLY UNDER THE MONEY LINE, above the actions and the charts. The
+          route and the book are what an owner opens the app to look at, and
+          they sat below two analysis panels and a forecast — so reaching the
+          doing meant scrolling past the thinking.
+        */}
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+          <section className="min-w-0 rounded-xl border border-[#1F1F23] bg-[#111113] p-5">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <h2 className="text-sm font-semibold text-[#F5F5F7]">{mainTitle(pack)}</h2>
+            </div>
+
+            {!pack.booksAtAll ? (
+              <PhoneVolume />
+            ) : pack.travels && stops && origin ? (
+              <RouteDay stops={stops} origin={origin} timezone={timezone} />
+            ) : live.length === 0 ? (
+              <p className="py-10 text-center text-sm text-[#6B6B73]">
+                Nothing on the book for this day.
+              </p>
+            ) : (
+              <BookingCalendar
+                bookings={today}
+                resources={resources}
+                busy={busy}
+                timezone={timezone}
+                openMinutes={[open, close]}
+              />
+            )}
+          </section>
+
+          <aside className="space-y-3">
+            <h2 className="px-1 text-xs font-semibold uppercase tracking-wide text-[#6B6B73]">
+              Needs you
+            </h2>
+            {attention.length === 0 ? (
+              <div className="rounded-xl border border-[#17C5B0]/25 bg-[#17C5B0]/5 p-4 text-sm text-[#D4D4D8]">
+                Nothing needs you. The day runs itself.
+              </div>
+            ) : (
+              attention.map((item) => (
+                <div
+                  key={item.title}
+                  className={`rounded-xl border p-4 ${
+                    item.tone === 'warn'
+                      ? 'border-[#E5484D]/30 bg-[#E5484D]/5'
+                      : 'border-[#1F1F23] bg-[#111113]'
+                  }`}
+                >
+                  <div className="flex items-baseline gap-2">
+                    {item.tone === 'warn' && (
+                      <AlertTriangle className="h-3.5 w-3.5 shrink-0 translate-y-0.5 text-[#E5484D]" />
+                    )}
+                    <h3 className={`text-sm font-medium ${
+                      item.tone === 'warn' ? 'text-[#E5484D]' : 'text-[#F5F5F7]'
+                    }`}>
+                      {item.title}
+                    </h3>
+                  </div>
+                  <p className="mt-1 text-xs text-[#A1A1A8]">{item.detail}</p>
+                  {item.rows && item.rows.length > 0 && (
+                    <ul className="mt-2.5 space-y-1">
+                      {item.rows.slice(0, 6).map((r) => (
+                        <li key={r} className="font-mono text-[11px] text-[#D4D4D8]">{r}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              ))
+            )}
+          </aside>
+        </div>
+        </>
+      )}
 
       {peakCells.length > 0 && (
         <PeakHoursHeatmap
