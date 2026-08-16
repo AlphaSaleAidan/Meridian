@@ -536,6 +536,115 @@ export const ALL_PACKS = [...NICHE_PACKS, GENERIC_PACK]
  * fall through to the generic pack, because that fallback is what guarantees
  * every existing merchant sees the portal they saw yesterday.
  */
+/**
+ * The deck slug a rep sells each pack under, per market.
+ *
+ * THIS IS THE JOIN THAT WAS MISSING. Three different vocabularies write
+ * `business_type` on an organization and none of them agreed:
+ *
+ *   1. The rep portals write a DECK SLUG — `ca-salon`, `us-detailing` —
+ *      because the field doubles as which proposal deck to render.
+ *   2. Square POS detection writes a BusinessType — `coffee_shop`,
+ *      `auto_shop` — from the merchant's MCC or its name.
+ *   3. Both fall back to the literal string "restaurant" when unset.
+ *
+ * packFor() matched pack keys and none of the above, so every account a rep
+ * created resolved to the generic pack: the merchant paid for a trade version
+ * and got the untailored portal. Silently, because the fallback is by design
+ * a working portal rather than an error.
+ *
+ * One table, read by packFor, closes it. Both markets map to the same pack —
+ * a Canadian barbershop and an American one are the same product.
+ */
+export const PACK_DECK_SLUGS: Record<string, string[]> = {
+  barbershop: ['ca-salon', 'us-salon'],
+  nails: ['ca-nailsalon', 'us-nailsalon'],
+  medspa: ['ca-spa', 'us-spa'],
+  detailing: ['ca-detailing', 'us-detailing', 'ca-carwash', 'us-carwash'],
+  quickservice: ['ca-qsr', 'us-qsr'],
+  coffeeshop: ['ca-coffee', 'us-coffee'],
+  smokeshop: ['ca-smokeshop', 'us-smokeshop'],
+  // No deck exists for these yet: the catalogues have no restaurant, auto
+  // repair or mobile-detailing entry in either market. They are sellable
+  // products with no proposal behind them, which is a gap to close rather
+  // than a mapping to invent.
+  restaurant: [],
+  autoshop: [],
+  mobiledetailing: [],
+}
+
+/**
+ * What a rep can actually sell, in the order the picker shows it.
+ *
+ * THE PICKER NOW SELECTS A PACK, not a deck. `business_type` stores the pack
+ * key directly, so the thing the rep chose and the thing the portal renders
+ * are literally the same string — no round trip through a slug that only
+ * existed because the field doubled as "which proposal to open".
+ *
+ * The deck is a property OF the trade rather than its identity, which is what
+ * lets mobile detailing be its own product while sharing the detailing deck —
+ * that deck's audience line already reads "detailing shop owner or MOBILE
+ * detailer". Legacy accounts that stored a slug still resolve through
+ * PACK_DECK_SLUGS below, so nothing already sold changes shape.
+ *
+ * Anything not in this list is not sellable. Thirty-five verticals in each
+ * catalogue have a deck and no product version behind them; a rep closing one
+ * of those sells a tailored portal that does not exist.
+ */
+export interface SellableTrade {
+  /** Pack key. Stored verbatim as organizations.business_type. */
+  key: string
+  label: string
+  group: 'Food and drink' | 'Appointments' | 'Vehicles' | 'Retail'
+  /** Deck slug per market. Some decks are market-neutral and share one. */
+  deck: { ca: string; us: string }
+}
+
+export const SELLABLE_TRADES: SellableTrade[] = [
+  { key: 'restaurant', label: 'Restaurants', group: 'Food and drink',
+    // Market-neutral slug: this deck predates the ca-/us- split and is live
+    // under the bare name in both markets.
+    deck: { ca: 'restaurant', us: 'restaurant' } },
+  { key: 'quickservice', label: 'Quick Service & Takeaway', group: 'Food and drink',
+    deck: { ca: 'ca-qsr', us: 'us-qsr' } },
+  { key: 'coffeeshop', label: 'Coffee Shops & Cafes', group: 'Food and drink',
+    deck: { ca: 'ca-coffee', us: 'us-coffee' } },
+
+  { key: 'barbershop', label: 'Barbershops & Salons', group: 'Appointments',
+    deck: { ca: 'ca-salon', us: 'us-salon' } },
+  { key: 'nails', label: 'Nail & Lash Studios', group: 'Appointments',
+    deck: { ca: 'ca-nailsalon', us: 'us-nailsalon' } },
+  { key: 'medspa', label: 'Med Spas & Day Spas', group: 'Appointments',
+    deck: { ca: 'ca-spa', us: 'us-spa' } },
+
+  { key: 'detailing', label: 'Auto Detailing (shop)', group: 'Vehicles',
+    deck: { ca: 'ca-detailing', us: 'us-detailing' } },
+  { key: 'mobiledetailing', label: 'Mobile Detailing (van)', group: 'Vehicles',
+    // Shares the detailing deck, which is written for both — its audience
+    // line names mobile detailers explicitly. A separate product, not a
+    // separate proposal.
+    deck: { ca: 'ca-detailing', us: 'us-detailing' } },
+  { key: 'autoshop', label: 'Auto Repair Shops', group: 'Vehicles',
+    deck: { ca: 'autoshop', us: 'autoshop' } },
+
+  { key: 'smokeshop', label: 'Smoke & Vape Shops', group: 'Retail',
+    deck: { ca: 'ca-smokeshop', us: 'us-smokeshop' } },
+]
+
+export const SELLABLE_GROUPS = [
+  'Food and drink', 'Appointments', 'Vehicles', 'Retail',
+] as const
+
+/** The deck a rep should link for this trade in this market. */
+export function deckSlugFor(tradeKey: string, market: 'ca' | 'us'): string | null {
+  return SELLABLE_TRADES.find((t) => t.key === tradeKey)?.deck[market] ?? null
+}
+
+/** Deck slug → pack key, derived so the two can never drift apart. */
+const SLUG_TO_PACK: Record<string, string> = Object.fromEntries(
+  Object.entries(PACK_DECK_SLUGS).flatMap(([pack, slugs]) => slugs.map((s) => [s, pack])),
+)
+
 const PACK_ALIASES: Record<string, string> = {
   fast_food: 'quickservice',
   coffee_shop: 'coffeeshop',
@@ -550,6 +659,6 @@ const PACK_ALIASES: Record<string, string> = {
 
 export function packFor(key: string | null | undefined): NichePack {
   if (!key) return GENERIC_PACK
-  const resolved = PACK_ALIASES[key] || key
+  const resolved = SLUG_TO_PACK[key] || PACK_ALIASES[key] || key
   return ALL_PACKS.find((p) => p.key === resolved) || GENERIC_PACK
 }
