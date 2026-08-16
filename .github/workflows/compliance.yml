@@ -49,6 +49,12 @@ jobs:
           COMPLIANCE_EVIDENCE_DIR: compliance-evidence
         run: python -m pytest tests/compliance -q
 
+      - name: Fee parity guard (backend redlines == frontend plan files)
+        # This suite silently rotted once (#461 changed prices everywhere but
+        # here, and no CI gate ran it). Keep it in the gate so price drift —
+        # or a dead detector — turns the build red.
+        run: python -m pytest tests/test_fee_parity_terms.py -q
+
       - name: Live evidence collectors (read-only, scheduled runs only)
         if: github.event_name == 'schedule'
         env:
