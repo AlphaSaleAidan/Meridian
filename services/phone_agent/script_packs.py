@@ -37,6 +37,8 @@ passes them in as strings.
 """
 from __future__ import annotations
 
+import os
+
 from dataclasses import dataclass
 
 from script_pack_defs import PACK_DEFS, ScriptPackDef
@@ -123,18 +125,26 @@ def pack_for_trade(trade: object) -> str | None:
 def auto_pack_for_trade(trade: object) -> str | None:
     """The pack to APPLY for a trade with no explicit choice — or None.
 
-    Gated on the benchmark rule at the top of script_pack_defs. A pack that
-    has not out-scored the legacy control does not get pointed at live calls
-    just because it is new and reads well; it stays selectable and
-    recommendable, and flips on here the moment the bench says so.
+    THE TRADE'S PACK APPLIES, benchmarked or not (Aidan 2026-08-16, after I
+    argued for gating it). The reasoning is sound: a barbershop answered by a
+    prompt written for takeaway food is a worse call than one answered by an
+    un-benchmarked barbershop prompt, and waiting for a bench run before any
+    merchant sees a trade-specific script means none of them ever do.
 
-    So today this returns None for every trade, and that is correct rather
-    than unfinished — the wiring is what was missing, not the permission.
+    `status` therefore becomes information rather than a gate — the settings
+    UI and the rep still see which packs have out-scored the control, and the
+    bench still decides what we RECOMMEND. It no longer decides what runs.
+
+    Two things stay, because this changes what a live agent says to a paying
+    merchant's customers:
+      · an explicit script_pack on the merchant always wins (see caller);
+      · MERIDIAN_TRADE_PACK_AUTO=0 turns the whole behaviour off without a
+        deploy, so a pack misbehaving on real calls is one env var from the
+        proven legacy prompt rather than a release.
     """
-    pack_id = pack_for_trade(trade)
-    if not pack_id:
+    if os.environ.get("MERIDIAN_TRADE_PACK_AUTO", "1").strip().lower() in ("0", "false", "no"):
         return None
-    return pack_id if PACK_DEFS[pack_id].status == "beat_baseline" else None
+    return pack_for_trade(trade)
 
 
 def get_pack(pack_id: str) -> ScriptPackDef:

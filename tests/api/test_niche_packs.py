@@ -61,21 +61,41 @@ class TestEveryTradeHasAPack:
             assert pack_for_trade(junk) is None
 
 
-class TestTheBenchmarkRuleIsEnforced:
+class TestSelectingTheTradeSelectsThePack:
+    """Aidan's call, after I argued for gating this on the benchmark.
+
+    The trade's pack applies whether or not it has beaten the control. A
+    barbershop answered by a prompt written for takeaway food is a worse call
+    than one answered by an un-benchmarked barbershop prompt, and gating it
+    means no merchant ever sees a trade-specific script.
+
+    `status` is still recorded and still decides what we RECOMMEND — it just
+    no longer decides what runs.
+    """
+
     @pytest.mark.parametrize("trade", sorted(TRADE_PACKS))
-    def test_only_a_proven_pack_auto_applies(self, trade):
-        auto = auto_pack_for_trade(trade)
-        if auto is None:
-            return
-        assert PACK_DEFS[auto].status == "beat_baseline", (
-            f"{trade} auto-applies {auto}, which has not beaten the control"
-        )
+    def test_every_trade_gets_its_pack_automatically(self, trade):
+        assert auto_pack_for_trade(trade) == TRADE_PACKS[trade]
+
+    def test_an_unmapped_trade_still_falls_back_to_legacy(self):
+        # The floor that makes the whole thing safe: anything we do not
+        # recognise gets the proven generic prompt, never a guess.
+        for junk in ["", "art-gallery", "vet clinic", None]:
+            assert auto_pack_for_trade(junk) is None
+
+    def test_one_env_var_turns_it_all_off(self, monkeypatch):
+        # This changes what a live agent says to a paying merchant's
+        # customers, and the packs are un-benchmarked. Rolling back must not
+        # need a deploy.
+        monkeypatch.setenv("MERIDIAN_TRADE_PACK_AUTO", "0")
+        for trade in TRADE_PACKS:
+            assert auto_pack_for_trade(trade) is None
 
     @pytest.mark.parametrize("pack_id", NICHE_PACKS)
-    def test_new_packs_ship_unproven_and_say_so(self, pack_id):
-        # Honest default. They become automatic by winning the bench, not by
-        # being merged.
-        assert PACK_DEFS[pack_id].status in ("pending", "not_ready")
+    def test_status_still_records_what_has_been_proven(self, pack_id):
+        # Not a gate any more, but still the truth about what has been
+        # measured — which is what the bench and the settings UI read.
+        assert PACK_DEFS[pack_id].status in ("pending", "not_ready", "beat_baseline")
 
 
 class TestTradeKnowledge:
