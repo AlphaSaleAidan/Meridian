@@ -76,6 +76,57 @@ describe('a pack may only turn modules OFF', () => {
   })
 })
 
+describe('margin tracking follows the product, not the pillar count', () => {
+  it('every trade that sells or consumes product keeps Inventory', () => {
+    // The earlier packs switched Inventory off for the service trades to
+    // "simplify" them, which removed margin tracking from businesses that
+    // sell retail and burn through consumables. A barbershop sells pomade; a
+    // med spa stocks injectables with expiry dates.
+    for (const key of ['barbershop', 'nails', 'detailing', 'mobiledetailing',
+                       'medspa', 'restaurant', 'quickservice']) {
+      const flags = flagsForMerchant('/app', packFor(key).modules)
+      expect(flags.inventory, `${key} must keep Inventory`).toBe(true)
+    }
+  })
+
+  it('drops Menu Matrix for everyone except the food trades', () => {
+    for (const key of ['barbershop', 'nails', 'detailing', 'mobiledetailing', 'medspa']) {
+      expect(packFor(key).hiddenViews).toContain('inventory/menu')
+    }
+    for (const key of ['restaurant', 'quickservice']) {
+      expect(packFor(key).hiddenViews || []).not.toContain('inventory/menu')
+    }
+  })
+
+  it('gives the food trades their camera back', () => {
+    for (const key of ['restaurant', 'quickservice']) {
+      expect(flagsForMerchant('/app', packFor(key).modules).camera).toBe(true)
+    }
+  })
+
+  it('hides only views that exist', () => {
+    const real = new Set(
+      merchantPillars.flatMap((p) => p.segments.map((s) => `${p.path}/${s.view}`)))
+    for (const pack of ALL_PACKS) {
+      for (const view of pack.hiddenViews || []) {
+        expect(real.has(view), `${pack.key} hides unknown view ${view}`).toBe(true)
+      }
+    }
+  })
+
+  it('never hides every segment of a pillar it keeps', () => {
+    // A pillar with no segments left would render an empty page rather than
+    // being absent, which is worse than either.
+    for (const pack of ALL_PACKS) {
+      const hidden = new Set(pack.hiddenViews || [])
+      for (const pillar of merchantPillars) {
+        const left = pillar.segments.filter((s) => !hidden.has(`${pillar.path}/${s.view}`))
+        expect(left.length, `${pack.key} emptied ${pillar.path}`).toBeGreaterThan(0)
+      }
+    }
+  })
+})
+
 describe('the packs themselves', () => {
   it('gives a takeout shop no booking module at all', () => {
     const pizza = packFor('quickservice')

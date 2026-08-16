@@ -117,6 +117,36 @@ export default function TradeVersions() {
             ))}
           </ol>
 
+          {(pack.hiddenViews || []).length > 0 && (
+            <>
+              <h3 className="mt-5 text-xs font-semibold uppercase tracking-wide text-[#6B6B73]">
+                Kept, minus the parts for another trade
+              </h3>
+              <ul className="mt-2 space-y-1">
+                {(pack.hiddenViews || []).map((v) => {
+                  const [pillarPath, view] = v.split('/')
+                  const pillar = merchantPillars.find((p) => p.path === pillarPath)
+                  const seg = pillar?.segments.find((s) => s.view === view)
+                  return (
+                    <li
+                      key={v}
+                      className="flex items-center gap-3 rounded-lg border border-[#1F1F23] px-3 py-1.5"
+                    >
+                      <span className="text-sm text-[#D4D4D8]">{pillar?.label}</span>
+                      <span className="text-xs text-[#6B6B73]">minus</span>
+                      <span className="text-sm text-[#6B6B73] line-through">{seg?.label}</span>
+                    </li>
+                  )
+                })}
+              </ul>
+              <p className="mt-2 text-xs text-[#6B6B73]">
+                A barbershop tracks margin on the retail shelf; it does not need a
+                menu matrix. Keeping the pillar and dropping the foreign tab is
+                the difference between a tailored product and a smaller one.
+              </p>
+            </>
+          )}
+
           {removed.length > 0 && (
             <>
               <h3 className="mt-5 text-xs font-semibold uppercase tracking-wide text-[#6B6B73]">

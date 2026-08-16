@@ -5,6 +5,8 @@ import { useMobile } from '@/hooks/useMobile'
 import { PortalLoadingSkeleton } from '@/pages/canada/portal/PortalPage'
 import ComingSoonBanner from '@/components/ComingSoonBanner'
 import type { Pillar } from '@/config/merchantPillars'
+import { packFor } from '@/config/niches'
+import { useAuth } from '@/lib/auth'
 
 /**
  * Generic pillar shell. Reads `?view=` to pick the active segment, renders a
@@ -14,10 +16,27 @@ import type { Pillar } from '@/config/merchantPillars'
 export default function MerchantPillarPage({ pillar }: { pillar: Pillar }) {
   const [params, setParams] = useSearchParams()
   const { isMobile } = useMobile()
+  const { org } = useAuth()
 
   // Deep links use a path segment (/camera/live); in-app tabs use ?view=.
   const splat = (useParams()['*'] || '').split('/')[0]
-  const segments = isMobile ? pillar.segments.filter(s => !s.desktopOnly) : pillar.segments
+
+  /**
+   * Drop the segments this merchant's TRADE does not use.
+   *
+   * Pillar-level on/off was too blunt: switching Inventory off for a barbershop
+   * to "simplify" it also removed margin tracking, which they very much need —
+   * they sell retail and burn through consumables. What they do not need is
+   * Menu Matrix. Keeping the pillar and dropping the foreign segment is the
+   * difference between a tailored product and a smaller one.
+   *
+   * A merchant with no trade set loses nothing: packFor() falls back to a pack
+   * that hides nothing.
+   */
+  const hidden = packFor(org?.business_type).hiddenViews || []
+  const forTrade = pillar.segments.filter(
+    s => !hidden.includes(`${pillar.path}/${s.view}`))
+  const segments = isMobile ? forTrade.filter(s => !s.desktopOnly) : forTrade
   const requested = params.get('view') || splat
   const active = segments.find(s => s.view === requested) ?? segments[0]
   const Active = active.Component

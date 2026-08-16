@@ -90,6 +90,19 @@ export interface NichePack {
    */
   pillarOrder?: string[]
   /**
+   * Segment views this trade never sees, as "pillar/view".
+   *
+   * Pillar-level on/off was too blunt and cost real features. A barbershop
+   * absolutely tracks margin — it sells pomade and burns through blades — so
+   * switching Inventory off to "simplify" removed the tool that tells them
+   * whether the retail shelf pays for itself. What it does NOT need is Menu
+   * Matrix, which is a restaurant instrument.
+   *
+   * So the rule is: keep the pillar, drop the segments that belong to another
+   * trade. Removing a whole capability should be rare and deliberate.
+   */
+  hiddenViews?: string[]
+  /**
    * The number that leads the home screen. This is the test of whether a pack
    * is real: if a trade's Meridian opens on the same figure as every other
    * trade's, it is a theme, not a version.
@@ -136,8 +149,12 @@ export const NICHE_PACKS: NichePack[] = [
     days: [2, 3, 4, 5, 6],
     opens: '09:00',
     closes: '18:00',
-    modules: { inventory: false, camera: false, taxExpenses: false, topActions: false },
-    pillarOrder: ['bookings', 'phone', '', 'schedule'],
+    // Inventory stays ON: a barbershop sells pomade and burns through blades,
+    // and margin on the retail shelf is a real number to them. Menu Matrix is
+    // a restaurant instrument and goes.
+    modules: { camera: false, taxExpenses: false, topActions: false },
+    hiddenViews: ['inventory/menu'],
+    pillarOrder: ['bookings', 'phone', '', 'inventory', 'schedule'],
     homeMetric: { label: 'Chair hours filled today',
                   help: 'Booked minutes against the hours your chairs are open.' },
   },
@@ -163,8 +180,11 @@ export const NICHE_PACKS: NichePack[] = [
     days: [1, 2, 3, 4, 5, 6],
     opens: '09:00',
     closes: '19:00',
-    modules: { inventory: false, camera: false, taxExpenses: false, topActions: false },
-    pillarOrder: ['bookings', 'phone', '', 'schedule'],
+    // Gel, tips, lash trays — consumable cost per service is the whole margin
+    // question in this trade.
+    modules: { camera: false, taxExpenses: false, topActions: false },
+    hiddenViews: ['inventory/menu'],
+    pillarOrder: ['bookings', 'phone', '', 'inventory', 'schedule'],
     homeMetric: { label: 'Clients rebooked before they left',
                   help: 'The cheapest appointment you will ever sell is the next one.' },
   },
@@ -190,8 +210,11 @@ export const NICHE_PACKS: NichePack[] = [
     days: [1, 2, 3, 4, 5, 6],
     opens: '08:00',
     closes: '17:00',
-    modules: { inventory: false, camera: false, schedule: false, taxExpenses: false, topActions: false },
-    pillarOrder: ['bookings', 'phone', ''],
+    // Ceramic coating is hundreds of dollars a bottle. A detailer who cannot
+    // see product cost against job price is guessing at their own margin.
+    modules: { schedule: false, taxExpenses: false, topActions: false },
+    hiddenViews: ['inventory/menu'],
+    pillarOrder: ['bookings', 'phone', '', 'inventory'],
     homeMetric: { label: 'Bay hours sold today',
                   help: 'A bay standing empty is the only thing that costs you money.' },
   },
@@ -221,8 +244,11 @@ export const NICHE_PACKS: NichePack[] = [
     days: [1, 2, 3, 4, 5, 6],
     opens: '08:00',
     closes: '18:00',
-    modules: { inventory: false, camera: false, schedule: false, taxExpenses: false, topActions: false },
-    pillarOrder: ['', 'bookings', 'phone'],
+    // Same chemicals as the shop, carried in a van. Margin per job still
+    // depends on what went into it.
+    modules: { camera: false, schedule: false, taxExpenses: false, topActions: false },
+    hiddenViews: ['inventory/menu'],
+    pillarOrder: ['', 'bookings', 'phone', 'inventory'],
     homeMetric: { label: 'Stops on today\'s route',
                   help: 'Not how many you booked — how many you can actually reach.' },
     travels: true,
@@ -247,8 +273,11 @@ export const NICHE_PACKS: NichePack[] = [
     days: [0, 2, 3, 4, 5, 6],
     opens: '17:00',
     closes: '22:00',
-    modules: { camera: false },
-    pillarOrder: ['bookings', 'phone', '', 'inventory', 'schedule'],
+    // Camera earns its place here — front of house, queue length, covers
+    // actually seated against covers booked. This is the trade it was built
+    // for, and switching it off was the wrong call.
+    modules: {},
+    pillarOrder: ['bookings', 'phone', '', 'inventory', 'schedule', 'camera'],
     avgCoverCents: 4800,
     homeMetric: { label: 'Covers booked tonight',
                   help: 'Guests expected, not tables — a four-top and a two-top are not the same night.' },
@@ -273,8 +302,10 @@ export const NICHE_PACKS: NichePack[] = [
     days: [0, 1, 2, 3, 4, 5, 6],
     opens: '11:00',
     closes: '22:00',
-    modules: { bookings: false, camera: false, schedule: false },
-    pillarOrder: ['phone', '', 'inventory'],
+    // Menu Matrix stays: this is exactly the trade it was written for. Camera
+    // stays too — counter queue at 7pm is the constraint on the whole evening.
+    modules: { bookings: false },
+    pillarOrder: ['phone', '', 'inventory', 'camera', 'schedule'],
     homeMetric: { label: 'Orders taken by phone',
                   help: 'Orders the agent took while the line was busy — the ones you would have lost.' },
   },
@@ -300,8 +331,11 @@ export const NICHE_PACKS: NichePack[] = [
     days: [1, 2, 3, 4, 5],
     opens: '09:00',
     closes: '18:00',
-    modules: { inventory: false, camera: false, taxExpenses: false, topActions: false },
-    pillarOrder: ['bookings', 'phone', '', 'schedule'],
+    // Injectables and skincare are the most expensive stock in any of these
+    // trades, with expiry dates attached. Inventory is not optional here.
+    modules: { camera: false, taxExpenses: false, topActions: false },
+    hiddenViews: ['inventory/menu'],
+    pillarOrder: ['bookings', 'phone', '', 'inventory', 'schedule'],
     homeMetric: { label: 'Consultations booked this week',
                   help: 'A consultation is the start of a treatment plan, not a single sale.' },
   },
