@@ -20,6 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "services" / "phone
 from script_pack_defs import PACK_DEFS  # noqa: E402
 from script_packs import (  # noqa: E402
     PromptContext, TRADE_PACKS, auto_pack_for_trade, compose, pack_for_trade,
+    refine_pack_for_cuisine,
 )
 
 NICHE_PACKS = ["restaurant_v1", "barbershop_v1", "nails_v1", "medspa_v1",
@@ -164,3 +165,70 @@ class TestTradeSpecificSafety:
             return
         rules = " ".join(PACK_DEFS[pack_id].hard_rules(CTX)).lower()
         assert "never invent availability" in rules
+
+
+# ── cuisine refinement ───────────────────────────────────────────────────────
+
+class TestAnIndianRestaurantNeverGetsThePizzaScript:
+    """Aidan: "indian resturants shouldnt get the pizza resturant script."
+
+    He was right and it was my mapping. "quickservice" pointed at
+    pizzeria_v1, so Heritage Indian Cuisine — stored as the deck slug
+    ca-qsr — was routed to a pack whose whole grammar is pizza sizes and
+    half-and-half toppings. The trade is simply not specific enough for food:
+    "restaurant" covers a tandoori kitchen and a pizzeria alike, and there is
+    no cuisine column anywhere. The menu is the evidence, and we already hold
+    it.
+    """
+
+    INDIAN_MENU = [{"name": "Butter Chicken"}, {"name": "Vegetable Samosas"},
+                   {"name": "Chicken Tikka Masala"}, {"name": "Garlic Naan"}]
+    PIZZA_MENU = [{"name": "Large Pepperoni Pizza"}, {"name": "Garlic Knots"},
+                  {"name": "Cheese Pizza"}]
+    BURGER_MENU = [{"name": "Cheeseburger"}, {"name": "Veggie Burger"},
+                   {"name": "Crispy Chicken"}]
+
+    def test_an_indian_menu_gets_the_indian_pack(self):
+        assert refine_pack_for_cuisine(
+            "restaurant_v1", "Maple Tandoor", self.INDIAN_MENU) == "indian_v1"
+
+    def test_the_name_alone_is_enough_when_no_menu_is_loaded(self):
+        # Heritage Indian Cuisine has no menu rows. A shop that says what it
+        # is in its own name has told us plainly.
+        assert refine_pack_for_cuisine(
+            "cafe_quickserve_v1", "heritage indian cuisine", []) == "indian_v1"
+
+    def test_a_pizza_menu_gets_the_pizza_pack(self):
+        assert refine_pack_for_cuisine(
+            "restaurant_v1", "Tony's Pizzeria", self.PIZZA_MENU) == "pizzeria_v1"
+
+    def test_an_ordinary_menu_is_left_alone(self):
+        # The conservative half. Burgers are not a cuisine we have a pack for,
+        # and guessing is worse than the generic pack.
+        assert refine_pack_for_cuisine(
+            "restaurant_v1", "Meridian Test Kitchen", self.BURGER_MENU) == "restaurant_v1"
+
+    def test_one_stray_word_is_not_evidence(self):
+        # A pub with a curry on the menu is not an Indian restaurant.
+        assert refine_pack_for_cuisine(
+            "restaurant_v1", "The Anchor", [{"name": "Chicken Curry"}]) == "restaurant_v1"
+
+    def test_it_never_touches_a_non_food_pack(self):
+        # The rule that stops this being dangerous: a barbershop whose owner
+        # is called Mr Curry stays a barbershop.
+        for pack in ["barbershop_v1", "nails_v1", "medspa_v1", "autoshop_v1",
+                     "mobiledetailing_v1", "smokeshop_v1"]:
+            assert refine_pack_for_cuisine(pack, "Curry's Pizza Cuts",
+                                           self.PIZZA_MENU) == pack
+
+    def test_quickservice_no_longer_means_pizza(self):
+        # The original bug in one line.
+        assert pack_for_trade("quickservice") != "pizzeria_v1"
+        assert pack_for_trade("ca-qsr") != "pizzeria_v1"
+
+    def test_refinement_only_ever_lands_on_a_proven_pack(self):
+        from script_pack_defs import PACK_DEFS
+        for target in ("indian_v1", "pizzeria_v1"):
+            assert PACK_DEFS[target].status == "beat_baseline", (
+                f"{target} is a promotion target but has not beaten the control"
+            )

@@ -83,7 +83,14 @@ def resolve_pack_id(raw: object) -> str | None:
 # string organizations.business_type now holds.
 TRADE_PACKS: dict[str, str] = {
     "restaurant": "restaurant_v1",
-    "quickservice": "pizzeria_v1",
+    # NOT pizzeria_v1. "Quick service" covers burgers, subs, chicken and
+    # Indian takeaway as much as pizza, and pizzeria_v1 is genuinely
+    # pizza-specific — size-first topping grammar, half-and-half handling.
+    # Handing all of them a pizza script is the coarse-mapping bug Aidan
+    # caught. cafe_quickserve_v1 is the counter-service pack and has beaten
+    # the control; CUISINE_PACKS below promotes the ones we can actually
+    # identify.
+    "quickservice": "cafe_quickserve_v1",
     "coffeeshop": "cafe_quickserve_v1",
     "barbershop": "barbershop_v1",
     "nails": "nails_v1",
@@ -145,6 +152,86 @@ def auto_pack_for_trade(trade: object) -> str | None:
     if os.environ.get("MERIDIAN_TRADE_PACK_AUTO", "1").strip().lower() in ("0", "false", "no"):
         return None
     return pack_for_trade(trade)
+
+
+def auto_pack_for_config(config: object) -> str | None:
+    """The pack to apply for a merchant, trade first then cuisine.
+
+    The one callers should use: the trade decides the shape of the call, the
+    menu decides the food. Anything unrecognised still falls through to the
+    legacy prompt.
+    """
+    base = auto_pack_for_trade(getattr(config, "business_type", None))
+    if not base:
+        return None
+    return refine_pack_for_cuisine(
+        base,
+        getattr(config, "business_name", None),
+        getattr(config, "menu_items", None),
+    )
+
+
+# ── cuisine refinement ───────────────────────────────────────────────
+#
+# A trade is as specific as the rep's picker gets, and for food it is not
+# specific enough: "restaurant" covers Maple Tandoor and Tony's Pizzeria
+# alike, and there is no cuisine column anywhere to tell them apart.
+#
+# The MENU tells them apart, and we already hold it. A menu of samosas,
+# pakora and tikka masala is not ambiguous, and neither is one of pepperoni
+# pizza and garlic knots. This promotes a merchant from the generic trade
+# pack onto the specific pack built for their food — both of which have
+# out-scored the control, so a promotion is always onto proven ground.
+#
+# Deliberately conservative. It only ever runs on food packs, it needs real
+# evidence rather than one word, and when unsure it leaves the trade's pack
+# alone. Getting this wrong means an Indian restaurant answered in pizza
+# grammar, which is the failure it exists to prevent.
+_CUISINE_TERMS: dict[str, tuple[str, ...]] = {
+    "indian_v1": (
+        "tikka", "masala", "samosa", "pakora", "paneer", "naan", "biryani",
+        "korma", "vindaloo", "tandoori", "saag", "dal", "curry", "chutney",
+        "bhaji", "raita", "roti", "papadum",
+    ),
+    "pizzeria_v1": (
+        "pizza", "pepperoni", "calzone", "margherita", "stromboli",
+        "garlic knot", "marinara", "sicilian",
+    ),
+}
+
+# Packs generic enough to be worth refining. Never a barbershop.
+_REFINABLE = {"restaurant_v1", "cafe_quickserve_v1", "efficient_v1"}
+
+
+def refine_pack_for_cuisine(pack_id: str | None, business_name: object,
+                            menu_items: object) -> str | None:
+    """Promote a generic food pack to the cuisine-specific one, if it is clear.
+
+    Menu terms are the evidence; two or more distinct hits is the bar, because
+    one "curry" on a pub menu does not make it an Indian restaurant. The
+    business NAME can carry it alone, since a shop called "Heritage Indian
+    Cuisine" has told us plainly — that is the case with no menu loaded at
+    all, which is exactly when the menu signal is unavailable.
+    """
+    if pack_id not in _REFINABLE:
+        return pack_id
+
+    name = business_name.lower() if isinstance(business_name, str) else ""
+    items = menu_items if isinstance(menu_items, list) else []
+    haystack = " ".join(
+        str(i.get("name", "")) if isinstance(i, dict) else str(i) for i in items
+    ).lower()
+
+    best, best_score = pack_id, 0
+    for candidate, terms in _CUISINE_TERMS.items():
+        hits = {t for t in terms if t in haystack}
+        score = len(hits)
+        # The name is decisive on its own — "Tony's Pizzeria", "Indian Cuisine".
+        if any(t in name for t in terms) or ("indian" in name and candidate == "indian_v1"):
+            score += 2
+        if score >= 2 and score > best_score:
+            best, best_score = candidate, score
+    return best
 
 
 def get_pack(pack_id: str) -> ScriptPackDef:

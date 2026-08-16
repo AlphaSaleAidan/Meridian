@@ -462,7 +462,7 @@ def _resolve_script_pack(config) -> str | None:
     has the proven generic prompt as its floor.
     """
     try:
-        from script_packs import auto_pack_for_trade, resolve_pack_id
+        from script_packs import auto_pack_for_config, resolve_pack_id
 
         explicit = resolve_pack_id(getattr(config, "script_pack", None))
         if explicit:
@@ -476,7 +476,9 @@ def _resolve_script_pack(config) -> str | None:
         # auto_pack_for_trade only returns a pack that has out-scored the
         # legacy control on the bench, so an unproven pack is never pointed at
         # a live call by this path — it stays selectable, not automatic.
-        return auto_pack_for_trade(getattr(config, "business_type", None))
+        # Trade first, then cuisine: "restaurant" covers a tandoori kitchen
+        # and a pizzeria alike, and their menus do not.
+        return auto_pack_for_config(config)
     except Exception:  # noqa: BLE001 — pack selection never breaks a call
         return None
 
