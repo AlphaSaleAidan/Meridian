@@ -24,6 +24,7 @@
  * merchant who abandons this half way is exactly as they were, rather than
  * live with an empty calendar and a phone agent offering times against it.
  */
+import { useTradePack } from '@/config/moduleFlags'
 import { useState } from 'react'
 import {
   ArrowLeft, ArrowRight, Armchair, Building2, Car, Check, HeartPulse, Loader2,
@@ -73,16 +74,31 @@ export default function BookingsWizard({ merchantId, onDone, onSkip }: {
   onDone: () => void
   onSkip: () => void
 }) {
+  /**
+   * Start on the trade the account was SOLD as.
+   *
+   * The rep already chose it, it is on the organization, and it is what the
+   * rest of the portal is already rendering. Opening this wizard on
+   * "Barbershop & salon" for a med spa asked the merchant a question we had
+   * the answer to, and invited them to give a different one — after which
+   * their book and their portal would disagree about what business they run.
+   *
+   * Still changeable: the rep can pick wrong, and the merchant is the
+   * authority on their own shop.
+   */
+  const soldAs = useTradePack()
+  const initial = PRESETS.find((p) => p.key === soldAs.key) || PRESETS[0]
+
   const [step, setStep] = useState<Step>('vertical')
-  const [preset, setPreset] = useState<NichePack>(PRESETS[0])
+  const [preset, setPreset] = useState<NichePack>(initial)
   const [mode, setMode] = useState<Mode>('native')
   const [linkUrl, setLinkUrl] = useState('')
-  const [count, setCount] = useState(PRESETS[0].defaultCount)
-  const [seats, setSeats] = useState(PRESETS[0].defaultSeats)
-  const [services, setServices] = useState(PRESETS[0].services)
-  const [days, setDays] = useState<number[]>(PRESETS[0].days)
-  const [opens, setOpens] = useState(PRESETS[0].opens)
-  const [closes, setCloses] = useState(PRESETS[0].closes)
+  const [count, setCount] = useState(initial.defaultCount)
+  const [seats, setSeats] = useState(initial.defaultSeats)
+  const [services, setServices] = useState(initial.services)
+  const [days, setDays] = useState<number[]>(initial.days)
+  const [opens, setOpens] = useState(initial.opens)
+  const [closes, setCloses] = useState(initial.closes)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
