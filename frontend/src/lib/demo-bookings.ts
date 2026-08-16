@@ -237,7 +237,9 @@ function makeBooking(input: {
     provider: null,
   }
   if (trade?.travels) {
-    const [addr, lat, lng] = ADDRESSES[bookings.length % ADDRESSES.length]
+    // A delivery run is tight around the shop; a detailing day is not.
+    const pool = trade.bookingNoun === 'delivery' ? DELIVERY_ADDRESSES : ADDRESSES
+    const [addr, lat, lng] = pool[bookings.length % pool.length]
     row.service_address = addr
     row.service_lat = lat
     row.service_lng = lng
@@ -249,7 +251,11 @@ function makeBooking(input: {
 function seedDay(dayKey: string) {
   if (seededDays.has(dayKey)) return
   seededDays.add(dayKey)
-  if (!trade || !trade.booksAtAll || RESOURCES.length === 0) return
+  // A trade that TRAVELS but does not book still has a day worth drawing: a
+  // pizza shop takes no reservations and absolutely does run a route. Its
+  // Bookings tab stays off (the module flag decides that); what it gains is
+  // the delivery map, which is the mobile detailer's problem exactly.
+  if (!trade || !(trade.booksAtAll || trade.travels) || RESOURCES.length === 0) return
 
   const rand = seeded(dayKey)
   const [, , d] = dayKey.split('-').map(Number)
@@ -456,7 +462,7 @@ export function configureForTrade(pack: any) {
   linkState.opened = 0
   linkState.failed = 0
 
-  if (!pack.booksAtAll) return
+  if (!pack.booksAtAll && !pack.travels) return
 
   const base = RESOURCE_NAME[pack.resourceKind] || 'Station'
   for (let i = 0; i < pack.defaultCount; i++) {
@@ -581,6 +587,28 @@ let trade: any = null
  * route has a real shape — a couple of clusters and one outlier, which is what
  * makes the "can I actually make it" question interesting rather than academic.
  */
+/**
+ * Delivery drops, close to the shop.
+ *
+ * The list below is a mobile detailer's day — jobs genuinely spread across a
+ * metro area, tens of kilometres apart. Reusing it for pizza produced nine
+ * deliveries covering 74km and three hours of driving, which is not a pizza
+ * shop; it is a road trip. A delivery radius is a few minutes, so these sit
+ * tight around BASE_LOCATION and the drive times come out in single-digit
+ * minutes, the way a real run does.
+ */
+const DELIVERY_ADDRESSES: [string, number, number][] = [
+  ['118 Union St', 49.2782, -123.0980],
+  ['42 Keefer Pl', 49.2800, -123.1050],
+  ['905 Prior St', 49.2745, -123.0890],
+  ['61 Adanac St', 49.2775, -123.0840],
+  ['330 Gore Ave', 49.2812, -123.0995],
+  ['77 Cordova St E', 49.2830, -123.1020],
+  ['210 Powell St', 49.2842, -123.0930],
+  ['14 Hawks Ave', 49.2790, -123.0870],
+  ['501 Main St', 49.2760, -123.1005],
+]
+
 const ADDRESSES: [string, number, number][] = [
   ['418 Maple Ridge Dr', 49.2827, -123.1207],
   ['77 Harbourview Ln', 49.2965, -123.1340],

@@ -74,6 +74,7 @@ function generateDemoCameras(): CameraDevice[] {
     medspa: ['Reception', 'Treatment Room 1', 'Treatment Room 2', 'Stock Cabinet'],
     detailing: ['Bay 1', 'Bay 2', 'Wash Area', 'Parts and Chemicals'],
     mobile_detailing: ['Van Loading Bay', 'Chemical Store', 'Yard Gate'],
+    pizzeria: ['Front Counter', 'Oven Line', 'Driver Dispatch', 'Car Park'],
   }
   const locs = locations[biz] || locations.restaurant
 

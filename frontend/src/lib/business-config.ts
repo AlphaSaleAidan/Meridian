@@ -442,6 +442,49 @@ const MOBILE_DETAILING: BusinessProfile = {
   ],
 }
 
+
+const PIZZERIA: BusinessProfile = {
+  businessName: "Tony's Pizzeria",
+  businessNameCA: "Tony's Pizzeria",
+  industryLabel: 'Pizza Shop',
+  peakLabel: '5:00–8:00 PM',
+  topBundlePair: ['Large Pepperoni', 'Garlic Knots'],
+  deadStockItems: ['Anchovy Topping', 'Diet Root Beer'],
+  hourlyPattern: [
+    0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 45,
+    60, 40, 25, 30, 55, 90,
+    100, 85, 60, 35, 10, 0,
+  ],
+  revenue: {
+    weekdayMin: 190000, weekdayMax: 320000,
+    weekendMin: 340000, weekendMax: 520000,
+    avgTicketMin: 2400, avgTicketMax: 4600,
+  },
+  staff: [
+    { name: 'Tony R.', role: 'Owner / Pizzaiolo' },
+    { name: 'Dana K.', role: 'Counter' },
+    { name: 'Marco S.', role: 'Driver' },
+    { name: 'Priya N.', role: 'Driver' },
+    { name: 'Owen B.', role: 'Kitchen' },
+  ],
+  products: [
+    { name: 'Large Pepperoni', sku: 'PEP-L', price: 2400, category: 'pizza', popularity: 0.95 },
+    { name: 'Large Cheese', sku: 'CHE-L', price: 2100, category: 'pizza', popularity: 0.90 },
+    { name: 'Meat Feast', sku: 'MEA-L', price: 2900, category: 'pizza', popularity: 0.70 },
+    { name: 'Veggie Supreme', sku: 'VEG-L', price: 2600, category: 'pizza', popularity: 0.55 },
+    { name: 'Family Deal', sku: 'FAM-001', price: 4500, category: 'deals', popularity: 0.65 },
+    { name: 'Garlic Knots', sku: 'KNO-006', price: 700, category: 'sides', popularity: 0.80 },
+    { name: 'Buffalo Wings', sku: 'WIN-008', price: 1100, category: 'sides', popularity: 0.75 },
+    { name: 'Mozzarella Sticks', sku: 'MOZ-006', price: 800, category: 'sides', popularity: 0.60 },
+    { name: 'Caesar Salad', sku: 'CAE-001', price: 900, category: 'sides', popularity: 0.40 },
+    { name: 'Coke 2L', sku: 'COK-2L', price: 400, category: 'drinks', popularity: 0.70 },
+    { name: 'Diet Root Beer', sku: 'DRB-001', price: 400, category: 'drinks', popularity: 0.12 },
+    { name: 'Anchovy Topping', sku: 'ANC-001', price: 200, category: 'toppings', popularity: 0.08 },
+    { name: 'Extra Cheese', sku: 'XCH-001', price: 250, category: 'toppings', popularity: 0.65 },
+  ],
+}
+
 const PROFILES: Record<BusinessType, BusinessProfile> = {
   coffee_shop: COFFEE_SHOP,
   restaurant: RESTAURANT,
@@ -453,6 +496,7 @@ const PROFILES: Record<BusinessType, BusinessProfile> = {
   medspa: MED_SPA,
   detailing: DETAILING,
   mobile_detailing: MOBILE_DETAILING,
+  pizzeria: PIZZERIA,
 }
 
 export function getBusinessProfile(type: BusinessType): BusinessProfile {

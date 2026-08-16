@@ -39,7 +39,11 @@ export interface RouteOrigin {
 /** Average urban driving speed, km/h. Deliberately conservative: a route that
  *  under-promises is a route an owner keeps trusting. */
 const URBAN_KMH = 32
-/** Fixed cost per stop — parking, unloading, finding the door. */
+/** Fixed cost per stop — parking, unloading, finding the door.
+ *
+ *  Six minutes is a detailer arriving at a job. A pizza handed over at a door
+ *  is nothing like that, and charging the same made a 6km delivery run read
+ *  as an hour of driving. Callers pass their own. */
 const STOP_OVERHEAD_MIN = 6
 
 export function haversineKm(
@@ -56,8 +60,8 @@ export function haversineKm(
   return 2 * R * Math.asin(Math.sqrt(s))
 }
 
-export function driveMinutes(km: number): number {
-  return Math.round((km / URBAN_KMH) * 60 + STOP_OVERHEAD_MIN)
+export function driveMinutes(km: number, stopOverheadMin: number = STOP_OVERHEAD_MIN): number {
+  return Math.round((km / URBAN_KMH) * 60 + stopOverheadMin)
 }
 
 interface Leg {
@@ -74,12 +78,16 @@ interface Leg {
 const LATE_OPTIONS = [15, 30, 45]
 
 export default function RouteDay({
-  stops, origin, timezone, onSelect,
+  stops, origin, timezone, onSelect, stopOverheadMin = STOP_OVERHEAD_MIN,
 }: {
   stops: Stop[]
   origin: RouteOrigin
   timezone: string
   onSelect?: (booking: Booking) => void
+  /** Minutes lost at each stop. A detailer parks and unloads; a driver hands
+   *  over a box. Six versus two is the difference between a believable run
+   *  and an hour of phantom driving. */
+  stopOverheadMin?: number
 }) {
   /**
    * "Running late" per stop.
@@ -136,12 +144,17 @@ export default function RouteDay({
   const legs: Leg[] = ordered.map((stop, i) => {
     const from = i === 0 ? origin : ordered[i - 1]
     const km = haversineKm(from, stop)
-    const minutes = driveMinutes(km)
+    const minutes = driveMinutes(km, stopOverheadMin)
     const previousEnd = i === 0
       ? new Date(ordered[0].booking.startsAt).getTime() - 60 * 60_000
       : new Date(ordered[i - 1].booking.endsAt).getTime()
     const available = Math.round(
       (new Date(stop.booking.startsAt).getTime() - previousEnd) / 60_000)
+    // Two stops at the same minute are two DRIVERS, not one impossible leg.
+    // A pizza shop runs three at once; chaining them into a single sequence
+    // flagged seven of nine drops as tight on a run that is comfortable.
+    const concurrent = i > 0
+      && ordered[i - 1].booking.startsAt === stop.booking.startsAt
     return {
       fromLabel: i === 0 ? origin.label : ordered[i - 1].booking.customerName,
       km,
@@ -149,7 +162,7 @@ export default function RouteDay({
       available,
       // Straight-line under-states real driving, so flag anything that is even
       // close rather than only what fails outright.
-      tight: minutes > available * 0.8,
+      tight: !concurrent && minutes > available * 0.8,
     }
   })
 
@@ -308,7 +321,7 @@ export default function RouteDay({
 
       <p className="text-xs text-[#6B6B73]">
         Drive times are straight-line estimates at {URBAN_KMH} km/h plus{' '}
-        {STOP_OVERHEAD_MIN} minutes a stop — real roads are longer, so treat a
+        {stopOverheadMin} minutes a stop — real roads are longer, so treat a
         tight leg as tighter than it looks. Connecting a routing provider
         replaces these with real ones.
       </p>

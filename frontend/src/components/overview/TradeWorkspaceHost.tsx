@@ -100,7 +100,7 @@ export default function TradeWorkspaceHost({
   // The forecasting and anomaly detection Meridian already ships. Called the
   // same way the rest of the portal calls them.
   useEffect(() => {
-    if (!pack.booksAtAll) { setForecasts([]); setAnomalies([]); return }
+    if (!pack.booksAtAll && !pack.travels) { setForecasts([]); setAnomalies([]); return }
     Promise.all([
       api.forecasts(merchantId).catch(() => ({ forecasts: [] })),
       api.anomalies(merchantId).catch(() => ({ anomalies: [] })),
@@ -111,7 +111,7 @@ export default function TradeWorkspaceHost({
   }, [pack])
 
   useEffect(() => {
-    if (!pack.booksAtAll) return
+    if (!pack.booksAtAll && !pack.travels) return
     const start = new Date(`${day}T00:00:00`)
     const from = new Date(start.getTime() - 12 * 3600_000).toISOString()
     const to = new Date(start.getTime() + 24 * 3600_000).toISOString()
@@ -133,7 +133,7 @@ export default function TradeWorkspaceHost({
   // A fortnight of booked revenue, read the same way the day is — so the trend
   // and the comparison come from real bookings rather than a drawn curve.
   useEffect(() => {
-    if (!pack.booksAtAll) { setHistory([]); return }
+    if (!pack.booksAtAll && !pack.travels) { setHistory([]); return }
     const end = new Date(`${day}T00:00:00`)
     const from = new Date(end.getTime() - 13 * 86400_000)
     Promise.all([

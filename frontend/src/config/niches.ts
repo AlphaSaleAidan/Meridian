@@ -323,7 +323,7 @@ export const NICHE_PACKS: NichePack[] = [
   },
   {
     key: 'quickservice',
-    label: 'Pizza & takeout',
+    label: 'Quick service & takeaway',
     pitch: 'Nobody waits on hold at 6pm on a Friday.',
     bookingNoun: 'order',
     customerNoun: 'customer',
@@ -354,6 +354,41 @@ export const NICHE_PACKS: NichePack[] = [
       { label: 'Missed calls', value: '0', sub: 'nobody hung up', tone: 'good' },
     ],
     counterTakingsCents: 428_000,
+  },
+  {
+    key: 'pizzeria',
+    label: 'Pizza shop',
+    pitch: 'Every delivery on one screen, and nobody waits on hold at 6pm on a Friday.',
+    bookingNoun: 'delivery',
+    customerNoun: 'customer',
+    resourceKind: 'staff',
+    countTitle: 'How many drivers are out at once?',
+    countLabel: 'Drivers',
+    // A pizza shop takes no reservations — but it DOES run a route, and that
+    // is the thing nobody can see today. Deliveries are stops with addresses
+    // and drive times between them, which is the mobile detailer's problem
+    // exactly, so it gets the mobile detailer's map rather than a new one.
+    booksAtAll: false,
+    travels: true,
+    defaultCount: 3,
+    defaultSeats: 1,
+    partyBanded: false,
+    services: [
+      { name: 'Delivery', duration: 30, buffer: 5, min: 1, max: 1, price: 3200 },
+      { name: 'Large pizza', duration: 20, buffer: 5, min: 1, max: 1, price: 2400 },
+      { name: 'Family deal', duration: 25, buffer: 5, min: 1, max: 1, price: 4500 },
+    ],
+    days: [0, 1, 2, 3, 4, 5, 6],
+    opens: '11:00',
+    closes: '23:00',
+    // Menu Matrix is exactly the screen this trade was written for, and the
+    // camera watches the counter queue at 7pm — the constraint on the whole
+    // evening.
+    modules: { bookings: false },
+    pillarOrder: ['', 'phone', 'inventory', 'camera', 'schedule'],
+    homeMetric: { label: 'Deliveries on the road',
+                  help: 'Where every driver is, and which drop is about to be late.' },
+    avgCoverCents: 2600,
   },
   {
     key: 'medspa',
@@ -607,6 +642,9 @@ export const SELLABLE_TRADES: SellableTrade[] = [
     deck: { ca: 'restaurant', us: 'restaurant' } },
   { key: 'quickservice', label: 'Quick Service & Takeaway', group: 'Food and drink',
     deck: { ca: 'ca-qsr', us: 'us-qsr' } },
+  { key: 'pizzeria', label: 'Pizza Shops', group: 'Food and drink',
+    // Shares the quick-service deck, which is written for exactly this shop.
+    deck: { ca: 'ca-qsr', us: 'us-qsr' } },
   { key: 'coffeeshop', label: 'Coffee Shops & Cafes', group: 'Food and drink',
     deck: { ca: 'ca-coffee', us: 'us-coffee' } },
 
@@ -647,6 +685,8 @@ const SLUG_TO_PACK: Record<string, string> = Object.fromEntries(
 
 const PACK_ALIASES: Record<string, string> = {
   fast_food: 'quickservice',
+  pizza: 'pizzeria',
+  pizza_shop: 'pizzeria',
   coffee_shop: 'coffeeshop',
   auto_shop: 'autoshop',
   smoke_shop: 'smokeshop',

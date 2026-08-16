@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
 import {
-  Car, Coffee, Sandwich, Scissors, Sparkles, Store, Syringe, Truck,
+  Car, Coffee, Pizza, Sandwich, Scissors, Sparkles, Store, Syringe, Truck,
   UtensilsCrossed, Wrench, type LucideIcon,
 } from 'lucide-react'
 import { useAuth } from './auth'
@@ -11,6 +11,7 @@ export type BusinessType =
   // business-config.ts — a barbershop demo shows pomade and blades, not
   // croissants, because a prospect reads the wrong products as "not for me".
   | 'barbershop' | 'nails' | 'medspa' | 'detailing' | 'mobile_detailing'
+  | 'pizzeria'
 
 export interface BusinessTypeOption {
   id: BusinessType
@@ -28,6 +29,7 @@ export const BUSINESS_TYPES: BusinessTypeOption[] = [
   // Food and drink
   { id: 'restaurant', icon: UtensilsCrossed, group: 'Food and drink', label: 'Restaurant', description: 'Full-service dining — covers, table turns, server performance' },
   { id: 'fast_food', icon: Sandwich, group: 'Food and drink', label: 'Quick Service', description: 'Counter and drive-through — order throughput, wait times, queues' },
+  { id: 'pizzeria', icon: Pizza, group: 'Food and drink', label: 'Pizza Shop', description: 'Delivery and takeaway — every driver on one map, late drops before they are late' },
   { id: 'coffee_shop', icon: Coffee, group: 'Food and drink', label: 'Coffee Shop', description: 'Cafe and beverage — morning rush, loyalty regulars, menu velocity' },
 
   // Appointments
@@ -123,6 +125,7 @@ function detectBusinessType(org: { business_type?: string | null; pos_provider?:
   //   - "mobile detailing" contains "detail", so it must beat plain detailing.
   //   - "barbershop" contains "bar", which the restaurant rule below matches —
   //     that is exactly the bug this ordering exists to prevent.
+  if (bt.includes('pizza')) return 'pizzeria'
   if (bt.includes('mobile detail') || bt.includes('mobile_detail')) return 'mobile_detailing'
   if (bt.includes('detail')) return 'detailing'
   if (bt.includes('barber') || bt.includes('salon') || bt.includes('haircut')) return 'barbershop'
@@ -137,6 +140,7 @@ function detectBusinessType(org: { business_type?: string | null; pos_provider?:
   if (bt.includes('restaurant') || bt.includes('dining') || bt.includes('bistro') || bt.includes('grill') || bt.includes('bar')) return 'restaurant'
 
   const name = org.business_name?.toLowerCase() || ''
+  if (name.includes('pizza') || name.includes('pizzeria')) return 'pizzeria'
   if (name.includes('barber') || name.includes('fade')) return 'barbershop'
   if (name.includes('nail') || name.includes('lash')) return 'nails'
   if (name.includes('detail')) return 'detailing'

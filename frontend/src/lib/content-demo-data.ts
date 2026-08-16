@@ -118,6 +118,41 @@ interface DemoBusiness {
 }
 
 const DEMO_BUSINESSES: Record<BusinessType, DemoBusiness> = {
+  pizzeria: {
+    brand: {
+      business_name: "Tony's Pizzeria",
+      business_type: 'pizzeria',
+      content_tier: 'growth',
+      ayrshare_connected_platforms: ['instagram', 'facebook', 'google_business'],
+      voice_profile: {
+        tone: 'friendly',
+        emoji_usage: 'minimal',
+        top_products: ['Large Pepperoni', 'Family Deal', 'Garlic Knots'],
+        keywords: ['pizza delivery near me', 'best pizza', 'family deal'],
+      },
+    },
+    post: {
+      id: 'demo-pizzeria-ad',
+      post_type: 'social',
+      platform: 'instagram',
+      status: 'published',
+      hook: 'Friday night: 41 deliveries, none of them late.',
+      body: "Three drivers, one route, and the kitchen knows what is going out before it comes off the peel.\n\nFamily Deal is still the fastest thing to order and the easiest thing to feed four people with.",
+      hashtags: ['#PizzaDelivery', '#FamilyDeal', '#TonysPizzeria', '#FridayNight'],
+      call_to_action: 'Order for delivery — link in bio',
+      pos_data_reference: { item: 'Family Deal', peak: '7:00 PM', deliveries: 41 },
+      published_at: daysAgo(2),
+      publish_url: 'https://instagram.com/p/demo',
+      created_at: daysAgo(3),
+    },
+    rankings: [
+      { keyword: 'pizza delivery near me', rank_position: 3, rank_change: 5, checked_at: daysAgo(0), ai_citation_count: 3, ai_platforms_cited: ['chatgpt', 'claude', 'perplexity'] },
+      { keyword: 'best pizza', rank_position: 7, rank_change: 2, checked_at: daysAgo(0), ai_citation_count: 1, ai_platforms_cited: ['perplexity'] },
+      { keyword: 'family deal pizza', rank_position: 5, rank_change: 4, checked_at: daysAgo(0), ai_citation_count: 2, ai_platforms_cited: ['chatgpt', 'claude'] },
+      { keyword: 'late night pizza', rank_position: 11, rank_change: -1, checked_at: daysAgo(0), ai_citation_count: 0, ai_platforms_cited: [] },
+    ],
+  },
+
   barbershop: {
     brand: {
       business_name: 'The Fade Room',

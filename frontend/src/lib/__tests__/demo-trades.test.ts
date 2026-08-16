@@ -137,8 +137,15 @@ describe('every trade the picker offers is actually a version', () => {
     // appointments at a shop that does not take them.
     for (const id of IDS) {
       const pack = packFor(id)
-      if (!pack.booksAtAll) {
+      if (!pack.booksAtAll && !pack.travels) {
+        // Neither a book nor a route to derive a day from, so the figures
+        // have to be written down.
         expect(pack.counterStats?.length, `${id} books nothing and shows nothing`).toBe(4)
+      } else if (pack.travels) {
+        // A pizza shop takes no reservations but very much runs a route, and
+        // the route IS its day — stops, drive time, the drop about to be
+        // late. Same four figures as the mobile detailer, same map.
+        expect(pack.counterStats, `${id} travels, so its day comes from the route`).toBeUndefined()
       } else {
         expect(pack.counterStats, `${id} books, so it derives its own figures`).toBeUndefined()
       }

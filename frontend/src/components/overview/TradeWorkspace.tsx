@@ -109,6 +109,13 @@ const packMoney = (cents: number): string =>
  * lie, so the two cases are handled separately rather than averaged.
  */
 function revenueCents(bookings: Booking[], services: Service[], pack: NichePack): number {
+  if (pack.avgCoverCents && !pack.partyBanded) {
+    // A delivery is one order at the average ticket — there is no party size
+    // to multiply by, and multiplying by one guest would have read every
+    // drop as a single cover.
+    const each = Math.round(pack.avgCoverCents * getCurrencyMultiplier())
+    return bookings.length * each
+  }
   if (pack.avgCoverCents) {
     // Converted, because avgCoverCents is a US figure written into the pack
     // while every service price arrives already converted. Left raw, the
@@ -238,8 +245,29 @@ export default function TradeWorkspace(data: WorkspaceData) {
     }
   }, [pack, resources, services, live, open, close])
 
+  /**
+   * The drops actually ON THE ROAD, not every order of the day.
+   *
+   * A pizza shop does sixty-eight deliveries on a Sunday; it does not have
+   * sixty-eight of them in the air at once, and drawing them as one
+   * sequential route produced "23h 55m driving" and sixty-four tight legs —
+   * numbers that are obviously wrong and make the whole panel untrustworthy.
+   * A driver carries about three drops, so the run is roughly three per
+   * driver, taken from the next ones due.
+   */
+  const routeStops = useMemo(() => {
+    const all = stops || []
+    if (!pack.travels) return all
+    if (pack.booksAtAll) return all          // a detailer's day IS the route
+    const perDriver = 3
+    const onTheRoad = Math.max(1, (pack.defaultCount || 1) * perDriver)
+    return [...all]
+      .sort((a, b) => a.booking.startsAt.localeCompare(b.booking.startsAt))
+      .slice(0, onTheRoad)
+  }, [stops, pack])
+
   const tiles = useMemo(
-    () => computeTiles(data, live, open, close, booked),
+    () => computeTiles(data, live, open, close, booked, routeStops),
     [data, live, open, close, booked])
 
   /**
@@ -318,7 +346,8 @@ export default function TradeWorkspace(data: WorkspaceData) {
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="text-[11px] uppercase tracking-[0.14em] text-[#6B6B73]">
-              {dayLabel} · {counterTakings != null ? 'taken so far' : 'booked so far'}
+              {dayLabel} · {counterTakings != null || !pack.booksAtAll
+                ? 'taken so far' : 'booked so far'}
             </div>
             <div className="mt-2 flex flex-wrap items-end gap-x-4 gap-y-1">
               <div className="font-mono text-[56px] font-semibold leading-none tracking-tight text-[#F5F5F7]">
@@ -415,7 +444,13 @@ export default function TradeWorkspace(data: WorkspaceData) {
               <h2 className="text-sm font-semibold text-[#F5F5F7]">{mainTitle(pack)}</h2>
             </div>
 
-            {!pack.booksAtAll ? (
+            {/* A trade that DRIVES gets its route first — checked before the
+                no-book fallback, or a pizza shop is shown a phone chart
+                instead of the map of where its drivers actually are. */}
+            {pack.travels && routeStops.length > 0 && origin ? (
+              <RouteDay stops={routeStops} origin={origin} timezone={timezone}
+                        stopOverheadMin={pack.bookingNoun === 'delivery' ? 2 : undefined} />
+            ) : !pack.booksAtAll ? (
               <PhoneVolume />
             ) : pack.travels && stops && origin ? (
               <RouteDay stops={stops} origin={origin} timezone={timezone} />
@@ -500,7 +535,13 @@ export default function TradeWorkspace(data: WorkspaceData) {
               <h2 className="text-sm font-semibold text-[#F5F5F7]">{mainTitle(pack)}</h2>
             </div>
 
-            {!pack.booksAtAll ? (
+            {/* A trade that DRIVES gets its route first — checked before the
+                no-book fallback, or a pizza shop is shown a phone chart
+                instead of the map of where its drivers actually are. */}
+            {pack.travels && routeStops.length > 0 && origin ? (
+              <RouteDay stops={routeStops} origin={origin} timezone={timezone}
+                        stopOverheadMin={pack.bookingNoun === 'delivery' ? 2 : undefined} />
+            ) : !pack.booksAtAll ? (
               <PhoneVolume />
             ) : pack.travels && stops && origin ? (
               <RouteDay stops={stops} origin={origin} timezone={timezone} />
@@ -607,8 +648,13 @@ export default function TradeWorkspace(data: WorkspaceData) {
 }
 
 function mainTitle(pack: NichePack): string {
+  // Travels FIRST. A pizza shop books nothing and drives everything, and
+  // checking booksAtAll first titled its delivery map "What the phone caught
+  // today" — the phone panel's heading over a map of drivers.
+  if (pack.travels) {
+    return pack.bookingNoun === 'delivery' ? 'Out for delivery' : "Today's route"
+  }
   if (!pack.booksAtAll) return 'What the phone caught today'
-  if (pack.travels) return "Today's route"
   return 'The floor'
 }
 
@@ -626,6 +672,7 @@ interface Tile {
 
 function computeTiles(
   data: WorkspaceData, live: Booking[], open: number, close: number, booked: number,
+  routeStops?: Stop[],
 ): Tile[] {
   const { pack, resources, services = [], timezone, stops, origin } = data
   const active = resources.filter((r) => r.active)
@@ -651,6 +698,30 @@ function computeTiles(
     }))
   }
 
+  // ── the trades that DRIVE ──────────────────────────────────────────
+  //
+  // A route is a route. A mobile detailer and a pizza shop have the same
+  // day-shaped problem — stops, drive time between them, and the one that is
+  // about to be late — so they get the same four figures and the same map,
+  // named in each trade's own words.
+  if (pack.travels) {
+    const onRoad = routeStops ?? stops ?? []
+    const legs = routeLegs(onRoad, origin, pack.bookingNoun === 'delivery' ? 2 : undefined)
+    const tight = legs.filter((l) => l.tight).length
+    const drive = legs.reduce((s, l) => s + l.minutes, 0)
+    const noun = pack.bookingNoun === 'delivery' ? 'Deliveries' : 'Jobs'
+    return [
+      { label: `${noun} on the road`, value: String(onRoad.length), icon: Navigation,
+        sub: pack.booksAtAll ? undefined : `${(stops || []).length} today` },
+      { label: pack.bookingNoun === 'delivery' ? 'Avg order' : 'Avg job value',
+        value: money(pack.avgCoverCents || avgTicket), icon: Receipt },
+      { label: 'Driving', value: drive >= 60 ? `${Math.floor(drive / 60)}h ${drive % 60}m` : `${drive}m`,
+        sub: 'unpaid time', icon: Car },
+      { label: 'Tight legs', value: String(tight), tone: tight > 0 ? 'warn' : 'good',
+        sub: tight > 0 ? 'may not make it' : 'the day fits' },
+    ]
+  }
+
   switch (pack.key) {
     case 'restaurant': {
       const covers = live.reduce((s, b) => s + b.partySize, 0)
@@ -662,19 +733,6 @@ function computeTiles(
           sub: peak.covers ? `${peak.covers} covers land` : undefined,
           tone: peak.covers > 20 ? 'warn' : undefined },
         { label: 'Tables in use', value: `${new Set(live.map((b) => b.resourceId)).size}/${active.length}` },
-      ]
-    }
-    case 'mobiledetailing': {
-      const legs = routeLegs(stops || [], origin)
-      const tight = legs.filter((l) => l.tight).length
-      const drive = legs.reduce((s, l) => s + l.minutes, 0)
-      return [
-        { label: 'Jobs on the route', value: String((stops || []).length), icon: Navigation },
-        { label: 'Avg job value', value: money(avgTicket), icon: Receipt },
-        { label: 'Driving', value: drive >= 60 ? `${Math.floor(drive / 60)}h ${drive % 60}m` : `${drive}m`,
-          sub: 'unpaid time', icon: Car },
-        { label: 'Tight legs', value: String(tight), tone: tight > 0 ? 'warn' : 'good',
-          sub: tight > 0 ? 'may not make it' : 'the day fits' },
       ]
     }
     case 'autoshop': {
@@ -849,18 +907,25 @@ function peakBucket(live: Booking[], tz: string, open: number, close: number) {
   return best
 }
 
-function routeLegs(stops: Stop[], origin?: RouteOrigin) {
+function routeLegs(stops: Stop[], origin?: RouteOrigin, stopOverheadMin?: number) {
   if (!origin || stops.length === 0) return []
   const ordered = [...stops].sort((a, b) => a.booking.startsAt.localeCompare(b.booking.startsAt))
   return ordered.map((stop, i) => {
+    // Two drops at the same minute are two DRIVERS, not one impossible leg.
+    // Chaining every stop into a single sequence flagged seven of nine as
+    // tight on a run that three drivers cover comfortably.
+    const concurrent = i > 0
+      && ordered[i - 1].booking.startsAt === stop.booking.startsAt
     const from = i === 0 ? origin : ordered[i - 1]
-    const minutes = driveMinutes(haversineKm(from, stop))
+    // Same per-stop cost the map uses, or the "tight legs" tile and the red
+    // legs drawn on the map would disagree about the same run.
+    const minutes = driveMinutes(haversineKm(from, stop), stopOverheadMin)
     const previousEnd = i === 0
       ? new Date(ordered[0].booking.startsAt).getTime() - 60 * 60_000
       : new Date(ordered[i - 1].booking.endsAt).getTime()
     const available = Math.round(
       (new Date(stop.booking.startsAt).getTime() - previousEnd) / 60_000)
-    return { minutes, available, tight: minutes > available * 0.8 }
+    return { minutes, available, tight: !concurrent && minutes > available * 0.8 }
   })
 }
 
