@@ -105,9 +105,16 @@ describe('a trade resolves to a pack', () => {
   it('still sends anything unrecognised to the generic pack', () => {
     // This fallback is what guarantees every merchant in production today
     // sees the portal they saw yesterday. Fuzzy matching would erode it.
-    for (const junk of ['not-a-real-trade', '', 'restaurant ', 'BARBERSHOP']) {
+    for (const junk of ['not-a-real-trade', '', 'vet-clinic', 'ca-artgallery']) {
       expect(packFor(junk).key, `${junk} matched a pack`).toBe(GENERIC_PACK.key)
     }
+    // Case and stray whitespace are NOT junk. Live organizations hold both
+    // "restaurant" and "Restaurant", written by different paths over two
+    // years; treating them differently gave two identical businesses two
+    // different portals.
+    expect(packFor('Restaurant').key).toBe('restaurant')
+    expect(packFor(' BARBERSHOP ').key).toBe('barbershop')
+    expect(packFor('Coffee_Shop').key).toBe('coffeeshop')
     expect(packFor(null).key).toBe(GENERIC_PACK.key)
     expect(packFor(undefined).key).toBe(GENERIC_PACK.key)
   })

@@ -699,6 +699,11 @@ const PACK_ALIASES: Record<string, string> = {
 
 export function packFor(key: string | null | undefined): NichePack {
   if (!key) return GENERIC_PACK
-  const resolved = SLUG_TO_PACK[key] || PACK_ALIASES[key] || key
+  // CASE-INSENSITIVE, because live data is not consistent: organizations hold
+  // both "restaurant" and "Restaurant" today, written by different paths over
+  // two years. Matching exactly gave two identical businesses two different
+  // portals, which is a worse outcome than either portal.
+  const norm = key.trim().toLowerCase()
+  const resolved = SLUG_TO_PACK[norm] || PACK_ALIASES[norm] || norm
   return ALL_PACKS.find((p) => p.key === resolved) || GENERIC_PACK
 }
