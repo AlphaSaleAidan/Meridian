@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { clsx } from 'clsx'
 import { Menu, MapPin } from 'lucide-react'
@@ -7,6 +7,7 @@ import { useUnreadNotifications } from '@/hooks/useUnreadNotifications'
 import { merchantPillars, comingSoonPillars, orderPillars, MERCHANT_BASE_PATH, type Pillar } from '@/config/merchantPillars'
 import { useAuth } from '@/lib/auth'
 import { useModuleFlags, useTradePack } from '@/config/moduleFlags'
+import { usePublishHeight } from '@/hooks/usePublishHeight'
 
 function PillarLink({ pillar, basePath, onNavigate }: { pillar: Pillar; basePath: string; onNavigate: () => void }) {
   const Icon = pillar.icon
@@ -39,6 +40,11 @@ function PillarLink({ pillar, basePath, onNavigate }: { pillar: Pillar; basePath
 
 export default function MerchantLayout({ basePath = MERCHANT_BASE_PATH }: { basePath?: string } = {}) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  // The mobile tab bar is permanent chrome under lg; above lg it is display:
+  // none and measures zero, which is the right answer without a breakpoint
+  // check here.
+  const bottomNavRef = useRef<HTMLElement>(null)
+  usePublishHeight(bottomNavRef, '--bottom-nav-h')
   const closeSidebar = () => setSidebarOpen(false)
   const flags = useModuleFlags()
   const { org } = useAuth()
@@ -174,7 +180,21 @@ export default function MerchantLayout({ basePath = MERCHANT_BASE_PATH }: { base
       </aside>
 
       {/* Main content */}
-      <main id="main-content" className="flex-1 overflow-y-auto">
+      {/*
+        The scroll container reserves room for the bars fixed OVER it.
+
+        Fixed elements are out of flow, so <main> gave itself no room for the
+        mobile tab bar or the cookie banner: you could scroll to the true end
+        and still have the last 150-200 pixels sitting behind one of them,
+        unreachable by any means. Each bar publishes its own height (they
+        change with wrapping, and the banner is dismissible), and this adds
+        them up.
+      */}
+      <main
+        id="main-content"
+        className="flex-1 overflow-y-auto"
+        style={{ paddingBottom: 'calc(var(--cookie-bar-h, 0px) + var(--bottom-nav-h, 0px))' }}
+      >
         <div className="lg:hidden sticky top-0 z-30 h-14 bg-[#0A0A0B]/95 backdrop-blur-sm border-b border-[#1F1F23] flex items-center gap-3 px-4">
           {/* Demos normally drop the hamburger because the bottom bar carries
               every tab — but the roadmap previews are sidebar-only (four more
@@ -202,7 +222,10 @@ export default function MerchantLayout({ basePath = MERCHANT_BASE_PATH }: { base
       </main>
 
       {/* Mobile pillar bar — money pillars + settings only, respects module flags */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 lg:hidden bg-[#0A0A0B]/95 backdrop-blur-lg border-t border-[#1F1F23]">
+      <nav
+        ref={bottomNavRef}
+        className="fixed bottom-0 left-0 right-0 z-50 lg:hidden bg-[#0A0A0B]/95 backdrop-blur-lg border-t border-[#1F1F23]"
+      >
         <div className="flex items-stretch justify-around px-2 pb-[max(env(safe-area-inset-bottom),4px)]">
           {mobileNavPillars.map(p => {
             const Icon = p.icon

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { usePublishHeight } from '@/hooks/usePublishHeight'
 
 const STORAGE_KEY = 'meridian_cookie_consent'
 
@@ -54,6 +55,11 @@ export default function CookieConsentBanner() {
     }
   }, [consent])
 
+  // The banner is position:fixed over the bottom of the scroll container,
+  // which therefore has no idea it is there. Publishing its height lets the
+  // container reserve exactly that much room — and only while it is showing.
+  usePublishHeight(bannerRef, '--cookie-bar-h', consent === null)
+
   if (consent !== null) return null
 
   const handleAcceptAll = () => {
@@ -72,7 +78,15 @@ export default function CookieConsentBanner() {
   // gutter so only the visible card intercepts taps. Compact on small screens —
   // the full-size banner buried the login CTA on 375x667.
   return (
-    <div ref={bannerRef} className="fixed bottom-0 inset-x-0 z-40 p-2 sm:p-4 pointer-events-none">
+    <div
+      ref={bannerRef}
+      // ABOVE the mobile tab bar (z-50), not below it. At z-40 the tab bar
+      // painted over this banner on every phone, and "Accept All" sat
+      // underneath a nav button — the consent control was unreachable on
+      // mobile, which is the one place it has to work. Still below the demo's
+      // business-type modal (z-100), which is a full-screen gate of its own.
+      className="fixed bottom-0 inset-x-0 z-[60] p-2 sm:p-4 pointer-events-none"
+    >
       <div className="pointer-events-auto mx-auto max-w-3xl rounded-xl border border-zinc-700 bg-zinc-900 p-3 sm:p-5 shadow-2xl">
         <div className="flex flex-col gap-2.5 sm:gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="text-xs sm:text-sm text-zinc-300 leading-snug sm:leading-relaxed">

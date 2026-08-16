@@ -236,26 +236,12 @@ export const comingSoonPillars: Pillar[] = [
     sampleData: true,
     segments: [{ view: 'customers', label: 'Customers', Component: CustomersPage }],
   },
-  {
-    path: 'tax',
-    label: 'Taxes & Expenses',
-    icon: Receipt,
-    comingSoon: true,
-    sampleData: true,
-    segments: [{ view: 'handoff', label: 'CPA Handoff', Component: CPAHandoffPage }],
-  },
-  {
-    path: 'my-website',
-    label: 'My Website',
-    icon: Globe,
-    comingSoon: true,
-    segments: [
-      // Managed sites first — that is the offer. The DIY builder stays visible
-      // as the second segment; it is still under construction behind its own flag.
-      { view: 'care', label: 'Site Care', Component: SiteCarePage },
-      { view: 'builder', label: 'Builder', Component: MyWebsitePage },
-    ],
-  },
+  // Taxes & Expenses and My Website were here and are deliberately gone.
+  // Aidan's call: a demo is a pitch, and two roadmap tabs a prospect cannot
+  // buy today dilute the four that are actually the product. Neither page is
+  // deleted — Taxes & Expenses still ships to real merchants through the
+  // `taxExpenses` flag (on for /app, off for Canada), and the website pages
+  // are still routed. They just no longer sit in a demo sidebar.
 ]
 
 /** Public demo route set: the shipped demo pillars plus the roadmap previews. */
