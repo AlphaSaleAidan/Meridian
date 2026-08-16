@@ -127,10 +127,25 @@ export default function BookingsWizard({ merchantId, onDone, onSkip }: {
     if (next) setStep(next)
   }
 
+  /**
+   * Name resources after what the TRADE calls them.
+   *
+   * This mapped the resource KIND, which only covered table/chair/bay and
+   * dropped everything else onto "Staff". So a med spa was asked "how many
+   * treatment rooms do you have?" and told "we'll add them as Staff 1", and a
+   * mobile detailer was asked about vans and told the same. Both questions
+   * already knew the right word — countLabel — and were not using it.
+   *
+   * The kind map stays as the fallback for a pack with no label of its own.
+   */
   const resourceNames = Array.from({ length: count }, (_, i) => {
-    const base = preset.resourceKind === 'table' ? 'Table'
-      : preset.resourceKind === 'chair' ? 'Chair'
-      : preset.resourceKind === 'bay' ? 'Bay' : 'Staff'
+    const labelled = (preset.countLabel || '').trim().replace(/s$/i, '')
+    const base = labelled || (
+      preset.resourceKind === 'table' ? 'Table'
+        : preset.resourceKind === 'chair' ? 'Chair'
+        : preset.resourceKind === 'bay' ? 'Bay'
+        : preset.resourceKind === 'room' ? 'Room' : 'Staff'
+    )
     return `${base} ${i + 1}`
   })
 
@@ -221,6 +236,10 @@ export default function BookingsWizard({ merchantId, onDone, onSkip }: {
                 return (
                   <button
                     key={p.key}
+                    // The chosen trade was signalled by colour alone, so a
+                    // screen reader announced ten identical buttons and no
+                    // state. It is also what makes the selection assertable.
+                    aria-pressed={chosen}
                     onClick={() => choosePreset(p)}
                     className={`flex items-start gap-3 rounded-lg border p-3 text-left transition-colors ${
                       chosen

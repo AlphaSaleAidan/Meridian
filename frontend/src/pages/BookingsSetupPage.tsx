@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { Select } from '@/components/ui/Select'
 import BookingsWizard from '@/pages/BookingsWizard'
+import { useTradePack } from '@/config/moduleFlags'
 import { useOrgId } from '@/hooks/useOrg'
 import {
   bookingsApi,
@@ -34,6 +35,7 @@ const KIND_LABEL: Record<ResourceKind, string> = {
 
 export default function BookingsSetupPage() {
   const merchantId = useOrgId()
+  const pack = useTradePack()
   const [resources, setResources] = useState<Resource[]>([])
   const [services, setServices] = useState<Service[]>([])
   const [hours, setHours] = useState<HoursRow[]>([])
@@ -76,6 +78,31 @@ export default function BookingsSetupPage() {
         {[0, 1, 2].map((i) => (
           <div key={i} className="h-32 animate-pulse rounded-lg border border-[#1F1F23] bg-[#111113]" />
         ))}
+      </div>
+    )
+  }
+
+  /**
+   * A trade that does not book gets told so, not handed a barbershop.
+   *
+   * The Bookings pillar is already hidden from their navigation, but the ROUTE
+   * is not gated — so a takeaway, a cafe or a smoke shop reaching this URL was
+   * shown the wizard pre-selected on "Barbershop & salon", because their pack
+   * is not in the list and the fallback is the first entry. Better to say the
+   * true thing and leave the door open, since a shop can start taking
+   * appointments and tell us so.
+   */
+  if (!pack.booksAtAll) {
+    return (
+      <div className="rounded-xl border border-[#1F1F23] bg-[#111113] p-8 text-center">
+        <h1 className="text-lg font-semibold text-[#F5F5F7]">
+          Bookings are not part of a {pack.label.toLowerCase()} setup
+        </h1>
+        <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-[#A1A1A8]">
+          Your phone agent takes orders rather than reservations, so there is no
+          book to set up. If that has changed and you want to start taking
+          appointments, tell your Meridian contact and we will switch it on.
+        </p>
       </div>
     )
   }
