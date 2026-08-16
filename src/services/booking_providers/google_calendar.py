@@ -32,10 +32,9 @@ it never touches the database in plaintext.
 """
 from __future__ import annotations
 
-import json
 import logging
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from .base import BusyBlock, Capabilities, ProviderError, ProviderRef
 

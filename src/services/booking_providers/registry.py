@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .base import BookingProvider, Capabilities
+from .base import BookingProvider
 from .google_calendar import GoogleCalendarProvider, is_configured as google_configured
 from .ics_feed import IcsFeedProvider
 from .square_appointments import SquareAppointmentsProvider

@@ -9,7 +9,6 @@ No images or video frames are ever stored or transmitted.
 Face embeddings stay on-prem and auto-delete after 90 days.
 """
 import asyncio
-import hashlib
 import json
 import logging
 import os
@@ -30,7 +29,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(name)-25s | %(levelname)-5s | %(message)s",
 )
-from event_detectors import EventDetectors, PHONE_CLASS_ID
+from event_detectors import EventDetectors, PHONE_CLASS_ID  # noqa: E402
 
 logger = logging.getLogger("meridian.edge")
 
@@ -310,13 +309,11 @@ class CameraProcessor:
                 self.current_bucket["depth_distances"].extend(distances)
 
                 if self.zone_config:
-                    scaled_zones = {
-                        name: self._zone_px(z, frame.shape[1], frame.shape[0])
-                        for name, z in self.zone_config.items()
-                    }
-                    zone_depths = self.depth_processor.get_zone_depths(
-                        depth_map, scaled_zones
-                    )
+                    # The zone rectangles were scaled and handed to
+                    # get_zone_depths(), whose result was then discarded — the
+                    # per-zone counts below come from `distances` instead. Both
+                    # the scaling and the call were real work on every frame
+                    # for a value nobody read, so both are gone.
                     zone_counts = defaultdict(int)
                     for dist in distances:
                         zone_name = self.depth_processor.classify_zone_by_depth(dist)

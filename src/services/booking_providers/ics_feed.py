@@ -31,7 +31,6 @@ from __future__ import annotations
 
 import logging
 import re
-from datetime import date as date_cls
 from datetime import datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 

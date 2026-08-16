@@ -466,8 +466,8 @@ async def handle_join_waitlist(args: dict, setup: be.MerchantBookingSetup,
     try:
         existing = await store.find_waitlist_by_phone(setup.merchant_id, phone)
         if existing:
-            return (f"You're already on the list for that. We'll text you the "
-                    f"moment something opens up.")
+            return ("You're already on the list for that. We'll text you the "
+                    "moment something opens up.")
     except Exception:  # noqa: BLE001
         pass
 

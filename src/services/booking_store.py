@@ -28,7 +28,6 @@ from __future__ import annotations
 import logging
 import os
 import random
-import string
 from datetime import datetime, timezone
 from typing import Any
 
@@ -389,7 +388,7 @@ class BookingStore:
         return await self._req("GET", "booking_waitlist", params={
             "merchant_id": f"eq.{merchant_id}",
             "customer_phone": f"eq.{phone}",
-            "status": f"in.(waiting,offered)",
+            "status": "in.(waiting,offered)",
             "select": "*", "limit": "5",
         })
 

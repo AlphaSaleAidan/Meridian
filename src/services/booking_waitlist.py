@@ -43,7 +43,6 @@ from __future__ import annotations
 import logging
 import os
 import random
-import string
 from datetime import datetime, timedelta, timezone
 
 from src.services import booking_engine as be
@@ -255,7 +254,6 @@ async def _recover(merchant_id: str, cancelled: dict, now: datetime) -> dict:
     if starts_at <= now:
         return {"offered": False, "reason": "in the past"}
 
-    store = get_booking_store()
     resource_id = cancelled.get("resource_id")
     seats = await _seats_for(merchant_id, resource_id)
 
