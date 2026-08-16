@@ -66,10 +66,10 @@ def test_fee_still_capped_below_the_charge():
     assert pl.application_fee_cents(50, service_fee_cents=75, currency="cad") <= 49
 
 
-def test_canonical_backend_terms_say_75_for_ca_premium():
+def test_canonical_backend_terms_say_50_for_ca_premium():
     from src.billing.fee_terms import CANONICAL_FEE_TERMS, ORDER_FEE_FLOOR_CENTS
-    assert CANONICAL_FEE_TERMS["ca"]["premium"]["order_fee_cents"] == 75
+    assert CANONICAL_FEE_TERMS["ca"]["premium"]["order_fee_cents"] == 50
     # the floor must move with the fee, or the backend clamps it back up to 90
-    assert ORDER_FEE_FLOOR_CENTS["ca"]["premium"] == 75
+    assert ORDER_FEE_FLOOR_CENTS["ca"]["premium"] == 50
     # US untouched
-    assert ORDER_FEE_FLOOR_CENTS["us"]["premium"] == 65
+    assert ORDER_FEE_FLOOR_CENTS["us"]["premium"] == 35

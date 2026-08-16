@@ -104,7 +104,7 @@ def test_per_order_resolution_is_unchanged_and_model_is_none():
     assert t["pricing_model"] is None
     assert t["included_monthly_min"] is None
     assert t["monthly_overage_cents_per_min"] is None
-    assert t["order_fee_cents"] == 75
+    assert t["order_fee_cents"] == 50
     assert t["monthly_fee_cents"] == 50000
 
 

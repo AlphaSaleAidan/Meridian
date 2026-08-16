@@ -63,11 +63,14 @@ class MockDB:
 #   passing it through.
 @pytest.mark.parametrize("market,tier,monthly,order_fee,floor", [
     ("us", "standard", 25000, 0, 0),
-    ("us", "premium", 35000, 65, 65),
-    ("us", "command", 50000, 45, 45),
+    # 2026-08-16 break-even: US$0.35 is the measured US$0.328 rounded up to
+    # 5c; CA$0.50 because the x1.4 derivation rounds DOWN to CA$0.45, below
+    # the CA$0.459 the same order costs us.
+    ("us", "premium", 35000, 35, 35),
+    ("us", "command", 50000, 35, 35),
     ("ca", "standard", 35000, 0, 0),
-    ("ca", "premium", 50000, 75, 75),
-    ("ca", "command", 70000, 60, 60),
+    ("ca", "premium", 50000, 50, 50),
+    ("ca", "command", 70000, 50, 50),
 ])
 def test_canonical_table_matches_frontend_plans(market, tier, monthly, order_fee, floor):
     base = ft.CANONICAL_FEE_TERMS[market][tier]
@@ -105,7 +108,7 @@ def test_resolve_defaults_everything_from_tier():
     assert terms == {
         "plan_tier": "premium",
         "monthly_fee_cents": 50000,
-        "order_fee_cents": 75,
+        "order_fee_cents": 50,
         "call_overage_cents_per_min": 0,
         "included_call_min": 3,
         "pricing_model": None,
@@ -125,7 +128,7 @@ def test_resolve_unknown_tier_falls_back_to_closest_by_monthly():
     # 'weekly' isn't a canonical tier; CA$700/mo → command.
     terms = ft.resolve_fee_terms("ca", plan_tier="weekly", monthly_fee_cents=70000)
     assert terms["plan_tier"] == "command"
-    assert terms["order_fee_cents"] == 60
+    assert terms["order_fee_cents"] == 50
 
 
 def test_resolve_keeps_rep_price_bump_within_headroom():
@@ -138,15 +141,15 @@ def test_resolve_keeps_rep_price_bump_within_headroom():
 
 def test_resolve_clamps_order_fee_to_tier_redline_and_ceiling():
     # crafted low fee → clamped up to the floor
-    assert ft.resolve_fee_terms("us", "premium", order_fee_cents=1)["order_fee_cents"] == 65
-    assert ft.resolve_fee_terms("ca", "command", order_fee_cents=1)["order_fee_cents"] == 60
+    assert ft.resolve_fee_terms("us", "premium", order_fee_cents=1)["order_fee_cents"] == 35
+    assert ft.resolve_fee_terms("ca", "command", order_fee_cents=1)["order_fee_cents"] == 50
     # above the tier standard rate → clamped down
-    assert ft.resolve_fee_terms("us", "command", order_fee_cents=9999)["order_fee_cents"] == 45
+    assert ft.resolve_fee_terms("us", "command", order_fee_cents=9999)["order_fee_cents"] == 35
     # NO in-range band survives: the rep fee slider was retired
     # (Aidan 2026-08-06), so the tier rate IS the floor and anything a
     # client sends — high or low — is clamped to it.
-    assert ft.resolve_fee_terms("ca", "premium", order_fee_cents=120)["order_fee_cents"] == 75
-    assert ft.resolve_fee_terms("ca", "premium", order_fee_cents=1)["order_fee_cents"] == 75
+    assert ft.resolve_fee_terms("ca", "premium", order_fee_cents=120)["order_fee_cents"] == 50
+    assert ft.resolve_fee_terms("ca", "premium", order_fee_cents=1)["order_fee_cents"] == 50
 
 
 def test_terms_from_lead_row_locked_columns_win():
@@ -158,21 +161,21 @@ def test_terms_from_lead_row_locked_columns_win():
     }
     terms = ft.terms_from_lead_row("ca", lead)
     assert terms["monthly_fee_cents"] == 52500
-    assert terms["order_fee_cents"] == 75
+    assert terms["order_fee_cents"] == 50
 
 
 def test_terms_from_lead_row_pre_migration_lead_infers_from_monthly_value():
     terms = ft.terms_from_lead_row("ca", {"monthly_value": 700})
     assert terms["plan_tier"] == "command"
     assert terms["monthly_fee_cents"] == 70000
-    assert terms["order_fee_cents"] == 60
+    assert terms["order_fee_cents"] == 50
 
 
 # ── merchant_billing_terms: provision copies lead → terms ────────────────────
 
 async def test_set_terms_supersedes_then_inserts_never_updates_in_place():
     db = MockDB()
-    terms = ft.resolve_fee_terms("ca", "premium", order_fee_cents=75)
+    terms = ft.resolve_fee_terms("ca", "premium", order_fee_cents=50)
     row = await ft.set_merchant_billing_terms(
         db, "org-1", terms, source_lead_id="lead-1", source_market="ca",
         created_by="rep@x.com")
@@ -188,7 +191,7 @@ async def test_set_terms_supersedes_then_inserts_never_updates_in_place():
     assert inserted["source_lead_id"] == "lead-1"
     assert inserted["source_market"] == "ca"
     assert inserted["monthly_fee_cents"] == 50000
-    assert inserted["order_fee_cents"] == 75
+    assert inserted["order_fee_cents"] == 50
     assert inserted["override_reason"] is None  # lead-sourced = automatic
 
 

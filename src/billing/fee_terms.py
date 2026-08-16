@@ -110,15 +110,38 @@ def cad_fee_cents(usd_cents: int) -> int:
     return int(raw // CAD_ROUND_DOWN_TO_CENTS) * CAD_ROUND_DOWN_TO_CENTS
 
 
-ORDER_FEE_FLOOR_CENTS_USD: dict[str, int] = {"standard": 0, "premium": 65, "command": 45}
+# BREAK-EVEN PRICING (Aidan 2026-08-16). The per-order fee is now the lowest
+# price that still covers what an order actually costs us, measured rather
+# than assumed:
+#
+#   voice   US$0.104/min x 3 min (the included block)  = US$0.312
+#   SMS     2 x US$0.008 (confirmation + pay link)     = US$0.016
+#                                                        --------
+#   marginal cost per phone order                        US$0.328
+#
+# Rounded UP to the nearest 5c so the fee can never sit below cost: US$0.35.
+# Stripe is neutral — grossup adds 2.9%+30c to the application fee, so the
+# merchant covers Stripe's cut and Meridian nets the base fee.
+#
+# The long-call tail pays for itself and does not need pricing in: overage
+# bills $0.45/min past 3 minutes, so a call that runs to the 5-minute cap
+# earns $0.90 against $0.21 of extra voice cost.
+#
+# Premium and command are now the SAME per-order rate. The tiers differentiate
+# on the monthly fee; charging more per order on the cheaper-monthly tier was
+# never the differentiator anybody bought.
+ORDER_FEE_FLOOR_CENTS_USD: dict[str, int] = {"standard": 0, "premium": 35, "command": 35}
 ORDER_FEE_CAP_CENTS_USD = 500
 
-# CAD overrides that deliberately BREAK the ×1.4 derivation (Aidan 2026-08-07).
-# CA premium is CA$0.75 ALL-IN: that is the merchant's total per-order cost
-# including Stripe's flat 30¢, which Meridian now absorbs instead of passing
-# through (STRIPE_FEE_FIXED_CENTS=0) — so Meridian nets CA$0.45. Derivation
-# would say 90¢; the cut is a deliberate CA-only price move, not a rounding.
-ORDER_FEE_FLOOR_CENTS_CAD_OVERRIDE: dict[str, int] = {"premium": 75}
+# CAD overrides that deliberately BREAK the ×1.4 derivation.
+#
+# 2026-08-16: BOTH paid tiers are overridden, and the reason is arithmetic
+# rather than positioning. The derivation rounds DOWN to the nearest 5c —
+# US$0.35 x 1.4 = 49c, which floors to 45c. Our cost in CAD terms is
+# US$0.328 x 1.4 = CA$0.459, so the derived 45c would price Canada BELOW
+# break-even. Rounding up to CA$0.50 is the smallest fee that still covers
+# the order.
+ORDER_FEE_FLOOR_CENTS_CAD_OVERRIDE: dict[str, int] = {"premium": 50, "command": 50}
 
 # Market-keyed views ('us' | 'ca') — the only floor/cap tables consumers read.
 ORDER_FEE_FLOOR_CENTS: dict[str, dict[str, int]] = {
@@ -150,14 +173,14 @@ CANONICAL_FEE_TERMS: dict[str, dict[str, dict[str, int]]] = {
         },
         "premium": {
             "monthly_fee_cents": 35000,
-            "order_fee_cents": 65,
+            "order_fee_cents": 35,
             "order_fee_floor_cents": ORDER_FEE_FLOOR_CENTS["us"]["premium"],
             "call_overage_cents_per_min": DEFAULT_CALL_OVERAGE_CENTS_PER_MIN,
             "included_call_min": DEFAULT_INCLUDED_CALL_MIN,
         },
         "command": {
             "monthly_fee_cents": 50000,
-            "order_fee_cents": 45,
+            "order_fee_cents": 35,
             "order_fee_floor_cents": ORDER_FEE_FLOOR_CENTS["us"]["command"],
             "call_overage_cents_per_min": DEFAULT_CALL_OVERAGE_CENTS_PER_MIN,
             "included_call_min": DEFAULT_INCLUDED_CALL_MIN,
@@ -173,14 +196,14 @@ CANONICAL_FEE_TERMS: dict[str, dict[str, dict[str, int]]] = {
         },
         "premium": {
             "monthly_fee_cents": 50000,
-            "order_fee_cents": 75,
+            "order_fee_cents": 50,
             "order_fee_floor_cents": ORDER_FEE_FLOOR_CENTS["ca"]["premium"],
             "call_overage_cents_per_min": DEFAULT_CALL_OVERAGE_CENTS_PER_MIN,
             "included_call_min": DEFAULT_INCLUDED_CALL_MIN,
         },
         "command": {
             "monthly_fee_cents": 70000,
-            "order_fee_cents": 60,
+            "order_fee_cents": 50,
             "order_fee_floor_cents": ORDER_FEE_FLOOR_CENTS["ca"]["command"],
             "call_overage_cents_per_min": DEFAULT_CALL_OVERAGE_CENTS_PER_MIN,
             "included_call_min": DEFAULT_INCLUDED_CALL_MIN,

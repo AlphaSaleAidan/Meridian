@@ -159,19 +159,21 @@ def test_clamp_enforces_cad_tier_redlines():
     # break from the x1.4 derivation) / CA$0.60 command. With the rep fee
     # slider retired the rate IS the floor, so there is no "in range" band any
     # more — anything sent, high or low, lands on the tier rate.
-    assert _clamp_order_fee_cents(50, "premium") == 75    # below → clamped up
-    assert _clamp_order_fee_cents(75, "premium") == 75    # at the rate, untouched
+    assert _clamp_order_fee_cents(50, "premium") == 50    # at the rate, untouched
+    assert _clamp_order_fee_cents(30, "premium") == 50    # below → clamped up
     assert _clamp_order_fee_cents(149, "premium") == 149  # above the rate, under the cap
-    assert _clamp_order_fee_cents(10, "command") == 60    # command floor 60
-    assert _clamp_order_fee_cents(0, None) == 60          # unknown plan → lowest non-zero floor
+    assert _clamp_order_fee_cents(10, "command") == 50    # command floor 50
+    assert _clamp_order_fee_cents(0, None) == 50          # unknown plan → lowest non-zero floor
     assert _clamp_order_fee_cents(0, "standard") == 0     # standard has no phone agent fee
     assert _clamp_order_fee_cents(99999, "premium") == 700  # CAD cap CA$7.00
 
 
 def test_clamp_us_floors_unchanged():
-    assert _clamp_order_fee_cents(50, "premium", market="us") == 65
-    assert _clamp_order_fee_cents(10, "command", market="us") == 45
-    assert _clamp_order_fee_cents(0, None, market="us") == 45
+    assert _clamp_order_fee_cents(30, "premium", market="us") == 35
+    assert _clamp_order_fee_cents(10, "command", market="us") == 35
+    # "no plan" clamps to the lowest NON-ZERO floor, which is now the single
+    # break-even rate both paid tiers share.
+    assert _clamp_order_fee_cents(0, None, market="us") == 35
     assert _clamp_order_fee_cents(0, "standard", market="us") == 0
     assert _clamp_order_fee_cents(99999, "premium", market="us") == 500  # US cap unchanged
 
@@ -184,10 +186,10 @@ def test_clamp_between_usd_and_cad_floor_diverges_by_market():
     # sat above BOTH once the CA floor was cut to 75, so the test had stopped
     # testing divergence at all — it needs a fee that is legal in one market
     # and not the other.
-    assert _clamp_order_fee_cents(70, "premium", market="us") == 70   # >= US floor 65 -> allowed
-    assert _clamp_order_fee_cents(70, "premium") == 75                # < CA floor 75 -> clamped up
-    assert _clamp_order_fee_cents(50, "command", market="us") == 50   # ≥ US floor 45 → allowed
-    assert _clamp_order_fee_cents(50, "command") == 60                # < CA floor 60 → clamped up
+    assert _clamp_order_fee_cents(40, "premium", market="us") == 40   # >= US floor 35 -> allowed
+    assert _clamp_order_fee_cents(40, "premium") == 50                # < CA floor 50 -> clamped up
+    assert _clamp_order_fee_cents(40, "command", market="us") == 40   # >= US floor 35 -> allowed
+    assert _clamp_order_fee_cents(40, "command") == 50                # < CA floor 50 -> clamped up
 
 
 def test_cad_floors_and_cap_derive_from_usd_times_multiplier():
@@ -201,14 +203,14 @@ def test_cad_floors_and_cap_derive_from_usd_times_multiplier():
     assert CAD_FEE_MULTIPLIER == 1.4
     # CAD = USD × 1.4, rounded DOWN to nearest 5¢ (never above the raw multiple).
     for tier, usd in ORDER_FEE_FLOOR_CENTS["us"].items():
-        if tier == "premium":
+        if tier in ("premium", "command"):
             # DELIBERATE exception (Aidan 2026-08-07): CA premium is CA$0.75
             # all-in because Meridian absorbs Stripe's flat 30c rather than
             # passing it through. Derivation would say 90c.
-            assert ORDER_FEE_FLOOR_CENTS["ca"][tier] == 75
+            assert ORDER_FEE_FLOOR_CENTS["ca"][tier] == 50
             continue
         assert ORDER_FEE_FLOOR_CENTS["ca"][tier] == int(usd * CAD_FEE_MULTIPLIER) // 5 * 5
-    assert ORDER_FEE_FLOOR_CENTS["ca"] == {"standard": 0, "premium": 75, "command": 60}
+    assert ORDER_FEE_FLOOR_CENTS["ca"] == {"standard": 0, "premium": 50, "command": 50}
     assert ORDER_FEE_CAP_CENTS == {"us": 500, "ca": 700}
     # canada.py clamps and fee_terms canonical table share the same values
     from src.api.routes.canada import (
@@ -222,11 +224,11 @@ def test_cad_floors_and_cap_derive_from_usd_times_multiplier():
 def test_resolve_fee_terms_clamps_to_cad_floor():
     from src.billing.fee_terms import resolve_fee_terms
     # below-floor negotiated fee at close → clamped up to the CAD redline
-    assert resolve_fee_terms("ca", "premium", order_fee_cents=70)["order_fee_cents"] == 75
-    assert resolve_fee_terms("ca", "command", order_fee_cents=1)["order_fee_cents"] == 60
+    assert resolve_fee_terms("ca", "premium", order_fee_cents=30)["order_fee_cents"] == 50
+    assert resolve_fee_terms("ca", "command", order_fee_cents=1)["order_fee_cents"] == 50
     # same fee on a US deal → US floors apply. 70 is above the US premium
     # rate of 65, and with the slider retired anything above clamps down to it.
-    assert resolve_fee_terms("us", "premium", order_fee_cents=70)["order_fee_cents"] == 65
+    assert resolve_fee_terms("us", "premium", order_fee_cents=70)["order_fee_cents"] == 35
 
 
 # ── 3+4. accent / voice / multilingual ────────────────────────
