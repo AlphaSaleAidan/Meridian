@@ -33,6 +33,7 @@ import PeakHoursHeatmap, { type HeatmapCell } from '@/components/PeakHoursHeatma
 import InsightCard from '@/components/InsightCard'
 import type { Insight } from '@/lib/api'
 import { formatCentsCompact } from '@/lib/format'
+import { getCurrencyMultiplier } from '@/lib/demo-context'
 import {
   CalendarCheck, Car, Clock, DollarSign, Navigation, PhoneCall,
   Receipt, Sparkles, Users, type LucideIcon,
@@ -78,6 +79,19 @@ export interface WorkspaceData {
 const money = (cents: number): string => formatCentsCompact(cents)
 
 /**
+ * A figure that came from the PACK rather than from the book.
+ *
+ * Pack figures — a cover price, a counter trade's takings — are written in US
+ * cents, because the pack describes a trade rather than a market. Prices that
+ * come through the book are already converted (demo-bookings does it when it
+ * seeds services), so without this the restaurant's cover price was the only
+ * number on a Canadian screen still quoted in US dollars, and the counter
+ * trades were quoted entirely in them.
+ */
+const packMoney = (cents: number): string =>
+  money(Math.round(cents * getCurrencyMultiplier()))
+
+/**
  * What a day's bookings are worth.
  *
  * Priced services carry their own price; a restaurant's "service" is a party
@@ -87,7 +101,12 @@ const money = (cents: number): string => formatCentsCompact(cents)
  */
 function revenueCents(bookings: Booking[], services: Service[], pack: NichePack): number {
   if (pack.avgCoverCents) {
-    return bookings.reduce((s, b) => s + b.partySize * pack.avgCoverCents!, 0)
+    // Converted, because avgCoverCents is a US figure written into the pack
+    // while every service price arrives already converted. Left raw, the
+    // restaurant was the one trade whose Canadian revenue was quoted in US
+    // dollars — and it read as a plausible number, which is why it survived.
+    const cover = Math.round(pack.avgCoverCents * getCurrencyMultiplier())
+    return bookings.reduce((s, b) => s + b.partySize * cover, 0)
   }
   const price = new Map(services.map((sv) => [sv.id, sv.priceCents ?? 0]))
   return bookings.reduce((s, b) => s + (price.get(b.serviceId || '') ?? 0), 0)
@@ -150,8 +169,20 @@ export default function TradeWorkspace(data: WorkspaceData) {
   const attention = useMemo(() => computeAttention(data, live, open, close), [data, live, open, close])
 
   const { services = [], history } = data
+  /**
+   * The headline.
+   *
+   * A trade with no book has no booked revenue, so the takeaway shop, the
+   * cafe and the smoke shop all opened the demo on "$0" — the largest number
+   * on the screen, and wrong. They take money all day; the pack says how
+   * much.
+   */
+  const counterTakings = pack.counterStats
+    ? Math.round((pack.counterTakingsCents ?? 0) * getCurrencyMultiplier())
+    : null
   const booked = useMemo(
-    () => revenueCents(live, services, pack), [live, services, pack])
+    () => counterTakings ?? revenueCents(live, services, pack),
+    [counterTakings, live, services, pack])
 
   /** Today against the same weekday, not against yesterday — a Sunday is not
    *  a slow Monday, and comparing them invents a crisis every week. */
@@ -182,8 +213,12 @@ export default function TradeWorkspace(data: WorkspaceData) {
     const avgDuration = services.length
       ? services.reduce((s, sv) => s + sv.durationMinutes + sv.bufferMinutes, 0) / services.length
       : 60
+    // Same conversion as revenueCents: the cover price is a pack figure in
+    // US cents, while service prices arrive converted. Without it the
+    // restaurant's "still sellable" line was the last US amount left on a
+    // Canadian screen.
     const avgValue = pack.avgCoverCents
-      ? pack.avgCoverCents * 2
+      ? Math.round(pack.avgCoverCents * getCurrencyMultiplier()) * 2
       : services.length
         ? services.reduce((s, sv) => s + (sv.priceCents ?? 0), 0) / services.length
         : 0
@@ -274,7 +309,7 @@ export default function TradeWorkspace(data: WorkspaceData) {
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="text-[11px] uppercase tracking-[0.14em] text-[#6B6B73]">
-              {dayLabel} · booked so far
+              {dayLabel} · {counterTakings != null ? 'taken so far' : 'booked so far'}
             </div>
             <div className="mt-2 flex flex-wrap items-end gap-x-4 gap-y-1">
               <div className="font-mono text-[56px] font-semibold leading-none tracking-tight text-[#F5F5F7]">
@@ -490,13 +525,30 @@ function computeTiles(
   const util = Math.round((bookedMins / capacity) * 100)
   const avgTicket = live.length ? Math.round(booked / live.length) : 0
 
+  /**
+   * A counter trade has no book, so there is no day to derive figures from.
+   * Its numbers come from the pack — beside everything else true about the
+   * trade — rather than from literals buried in this switch, which is where
+   * the takeaway shop's used to live.
+   */
+  if (pack.counterStats) {
+    const icons = [PhoneCall, Receipt, Clock, Users]
+    return pack.counterStats.map((stat, i) => ({
+      label: stat.label,
+      value: stat.cents != null ? packMoney(stat.cents) : stat.value ?? '—',
+      sub: stat.sub,
+      tone: stat.tone,
+      icon: icons[i],
+    }))
+  }
+
   switch (pack.key) {
     case 'restaurant': {
       const covers = live.reduce((s, b) => s + b.partySize, 0)
       const peak = peakBucket(live, timezone, open, close)
       return [
         { label: 'Covers booked', value: String(covers), sub: `${live.length} bookings`, icon: Users },
-        { label: 'Avg spend / cover', value: money(pack.avgCoverCents ?? 0), icon: Receipt },
+        { label: 'Avg spend / cover', value: packMoney(pack.avgCoverCents ?? 0), icon: Receipt },
         { label: 'Busiest half hour', value: peak.covers ? clock(peak.at) : '—',
           sub: peak.covers ? `${peak.covers} covers land` : undefined,
           tone: peak.covers > 20 ? 'warn' : undefined },
@@ -516,13 +568,22 @@ function computeTiles(
           sub: tight > 0 ? 'may not make it' : 'the day fits' },
       ]
     }
-    case 'quickservice':
+    case 'autoshop': {
+      // A repair shop is not a detailer: the spread from a half-hour oil
+      // change to a four-hour brake job IS the scheduling problem, so the
+      // longest job on the board is a figure worth leading with.
+      const longest = live.reduce((m, b) => Math.max(m, mins(b)), 0)
       return [
-        { label: 'Orders by phone', value: '86', sub: 'taken by the agent', icon: PhoneCall },
-        { label: 'Avg ticket', value: money(2800), icon: Receipt },
-        { label: 'Busiest hour', value: '7pm', sub: '22 orders' },
-        { label: 'Missed calls', value: '0', tone: 'good', sub: 'nobody hung up' },
+        { label: 'Vehicles in', value: String(live.length), icon: Car },
+        { label: 'Avg repair order', value: money(avgTicket), icon: Receipt },
+        { label: 'Bay hours sold', value: `${(bookedMins / 60).toFixed(1)}h`, icon: Clock,
+          tone: util < 50 ? 'warn' : util > 80 ? 'good' : undefined,
+          sub: `${util}% of ${(capacity / 60).toFixed(0)}h available` },
+        { label: 'Longest job', value: longest ? `${Math.floor(longest / 60)}h ${longest % 60}m` : '—',
+          sub: longest >= 120 ? 'blocks a bay most of the morning' : undefined,
+          tone: longest >= 120 ? 'warn' : undefined },
       ]
+    }
     case 'medspa': {
       const consults = live.filter((b) => mins(b) <= 45)
       const treatments = live.filter((b) => mins(b) > 45)

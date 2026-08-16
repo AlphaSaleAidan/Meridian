@@ -113,6 +113,39 @@ describe('a trade resolves to a pack', () => {
   })
 })
 
+describe('every trade the picker offers is actually a version', () => {
+  it('resolves to its own pack, never the generic fallback', () => {
+    // Coffee Shop, Auto Shop and Smoke Shop shipped in the picker with no
+    // pack behind them, so all three fell through to GENERIC_PACK and showed
+    // an identical dashboard, an identical sidebar order, and — for a smoke
+    // shop — an "Appointments" figure for a business that has never taken
+    // one. Offering a trade and not building it is worse than not offering it.
+    for (const id of IDS) {
+      expect(packFor(id).key, `${id} has no pack of its own`).not.toBe(GENERIC_PACK.key)
+    }
+  })
+
+  it('opens each trade on a different headline figure', () => {
+    const labels = IDS.map((id) => packFor(id).homeMetric.label)
+    const dupes = labels.filter((l, i) => labels.indexOf(l) !== i)
+    expect(dupes, 'two trades sharing a headline is a theme, not a version').toEqual([])
+  })
+
+  it('gives the counter trades figures instead of an empty book', () => {
+    // A trade that does not book has no day to derive numbers from. Without
+    // counterStats the workspace falls back to booking tiles and reports zero
+    // appointments at a shop that does not take them.
+    for (const id of IDS) {
+      const pack = packFor(id)
+      if (!pack.booksAtAll) {
+        expect(pack.counterStats?.length, `${id} books nothing and shows nothing`).toBe(4)
+      } else {
+        expect(pack.counterStats, `${id} books, so it derives its own figures`).toBeUndefined()
+      }
+    }
+  })
+})
+
 describe('Canadian money says it is Canadian', () => {
   it('qualifies the dollar sign on /canada, in both formatters', async () => {
     // Intl renders CAD under en-CA as a bare "$", which put "CA$1.4K" as a

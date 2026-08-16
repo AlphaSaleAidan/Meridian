@@ -109,6 +109,35 @@ export interface NichePack {
    */
   homeMetric: { label: string; help: string }
   /**
+   * The four figures a COUNTER trade opens on.
+   *
+   * A trade with no book has no bookings to derive a day from, so its
+   * headline figures cannot be computed the way a barbershop's are. They live
+   * here, beside everything else that is true about the trade, rather than as
+   * literals inside the overview component — which is where the takeaway
+   * shop's numbers used to sit, invisible to anyone reading the pack.
+   *
+   * Only set on packs where booksAtAll is false.
+   */
+  counterStats?: {
+    label: string
+    /** Money, in US cents. The Canadian demo converts it, exactly as it does
+     *  every service price — a pre-formatted "$28.00" string cannot be. */
+    cents?: number
+    /** Anything that is not money: a count, a percentage, a time. */
+    value?: string
+    sub?: string
+    tone?: 'good' | 'warn'
+  }[]
+  /**
+   * What a COUNTER trade took today, in US cents.
+   *
+   * The headline is booked revenue, which a trade with no book has none of —
+   * so a takeaway shop, a cafe and a smoke shop all opened the demo on a
+   * "$0" headline. They take money all day; they just do not take bookings.
+   */
+  counterTakingsCents?: number
+  /**
    * Average spend per cover, for trades where the booking is a table rather
    * than a priced service. A restaurant's revenue is covers x spend; pricing
    * a "Table for 1-4" would be nonsense.
@@ -308,6 +337,13 @@ export const NICHE_PACKS: NichePack[] = [
     pillarOrder: ['phone', '', 'inventory', 'camera', 'schedule'],
     homeMetric: { label: 'Orders taken by phone',
                   help: 'Orders the agent took while the line was busy — the ones you would have lost.' },
+    counterStats: [
+      { label: 'Orders by phone', value: '86', sub: 'taken by the agent' },
+      { label: 'Avg ticket', cents: 2800 },
+      { label: 'Busiest hour', value: '7pm', sub: '22 orders' },
+      { label: 'Missed calls', value: '0', sub: 'nobody hung up', tone: 'good' },
+    ],
+    counterTakingsCents: 428_000,
   },
   {
     key: 'medspa',
@@ -338,6 +374,110 @@ export const NICHE_PACKS: NichePack[] = [
     pillarOrder: ['bookings', 'phone', '', 'inventory', 'schedule'],
     homeMetric: { label: 'Consultations booked this week',
                   help: 'A consultation is the start of a treatment plan, not a single sale.' },
+  },
+  {
+    key: 'coffeeshop',
+    label: 'Coffee shop & cafe',
+    pitch: 'The morning rush is ninety minutes long and decides the whole day.',
+    bookingNoun: 'order',
+    customerNoun: 'regular',
+    resourceKind: 'table',
+    countTitle: '',
+    countLabel: '',
+    // A cafe does not book a table and never has. Handing it a calendar is
+    // the same mistake as handing one to a pizza shop.
+    booksAtAll: false,
+    defaultCount: 0,
+    defaultSeats: 0,
+    partyBanded: false,
+    services: [],
+    days: [0, 1, 2, 3, 4, 5, 6],
+    opens: '06:00',
+    closes: '16:00',
+    // Menu Matrix is the point here — a cafe lives or dies on which drinks
+    // carry the margin. Camera stays for the queue at 8am.
+    modules: { bookings: false },
+    pillarOrder: ['inventory', '', 'schedule', 'phone', 'camera'],
+    homeMetric: { label: 'Morning rush takings',
+                  help: 'The first four hours are most of the day. Everything else is a tail.' },
+    counterStats: [
+      { label: 'Drinks sold', value: '412', sub: 'before 11am: 268' },
+      { label: 'Avg ticket', cents: 940 },
+      { label: 'Morning rush', value: '8am', sub: '96 drinks in the hour' },
+      { label: 'Regulars back', value: '38%', sub: 'seen in the last week', tone: 'good' },
+    ],
+    counterTakingsCents: 387_000,
+  },
+  {
+    key: 'autoshop',
+    label: 'Auto repair shop',
+    pitch: 'A bay standing empty at 10am is a day you cannot get back.',
+    bookingNoun: 'appointment',
+    customerNoun: 'customer',
+    resourceKind: 'bay',
+    countTitle: 'How many bays can take a vehicle at once?',
+    countLabel: 'Bays',
+    booksAtAll: true,
+    defaultCount: 4,
+    defaultSeats: 1,
+    partyBanded: false,
+    // Repair, not detailing: the jobs are diagnostic and mechanical, and the
+    // spread from a 30-minute oil change to a 4-hour brake job is the whole
+    // scheduling problem.
+    services: [
+      { name: 'Oil change', duration: 30, buffer: 10, min: 1, max: 1, price: 8900 },
+      { name: 'Diagnostic', duration: 60, buffer: 15, min: 1, max: 1, price: 12500 },
+      { name: 'Brake service', duration: 150, buffer: 20, min: 1, max: 1, price: 42000 },
+      { name: 'Tyre fitting', duration: 45, buffer: 10, min: 1, max: 1, price: 16000 },
+    ],
+    days: [1, 2, 3, 4, 5, 6],
+    opens: '08:00',
+    closes: '17:00',
+    // Parts are inventory with real margin, so Inventory stays. Menu Matrix
+    // is a food screen and goes.
+    modules: { taxExpenses: false },
+    hiddenViews: ['inventory/menu'],
+    pillarOrder: ['bookings', '', 'inventory', 'phone', 'schedule'],
+    // Not "bay hours" — that is the DETAILER's headline, and two trades
+    // opening on the same figure is the definition of a theme rather than a
+    // version. A repair shop counts vehicles through the door; the hours are
+    // a tile underneath.
+    homeMetric: { label: 'Vehicles through the bays today',
+                  help: 'A repair shop is paid per vehicle, and a bay standing empty at 10am is a job that never arrives.' },
+  },
+  {
+    key: 'smokeshop',
+    label: 'Smoke & vape shop',
+    pitch: 'Margin lives in the case, not at the till.',
+    bookingNoun: 'order',
+    customerNoun: 'customer',
+    resourceKind: 'table',
+    countTitle: '',
+    countLabel: '',
+    // Pure retail. There is nothing to book, and pretending otherwise put an
+    // "Appointments" figure on a shop that has never taken one.
+    booksAtAll: false,
+    defaultCount: 0,
+    defaultSeats: 0,
+    partyBanded: false,
+    services: [],
+    days: [0, 1, 2, 3, 4, 5, 6],
+    opens: '10:00',
+    closes: '21:00',
+    // Everything here is an inventory business: stock, margin, dead lines.
+    // Menu Matrix is a food screen; the rest of Inventory is the product.
+    modules: { bookings: false },
+    hiddenViews: ['inventory/menu'],
+    pillarOrder: ['inventory', '', 'camera', 'phone', 'schedule'],
+    homeMetric: { label: 'Margin taken today',
+                  help: 'Two shops can take the same money and keep very different amounts of it.' },
+    counterStats: [
+      { label: 'Transactions', value: '134' },
+      { label: 'Avg basket', cents: 3120 },
+      { label: 'Gross margin', value: '46%', sub: 'on today\u2019s mix', tone: 'good' },
+      { label: 'Dead stock', value: '7 lines', sub: 'no sale in 30 days', tone: 'warn' },
+    ],
+    counterTakingsCents: 418_000,
   },
 ]
 
@@ -383,6 +523,9 @@ export const ALL_PACKS = [...NICHE_PACKS, GENERIC_PACK]
  */
 const PACK_ALIASES: Record<string, string> = {
   fast_food: 'quickservice',
+  coffee_shop: 'coffeeshop',
+  auto_shop: 'autoshop',
+  smoke_shop: 'smokeshop',
   mobile_detailing: 'mobiledetailing',
   auto_detailing: 'detailing',
   med_spa: 'medspa',

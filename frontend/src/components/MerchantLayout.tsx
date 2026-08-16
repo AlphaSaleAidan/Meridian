@@ -54,6 +54,20 @@ export default function MerchantLayout({ basePath = MERCHANT_BASE_PATH }: { base
   // then put them in the order this merchant's TRADE cares about. A barber
   // opens on the book; a takeout shop opens on the phone.
   const pack = useTradePack()
+  /**
+   * Roadmap previews ride along in BOTH public demos — never in a paying
+   * merchant's portal. This was pinned to the Canada demo path, so a US
+   * prospect saw four fewer tabs than a Canadian one despite /demo being
+   * documented as a mirror of /canada/demo.
+   *
+   * They sit in the ONE list now rather than under a "Coming Soon" heading.
+   * They follow Camera at the end of Everything else.
+   * The heading sorted the navigation by our build status, which is our
+   * problem and not the merchant's — and it did it twice over, since each of
+   * those pages already says so in a banner at the top. Sorting by what a
+   * trade uses is the only order that means anything to them.
+   */
+  const roadmapPillars = isDemo ? comingSoonPillars : []
   const visiblePillars = orderPillars(
     merchantPillars.filter(p => !p.flag || flags[p.flag]),
     pack.pillarOrder,
@@ -74,12 +88,6 @@ export default function MerchantLayout({ basePath = MERCHANT_BASE_PATH }: { base
     .filter(p => !(homePillar && p.path === ''))
   const secondaryPillars = visiblePillars.filter(p => p.secondary)
   const settingsPillar = visiblePillars.find(p => p.path === 'settings')
-  // Roadmap previews ride along in BOTH public demos — never in a paying
-  // merchant's portal. This was pinned to the Canada demo path, so a US
-  // prospect saw four fewer tabs (Insights, Customers, Taxes & Expenses,
-  // My Website) than a Canadian one despite /demo being documented as a
-  // mirror of /canada/demo.
-  const roadmapPillars = isDemo ? comingSoonPillars : []
   // Mobile bottom-nav: money pillars + settings only (no secondary tabs, no
   // overflow) — except in the demo, where the secondary tabs (Camera) join the
   // bar so the sidebar isn't needed at all on mobile.
@@ -137,19 +145,12 @@ export default function MerchantLayout({ basePath = MERCHANT_BASE_PATH }: { base
           {moneyPillars.map(p => (
             <PillarLink key={p.path || '_home'} pillar={p} basePath={basePath} onNavigate={closeSidebar} />
           ))}
-          {secondaryPillars.length > 0 && (
+          {[...secondaryPillars, ...roadmapPillars].length > 0 && (
             <div className="pt-2 mt-2 border-t border-[#1F1F23] space-y-0.5">
-              {secondaryPillars.map(p => (
-                <PillarLink key={p.path} pillar={p} basePath={basePath} onNavigate={closeSidebar} />
-              ))}
-            </div>
-          )}
-          {roadmapPillars.length > 0 && (
-            <div className="pt-2 mt-2 border-t border-[#1F1F23] space-y-0.5">
-              <p className="px-3 pt-1 pb-1.5 text-[9px] font-semibold uppercase tracking-[0.16em] text-[#A1A1A8]/45">
-                Coming Soon
-              </p>
-              {roadmapPillars.map(p => (
+              {/* Camera first, then the roadmap previews — one continuous list
+                  under Everything else. Camera below "My Website" read as an
+                  afterthought when the roadmap items were merged above it. */}
+              {[...secondaryPillars, ...roadmapPillars].map(p => (
                 <PillarLink key={p.path} pillar={p} basePath={basePath} onNavigate={closeSidebar} />
               ))}
             </div>
@@ -176,8 +177,8 @@ export default function MerchantLayout({ basePath = MERCHANT_BASE_PATH }: { base
       <main id="main-content" className="flex-1 overflow-y-auto">
         <div className="lg:hidden sticky top-0 z-30 h-14 bg-[#0A0A0B]/95 backdrop-blur-sm border-b border-[#1F1F23] flex items-center gap-3 px-4">
           {/* Demos normally drop the hamburger because the bottom bar carries
-              every tab — but the Coming Soon group lives only in the sidebar,
-              so the Canada demo keeps a way to open it. */}
+              every tab — but the roadmap previews are sidebar-only (four more
+              tabs will not fit in a bottom bar), so a demo keeps a way in. */}
           {(!isDemo || roadmapPillars.length > 0) && (
             <button aria-label="Open menu" onClick={() => setSidebarOpen(true)} className="p-1.5 rounded-lg hover:bg-[#111113]">
               <Menu size={20} className="text-[#A1A1A8]" />
