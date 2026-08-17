@@ -258,7 +258,12 @@ export default function TradeWorkspace(data: WorkspaceData) {
   const routeStops = useMemo(() => {
     const all = stops || []
     if (!pack.travels) return all
-    if (pack.booksAtAll) return all          // a detailer's day IS the route
+    // A DELIVERY trade runs many routes a night; a detailer runs one. Seven
+    // jobs in a van IS the day, so showing all of them is right — sixty-eight
+    // pizza drops is not one run, and drawing them as one produced "3h 46m
+    // driving". Keyed on the noun rather than on whether it books, because
+    // deliveries became bookings and the old test silently stopped applying.
+    if (pack.bookingNoun !== 'delivery') return all
     const perDriver = 3
     const onTheRoad = Math.max(1, (pack.defaultCount || 1) * perDriver)
     return [...all]
