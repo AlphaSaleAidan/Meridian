@@ -34,7 +34,8 @@ export default function MerchantPillarPage({ pillar }: { pillar: Pillar }) {
    * A merchant with no trade set loses nothing: packFor() falls back to a pack
    * that hides nothing.
    */
-  const hidden = useTradePack().hiddenViews || []
+  const pack = useTradePack()
+  const hidden = pack.hiddenViews || []
 
   /**
    * On the demos, home IS the trade workspace.
@@ -46,7 +47,22 @@ export default function MerchantPillarPage({ pillar }: { pillar: Pillar }) {
    */
   const { pathname } = useLocation()
   const isDemo = pathname.startsWith('/demo') || pathname.startsWith('/canada/demo')
-  const workspaceHome = isDemo && pillar.path === ''
+
+  /**
+   * LIVE for the trades that DRIVE, demo for everyone else.
+   *
+   * The workspace was demo-only on purpose: a new home screen is not
+   * something a paying merchant should discover. That caution still holds for
+   * a barbershop, whose existing home page works.
+   *
+   * It does not hold for a pizza shop or a mobile detailer. Their day is a
+   * ROUTE — where every driver is and which drop is about to be late — and
+   * the old home page cannot show it at all, so leaving them on it is not the
+   * safe option, it is the one that withholds the product they bought.
+   * Aidan's call, scoped to `travels` so the blast radius is those two trades
+   * rather than every merchant.
+   */
+  const workspaceHome = (isDemo || pack.travels) && pillar.path === ''
 
   const forTrade = pillar.segments.filter(
     s => !hidden.includes(`${pillar.path}/${s.view}`) && !(workspaceHome && s.view !== 'home'))

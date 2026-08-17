@@ -15,6 +15,7 @@ import { describe, expect, it } from 'vitest'
 import { BUSINESS_GROUPS, BUSINESS_TYPES, type BusinessType } from '../demo-context'
 import { getBusinessProfile, getProducts, getStaff } from '../business-config'
 import { packFor, GENERIC_PACK } from '@/config/niches'
+import { flagsForMerchant } from '@/config/moduleFlags'
 
 const IDS = BUSINESS_TYPES.map((b) => b.id)
 
@@ -188,6 +189,45 @@ describe('Canadian money says it is Canadian', () => {
       expect(formatCentsCompact(140000)).not.toContain('CA$')
     } finally {
       history.replaceState(null, '', original)
+    }
+  })
+})
+
+
+describe('a pizza shop books its deliveries and sees them on a map', () => {
+  it('books, because a delivery IS a booking', () => {
+    // Not a reservation — nobody rings a pizza shop for a table — but a drop
+    // has a time, an address and a driver, which is the same record with the
+    // same double-booking guarantee behind it. Without this a LIVE shop has
+    // no stops and the map is empty; it only ever worked in the demo.
+    const pizza = packFor('pizzeria')
+    expect(pizza.booksAtAll).toBe(true)
+    expect(pizza.travels).toBe(true)
+    expect(pizza.bookingNoun).toBe('delivery')
+  })
+
+  it('sets up in a driver\'s words, not a barber\'s', () => {
+    const pizza = packFor('pizzeria')
+    expect(pizza.countTitle).toMatch(/driver/i)
+    expect(pizza.countLabel).toBe('Drivers')
+    expect(pizza.services.some((s) => /delivery/i.test(s.name))).toBe(true)
+  })
+
+  it('keeps the Bookings module on — it is the delivery board', () => {
+    expect(flagsForMerchant('/canada/merchant', packFor('pizzeria').modules).bookings).toBe(true)
+  })
+
+  it('opens on the day, then the board', () => {
+    const order = packFor('pizzeria').pillarOrder || []
+    expect(order[0]).toBe('')          // the workspace: where the drivers are
+    expect(order[1]).toBe('bookings')  // then the deliveries themselves
+  })
+
+  it('still keeps the takeaway trades out of the booking system', () => {
+    // Pizza gained a book because it has a ROUTE. A counter takeaway and a
+    // smoke shop did not, and must not inherit one by association.
+    for (const key of ['quickservice', 'coffeeshop', 'smokeshop']) {
+      expect(packFor(key).booksAtAll, `${key} should not book`).toBe(false)
     }
   })
 })

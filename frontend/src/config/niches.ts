@@ -364,11 +364,12 @@ export const NICHE_PACKS: NichePack[] = [
     resourceKind: 'staff',
     countTitle: 'How many drivers are out at once?',
     countLabel: 'Drivers',
-    // A pizza shop takes no reservations — but it DOES run a route, and that
-    // is the thing nobody can see today. Deliveries are stops with addresses
-    // and drive times between them, which is the mobile detailer's problem
-    // exactly, so it gets the mobile detailer's map rather than a new one.
-    booksAtAll: false,
+    // A DELIVERY IS A BOOKING. Not a reservation — nobody rings a pizza shop
+    // for a table — but a drop has a time, an address and a driver, which is
+    // the same record with the same double-booking guarantee behind it. That
+    // is what makes the map work on real data rather than only in the demo:
+    // without it a live shop has no stops to draw.
+    booksAtAll: true,
     travels: true,
     defaultCount: 3,
     defaultSeats: 1,
@@ -383,9 +384,9 @@ export const NICHE_PACKS: NichePack[] = [
     closes: '23:00',
     // Menu Matrix is exactly the screen this trade was written for, and the
     // camera watches the counter queue at 7pm — the constraint on the whole
-    // evening.
-    modules: { bookings: false },
-    pillarOrder: ['', 'phone', 'inventory', 'camera', 'schedule'],
+    // evening. Bookings stays ON: it is the delivery board.
+    modules: {},
+    pillarOrder: ['', 'bookings', 'phone', 'inventory', 'camera', 'schedule'],
     homeMetric: { label: 'Deliveries on the road',
                   help: 'Where every driver is, and which drop is about to be late.' },
     avgCoverCents: 2600,
