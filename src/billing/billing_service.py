@@ -330,11 +330,19 @@ class BillingService:
 
     async def process_renewals(self):
         """
-        Renewal processor for subscriptions NOT on Square auto-billing.
-        Runs daily via Celery beat. Handles:
-        - Active subscriptions past their period end → create renewal invoice
-        - Trialing subscriptions past trial_ends_at → convert to first paid invoice
+        DISABLED 2026-08-19 — billing is Stripe-only now.
+
+        This used to create SQUARE renewal invoices for every subscription past
+        its period end. Stripe subscriptions auto-renew natively (Stripe charges
+        the card on file each period), so there is nothing to renew here, and
+        minting a Square invoice would double-bill a Stripe merchant. The daily
+        Celery beat entry was removed; this guard makes the manual
+        /api/billing/process-renewals endpoint a safe no-op too.
         """
+        logger.info("process_renewals is a no-op — renewals are handled by Stripe")
+        return
+
+    async def _process_renewals_legacy_square(self):
         try:
             now = datetime.now(timezone.utc)
 

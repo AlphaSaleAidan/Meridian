@@ -589,83 +589,40 @@ async def provision_customer(req: ProvisionCustomerRequest):
         logger.error("provision-customer: billing terms provisioning FAILED for %s: %s",
                      req.org_id, terms_err, exc_info=True)
 
-    # 3. Send setup fee invoice (card stored on payment → auto-billing starts)
-    invoices_sent = False
+    # 3. Record the subscription as awaiting Stripe payment.
+    #
+    #    NO invoice is created here. Billing runs entirely through Stripe now
+    #    (Aidan, 2026-08-19 — "it's all supposed to be done with stripe"). The
+    #    rep shares the Stripe subscription link (POST /api/stripe/subscribe-link);
+    #    the customer pays a recurring Stripe Checkout; the checkout webhook
+    #    (_activate_from_checkout) flips the org to active and STRIPE auto-renews
+    #    every period. The Square setup invoice + invoice SMS + daily Square
+    #    renewal cron that used to live here are gone — they were minting Square
+    #    invoices for a business that has moved to Stripe.
+    invoices_sent = False    # no invoice is created at provision time
     invoice_error = None
-    setup_result = None
+    sms_sent = False         # the Stripe link is shared by the rep, not auto-SMS'd
     try:
-        from src.billing.billing_service import BillingService
-        billing = BillingService(db)
-
-        plan_label = req.plan.replace("_", " ").title()
-
-        setup_result = await billing.create_invoice(
-            org_id=req.org_id,
-            amount_cents=req.monthly_price * 100,
-            customer_email=req.email,
-            description=f"Meridian Analytics - {plan_label} Plan (Setup + First Month)",
-            due_days=3,
-            store_card=True,
-        )
-
-        invoices_sent = setup_result.success
-        if invoices_sent:
-            logger.info(f"Sent setup invoice for {req.email}: {setup_result.invoice_id}")
-
-            customer_id = await billing._get_or_create_customer(
-                req.email, req.owner_name, req.business_name,
-            )
-
-            period_end = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
-            await db.upsert("subscriptions", {
-                "org_id": req.org_id,
-                "tier": req.plan,
-                "status": "pending_payment",
-                "monthly_price_cents": req.monthly_price * 100,
-                "current_period_start": now,
-                "current_period_end": period_end,
-                "metadata": {
-                    "payment_method": "square_invoice",
-                    "setup_invoice_id": setup_result.invoice_id,
-                    "setup_invoice_url": setup_result.invoice_url,
-                    "square_customer_id": customer_id,
-                    "awaiting_auto_subscription": True,
-                    "target_monthly_cents": req.monthly_price * 100,
-                    "created_via": "sr_provision",
-                    "rep_id": req.rep_id,
-                    "auto_renew": True,
-                },
-            }, on_conflict="org_id")
-        else:
-            invoice_error = "Invoice creation returned unsuccessful"
-            logger.warning(f"Invoice not successful for {req.email}: {setup_result}")
-    except ImportError:
-        invoice_error = "billing_service_unavailable"
-        logger.warning("Billing service not available — skipping invoices")
-    except Exception as e:
+        period_end = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+        await db.upsert("subscriptions", {
+            "org_id": req.org_id,
+            "tier": req.plan,
+            "status": "pending_payment",
+            "monthly_price_cents": req.monthly_price * 100,
+            "current_period_start": now,
+            "current_period_end": period_end,
+            "metadata": {
+                "payment_method": "stripe",
+                "awaiting_stripe_checkout": True,
+                "target_monthly_cents": req.monthly_price * 100,
+                "created_via": "sr_provision",
+                "rep_id": req.rep_id,
+            },
+        }, on_conflict="org_id")
+    except Exception as e:  # noqa: BLE001 — a record hiccup must not fail provisioning
         invoice_error = str(e)
-        logger.error(f"Invoice creation failed for {req.email}: {e}", exc_info=True)
-
-    # 3b. Send invoice SMS to customer phone
-    sms_sent = False
-    if invoices_sent and req.phone:
-        try:
-            from src.sms.client import send_invoice_sms
-            plan_label = req.plan.replace("_", " ").title()
-            invoice_url = setup_result.invoice_url if setup_result else None
-            sms_result = await send_invoice_sms(
-                phone=req.phone,
-                owner_name=req.owner_name,
-                business_name=req.business_name,
-                invoice_url=invoice_url,
-                plan_label=plan_label,
-                amount_display=f"${req.monthly_price}/mo",
-            )
-            sms_sent = sms_result.get("sent", False)
-            if sms_sent:
-                logger.info(f"Invoice SMS sent to {req.phone} for {req.email}")
-        except Exception as e:
-            logger.warning(f"Invoice SMS failed for {req.phone}: {e}")
+        logger.error(f"provision-customer: subscription record failed for {req.email}: {e}",
+                     exc_info=True)
 
     # 4. Send credentials email via Postal/Resend
     welcome_sent = False

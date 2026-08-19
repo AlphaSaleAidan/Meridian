@@ -386,11 +386,14 @@ async def test_provision_with_missing_lead_falls_back_to_manual():
     assert row["override_reason"] == "manual_provision"
 
 
-def test_billing_service_reads_contracted_monthly_and_prechecks():
+def test_process_renewals_is_a_stripe_noop_not_a_square_invoice():
+    # Renewals moved to Stripe (2026-08-19). Stripe subscriptions auto-renew
+    # natively, so process_renewals must be a no-op and must NOT create a Square
+    # invoice — otherwise a Stripe merchant gets double-billed.
     from src.billing.billing_service import BillingService
     src = inspect.getsource(BillingService.process_renewals)
-    assert "get_active_terms" in src
-    assert "check_merchant" in src
+    assert "create_invoice" not in src
+    assert "no-op" in src.lower() or "stripe" in src.lower()
 
 
 def test_vapi_end_of_call_uses_merchant_terms_fail_open():
