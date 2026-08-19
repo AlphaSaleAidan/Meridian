@@ -34,9 +34,27 @@ function rowToDeal(row: Record<string, unknown>): Deal {
   }
 }
 
+/**
+ * Postgres speaks to the database owner; this portal speaks to a rep. RLS
+ * denials arrive as raw policy text — 'new row violates row-level security
+ * policy "Training required to insert US leads"' — which lands in the add-lead
+ * form verbatim and tells the rep nothing they can act on. Translate the
+ * denials we know into the action they name, and keep everything else as-is:
+ * an unexpected message is worth seeing unedited.
+ */
+export function humanise(message: string): string {
+  if (/training required/i.test(message)) {
+    return 'Finish your training first — leads unlock as soon as the course is done.'
+  }
+  if (/row-level security/i.test(message)) {
+    return "Your account isn't allowed to do that. If it should be, ask your team lead."
+  }
+  return message
+}
+
 export class LeadsServiceError extends Error {
   constructor(message: string) {
-    super(message)
+    super(humanise(message))
     this.name = 'LeadsServiceError'
   }
 }

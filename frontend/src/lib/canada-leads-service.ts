@@ -3,9 +3,27 @@ import { supabase } from './supabase'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import type { Deal, DealStage } from './canada-sales-demo-data'
 
+/**
+ * Postgres speaks to the database owner; this portal speaks to a rep. RLS
+ * denials arrive as raw policy text which lands in the form verbatim and
+ * tells the rep nothing they can act on. Translate the denials we know into
+ * the action they name; keep everything else unedited. Mirrors
+ * us-leads-service — the two portals must not explain the same denial
+ * differently.
+ */
+function humanise(message: string): string {
+  if (/training required/i.test(message)) {
+    return 'Finish your training first — leads unlock as soon as the course is done.'
+  }
+  if (/row-level security/i.test(message)) {
+    return "Your account isn't allowed to do that. If it should be, ask your team lead."
+  }
+  return message
+}
+
 export class LeadsServiceError extends Error {
   constructor(message: string) {
-    super(message)
+    super(humanise(message))
     this.name = 'LeadsServiceError'
   }
 }

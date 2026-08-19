@@ -13,6 +13,7 @@ import { PLAN_TIERS, getPlan, REP_PRICE_HEADROOM, ZERO_PER_ORDER_CARDS, WEBSITE_
 import { downloadProposalPdf, type ProposalInput } from '@/lib/generate-proposal-pdf'
 import { usVerticalsByGroup, findUsVerticalBySlug, US_DECK_BASE_URL, buildPersonalizedUsDeckUrl } from '@/data/usVerticals'
 import { SELLABLE_TRADES, SELLABLE_GROUPS, deckSlugFor } from '@/config/niches'
+import { humanise } from '@/lib/us-leads-service'
 
 type Step = 'details' | 'plan' | 'customize' | 'preview' | 'confirm'
 
@@ -866,7 +867,7 @@ export default function USPortalCreateCustomerPage() {
             notes: (form.notes || `Plan: ${selectedPlan.label} at $${price}${interval}. Setup fee: $${setupFee}. First month free: ${form.firstMonthFree ? 'Yes' : 'No'}`) + (zeroPerOrder && zpoCard ? ` Pricing: $0/order minutes plan (${zpoCard.includedMinutes} min/mo included, $${zpoCard.overagePerMin.toFixed(2)}/min after).` : '') + (form.website ? ` Website Buildout: $${websiteOneTime} one-time (${WEBSITE_MODULES.filter(m => websiteModules.includes(m.id) || (m.monthly && monthlyFree)).map(m => m.label).join(', ')})${websiteMonthlyDue > 0 ? ` + $${websiteMonthlyDue}/mo recurring` : monthlyFree ? ` — maintenance & hosting included with ${selectedPlan.label}` : ''}.` : '') + (form.crm ? ` ${CUSTOM_CRM_SERVICE.label}: $${crmOneTime} one-time.` : '') + (form.adSpot ? ` ${AD_SPOT_SERVICE.label}: $${adSpotOneTime} one-time (${AD_SPOT_PLACEMENTS.find(p => p.id === form.adPlacement)?.label}, ${AD_SPOT_AUDIO.find(a => a.id === form.adAudio)?.label}). Brief: ${form.adGoal.trim()}` : ''),
             rep_id: rep?.rep_id || null,
           }).select('id')
-          if (leadErr) setCrmRecordError(leadErr.message)
+          if (leadErr) setCrmRecordError(humanise(leadErr.message))
           leadId = leadRows?.[0]?.id || null
           createdLeadIdRef.current = leadId
         } catch (e) {
