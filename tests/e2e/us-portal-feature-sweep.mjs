@@ -75,10 +75,20 @@ async function testUsLeadFeature(page, errors) {
   await page.getByPlaceholder(/business name/i).fill(biz)
   await page.getByPlaceholder(/contact name/i).fill('Sweep Tester')
   await page.getByPlaceholder(/contact email/i).fill('sweep@example.com')
+  // Business Type became REQUIRED with the 2.0 trade packs (the trade a rep
+  // picks is the trade the merchant gets). Without it, native form validation
+  // blocks submit with no toast and this test failed looking like a crash.
+  await page.locator('select[required]').first()
+    .selectOption({ index: 1 }).catch(() => {})
   await page.getByRole('button', { name: /add lead/i }).click()
   await page.waitForTimeout(3000)
-  const listed = (await page.evaluate(() => document.body.innerText)).includes(biz)
-  out.createLead = { ok: listed, biz, jsErrors: [...errors] }
+  const bodyAfter = await page.evaluate(() => document.body.innerText)
+  const listed = bodyAfter.includes(biz)
+  // An untrained e2e rep is DENIED by RLS ("Training required to insert US
+  // leads") — that is the gate working, not the form breaking. Report it as
+  // its own outcome so a red here means something real.
+  const trainingGated = /Training required to insert/i.test(bodyAfter)
+  out.createLead = { ok: listed, trainingGated, biz, jsErrors: [...errors] }
   if (!listed) return out
   // open detail
   errors.length = 0

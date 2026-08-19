@@ -152,16 +152,22 @@ export function useTradePack(): NichePack {
   const { org } = useAuth()
   const { businessType } = useDemoContext()
 
-  // On the public demos there is no org, so the trade comes from what the
-  // visitor picked on the opening screen — that pick is the entire point of
-  // the screen, and without this line it only changed the numbers.
+  // ON THE DEMO PATHS THE PICKER WINS, even signed in. The org used to take
+  // precedence everywhere, which broke the demo for exactly the people who
+  // give demos: a rep signed into the portal opened /demo, picked "Pizza
+  // Shop", and got the GENERIC workspace — their own account's business_type
+  // ("saas", a deck slug, whatever) silently beat the pick, while the demo
+  // DATA still followed it. The label said pizza; the screen said nothing.
   //
-  // STRICTLY DEMO-ONLY. A signed-in merchant keeps resolving from their own
-  // record and nothing else: detectBusinessType() always returns something,
-  // so letting it through here would hand every merchant with a blank
-  // business_type the restaurant pack and quietly change their portal.
+  // Off the demo paths nothing changes: a signed-in merchant resolves from
+  // their own record and nothing else — detectBusinessType() always returns
+  // something, so letting the picker through would hand every merchant with
+  // a blank business_type the restaurant pack and quietly change their
+  // portal.
   const isDemo = pathname.startsWith('/demo') || pathname.startsWith('/canada/demo')
-  const trade = org?.business_type || (isDemo ? businessType : null)
+  const trade = isDemo
+    ? (businessType || org?.business_type || null)
+    : (org?.business_type || null)
 
   return packFor(trade)
 }
