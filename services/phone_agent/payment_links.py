@@ -661,14 +661,18 @@ async def _stripe_checkout(
     session = stripe.checkout.Session.create(api_key=_active_stripe_key(), **kwargs)
     # Stripe SDK objects are NOT dicts — use subscript access, not .get()
     # (.get raises AttributeError on a StripeObject).
-    # Branded short link so the texted URL is "<pay base>/p/<code>" instead of
-    # Stripe's ~400-char URL. Only used if we can persist the mapping; otherwise
-    # the customer still gets the full (always-working) Stripe URL.
+    #
+    # The customer gets the CUSTOM STRIPE CHECKOUT LINK directly (Aidan
+    # 2026-08-20) — checkout.stripe.com/<session>, built per-order with this
+    # order's line items. We still persist the checkout_sessions row (the
+    # webhook + phone_orders claim key off session_id), and the /p/<code>
+    # redirect still resolves for anything that used it; we just no longer wrap
+    # the Stripe URL in the meridian short link before texting it.
     short_code = uuid.uuid4().hex[:8]
     charge_total = amount + surcharge
-    recorded = await _record_checkout_session(
+    await _record_checkout_session(
         order, merchant_config, pos_order_id, session, charge_total, currency, short_code)
-    url = f"{PUBLIC_PAY_BASE}/p/{short_code}" if recorded else session["url"]
+    url = session["url"]
     logger.info("Stripe checkout %s (%s) for merchant %s ($%.2f %s, surcharge %d¢) -> %s",
                 session["id"], "connect" if connect_account else "platform",
                 order.get("merchant_id"), charge_total / 100, currency.upper(), surcharge, url)
