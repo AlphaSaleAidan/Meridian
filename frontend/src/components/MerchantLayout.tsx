@@ -1,7 +1,7 @@
-import { useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { clsx } from 'clsx'
-import { MapPin } from 'lucide-react'
+import { ChevronRight, MapPin } from 'lucide-react'
 import { MeridianEmblem, MeridianWordmark } from './MeridianLogo'
 import { useUnreadNotifications } from '@/hooks/useUnreadNotifications'
 import { merchantPillars, comingSoonPillars, orderPillars, MERCHANT_BASE_PATH, type Pillar } from '@/config/merchantPillars'
@@ -47,6 +47,25 @@ export default function MerchantLayout({ basePath = MERCHANT_BASE_PATH }: { base
   // Desktop-sidebar links need no close handler (the sidebar is static there);
   // the mobile drawer is gone.
   const noop = () => {}
+
+  // Whether the tab bar has more tabs off either edge, so we can show a fade +
+  // chevron telling the user it scrolls. A demo has more tabs than fit; without
+  // this cue the extra tabs look like they simply do not exist.
+  const tabScrollerRef = useRef<HTMLDivElement>(null)
+  const [tabOverflow, setTabOverflow] = useState({ left: false, right: false })
+  useEffect(() => {
+    const el = tabScrollerRef.current
+    if (!el) return
+    const update = () => setTabOverflow({
+      left: el.scrollLeft > 4,
+      right: el.scrollLeft + el.clientWidth < el.scrollWidth - 4,
+    })
+    update()
+    el.addEventListener('scroll', update, { passive: true })
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => { el.removeEventListener('scroll', update); ro.disconnect() }
+  }, [])
   const flags = useModuleFlags()
   const { org } = useAuth()
   // Same chrome serves both regions: /canada/* keeps its existing branding,
@@ -228,7 +247,30 @@ export default function MerchantLayout({ basePath = MERCHANT_BASE_PATH }: { base
         ref={bottomNavRef}
         className="fixed bottom-0 left-0 right-0 z-50 lg:hidden bg-[#0A0A0B]/95 backdrop-blur-lg border-t border-[#1F1F23]"
       >
-        <div className="flex items-stretch overflow-x-auto no-scrollbar snap-x pb-[max(env(safe-area-inset-bottom),4px)] [-webkit-overflow-scrolling:touch]">
+        {/* Left fade: appears once you have scrolled right, so it is clear the
+            row came from somewhere. */}
+        <div
+          aria-hidden
+          className={clsx(
+            'pointer-events-none absolute inset-y-0 left-0 w-8 bg-gradient-to-r from-[#0A0A0B] to-transparent transition-opacity duration-200',
+            tabOverflow.left ? 'opacity-100' : 'opacity-0',
+          )}
+        />
+        {/* Right fade + chevron: the cue that there are more tabs to the right.
+            Fades out when the row is scrolled to its end. */}
+        <div
+          aria-hidden
+          className={clsx(
+            'pointer-events-none absolute inset-y-0 right-0 flex items-center justify-end pr-1 w-10 bg-gradient-to-l from-[#0A0A0B] via-[#0A0A0B]/90 to-transparent transition-opacity duration-200',
+            tabOverflow.right ? 'opacity-100' : 'opacity-0',
+          )}
+        >
+          <ChevronRight size={18} className="text-[#1A8FD6]" strokeWidth={2.25} />
+        </div>
+        <div
+          ref={tabScrollerRef}
+          className="flex items-stretch overflow-x-auto no-scrollbar snap-x pb-[max(env(safe-area-inset-bottom),4px)] [-webkit-overflow-scrolling:touch]"
+        >
           {mobileNavPillars.map(p => {
             const Icon = p.icon
             const to = p.path ? `${basePath}/${p.path}` : basePath

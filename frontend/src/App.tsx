@@ -222,43 +222,15 @@ function SubdomainRedirector() {
   return null
 }
 
-function useLenis() {
-  useEffect(() => {
-    let lenis: any = null
-    let rafId: number | null = null
-    let observer: MutationObserver | null = null
-
-    observer = new MutationObserver(() => {
-      const wrapper = document.querySelector('main')
-      if (!wrapper || lenis) return
-      observer?.disconnect()
-      import('lenis').then((mod) => {
-        const Lenis = mod.default
-        lenis = new Lenis({
-          lerp: 0.08,
-          smoothWheel: true,
-          wrapper: wrapper as HTMLElement,
-          content: wrapper.firstElementChild as HTMLElement,
-        })
-        const raf = (time: number) => {
-          lenis.raf(time)
-          rafId = requestAnimationFrame(raf)
-        }
-        rafId = requestAnimationFrame(raf)
-      })
-    })
-    observer.observe(document.body, { childList: true, subtree: true })
-
-    return () => {
-      observer?.disconnect()
-      if (rafId !== null) cancelAnimationFrame(rafId)
-      lenis?.destroy()
-    }
-  }, [])
-}
+// Lenis smooth-scroll removed 2026-08-19. It bound to the first `main` it saw
+// and used `main.firstElementChild` as its scroll content — which in the app
+// shell is the sticky mobile top bar, not the page content. The result was a
+// wheel that stopped a few hundred pixels down and never reached the bottom
+// ("can't scroll to the bottom with the mouse"), plus a floaty, un-firm feel
+// from its lerp. Native scroll is firm and reliable, and #main-content already
+// owns momentum + overscroll tuning.
 
 export default function App() {
-  useLenis()
   useEffect(() => {
     // Load GA4 if the visitor already consented (returning visitor), and whenever
     // consent is granted this session. No-op until VITE_GA4_ID is set + consent === 'all'.
