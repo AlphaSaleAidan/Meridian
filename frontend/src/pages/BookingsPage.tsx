@@ -22,6 +22,8 @@ import {
   ChevronRight, Clock, Phone, Plus, Rows3, UserX, Users,
 } from 'lucide-react'
 import BookingCalendar from '@/components/BookingCalendar'
+import SendPaymentLink from '@/components/SendPaymentLink'
+import { useTradePack } from '@/config/moduleFlags'
 import { useOrgId } from '@/hooks/useOrg'
 import {
   bookingsApi, BookingsApiError,
@@ -164,6 +166,7 @@ function toDayKey(d: Date): string {
 
 export default function BookingsPage() {
   const merchantId = useOrgId()
+  const pack = useTradePack()
   const [day, setDay] = useState(() => toDayKey(new Date()))
   const [bookings, setBookings] = useState<Booking[]>([])
   const [resources, setResources] = useState<Resource[]>([])
@@ -476,6 +479,17 @@ export default function BookingsPage() {
                     control would be a button that changes nothing. */}
                 <RowAction booking={b} onSet={(s) => setStatus(b, s)} />
               </div>
+
+              {/* Pack-driven, and only once the customer is in the chair or
+                  the job is done — that is when money is due. Kept OUT of the
+                  action slot above: arrival stays the one-tap primary, and a
+                  send-money control beside it is how a barber charges someone
+                  by accident while marking them here. */}
+              {pack.paymentLinks && (b.status === 'seated' || b.status === 'completed') && (
+                <div className="mt-2 flex justify-end">
+                  <SendPaymentLink bookingId={b.id} />
+                </div>
+              )}
             </li>
           )})()
           ))}

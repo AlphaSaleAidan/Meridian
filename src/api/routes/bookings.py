@@ -997,10 +997,21 @@ async def send_payment_link(booking_id: str,
     if price_cents <= 0:
         return {"sent": False, "url": "", "reason": "no_price"}
 
+    # The same config surface the phone rail charges with (see website.py):
+    # stripe_account_id + stripe_charges_enabled route the destination charge
+    # to the merchant's connected account, plan_tier / fee_allocation_mode /
+    # order_fee_cents drive Meridian's application fee, and the pos_* trio
+    # only matters on the degraded per-POS path.
     cfg_rows = await get_db().select(
         "phone_agent_config",
         {"merchant_id": f"eq.{merchant_id}",
-         "select": "business_name,pos_system,pos_access_token,pos_location_id"},
+         # payment_link_provider (migration 043) is deliberately NOT selected —
+         # the column may not exist on a live DB yet and one unknown column
+         # 400s the whole select. create_checkout getattr-defaults it, and its
+         # Clover-native gate is env-off anyway.
+         "select": "business_name,pos_system,pos_access_token,pos_location_id,"
+                   "plan_tier,stripe_account_id,stripe_charges_enabled,"
+                   "order_fee_cents,fee_allocation_mode"},
     )
     cfg_row = cfg_rows[0] if cfg_rows else {}
     cfg = SimpleNamespace(
@@ -1009,6 +1020,11 @@ async def send_payment_link(booking_id: str,
         pos_system=(cfg_row.get("pos_system") or ""),
         pos_access_token=(cfg_row.get("pos_access_token") or ""),
         pos_location_id=(cfg_row.get("pos_location_id") or ""),
+        plan_tier=(cfg_row.get("plan_tier") or ""),
+        stripe_account_id=(cfg_row.get("stripe_account_id") or ""),
+        stripe_charges_enabled=bool(cfg_row.get("stripe_charges_enabled")),
+        order_fee_cents=cfg_row.get("order_fee_cents"),
+        fee_allocation_mode=cfg_row.get("fee_allocation_mode"),
     )
 
     from src.services.booking_links import text_payment_link

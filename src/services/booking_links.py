@@ -296,11 +296,16 @@ async def text_payment_link(
 ) -> dict:
     """Create a checkout for a booking and text the customer the link.
 
-    RIDES THE PHONE-ORDER PAYMENT RAIL (services/phone_agent/payment_links),
-    not the deposit seam — that rail is the one live in production: Square
-    merchants get a native Square pay link, everyone else gets the
-    Meridian-hosted checkout page. A second checkout implementation for
-    bookings would be a second place for money bugs to live.
+    RIDES THE PHONE-ORDER PAYMENT RAIL (services/phone_agent/payment_links)
+    via create_checkout — the MEDIATED entry point, not the per-POS one.
+    Meridian sits in the middle exactly as it does for phone orders: with
+    unified payments on, the customer pays a Stripe hosted checkout that
+    destination-charges the merchant's connected account and takes Meridian's
+    application fee in transit; a merchant not yet onboarded for Connect gets
+    a direct charge on the platform account so the link still works. Only
+    when unified payments are off does it degrade to the per-POS link the
+    phone rail would use too. A second checkout implementation for bookings
+    would be a second place for money bugs to live.
 
     Returns {"sent": bool, "url": str, "reason": str} and NEVER raises. The
     url is returned even when the SMS fails or there is no number on file —
@@ -319,7 +324,7 @@ async def text_payment_link(
         _Path(__file__).resolve().parents[2] / "services" / "phone_agent")
     if _phone_agent_dir not in sys.path:
         sys.path.insert(0, _phone_agent_dir)
-    from payment_links import create_payment_link  # type: ignore[import]
+    from payment_links import create_checkout  # type: ignore[import]
 
     label = (booking.get("service_name") or "").strip()
     phone = (booking.get("customer_phone") or "").strip()
@@ -339,13 +344,11 @@ async def text_payment_link(
     }
 
     try:
-        link = await create_payment_link(
-            order=order,
-            pos_system=getattr(config, "pos_system", "") or "",
-            pos_order_id="",
-            access_token=getattr(config, "pos_access_token", "") or "",
-            location_id=getattr(config, "pos_location_id", "") or "",
-        )
+        # config carries the same fields the phone rail reads: stripe_account_id
+        # + stripe_charges_enabled route the destination charge, plan_tier /
+        # fee_allocation_mode / order_fee_cents drive the application fee, and
+        # the pos_* trio is only the degraded path when unified payments is off.
+        link = await create_checkout(order, config)
     except Exception as e:  # noqa: BLE001
         logger.warning("booking payment link failed for %s: %s", merchant_id, e)
         return {"sent": False, "url": "", "reason": "link_failed"}
