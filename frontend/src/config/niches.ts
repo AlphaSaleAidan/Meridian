@@ -149,6 +149,15 @@ export interface NichePack {
    *  implemented — see docs; declared here because the packs that need it are
    *  exactly the packs worth building next. */
   travels?: boolean
+
+  /**
+   * True for trades where the operator sends the customer the bill — a
+   * "Send payment link" action on each booking, riding the same rail phone
+   * orders settle through. A trade with a till does not need it; a trade
+   * standing in a driveway with wet hands does. Data, not a screen: turning
+   * it on for another trade is one line here.
+   */
+  paymentLinks?: boolean
 }
 
 /**
@@ -291,6 +300,9 @@ export const NICHE_PACKS: NichePack[] = [
     homeMetric: { label: 'Stops on today\'s route',
                   help: 'Not how many you booked — how many you can actually reach.' },
     travels: true,
+    // The whole trade is paid in a driveway. "I'll Venmo you?" is the
+    // competitor this button removes.
+    paymentLinks: true,
   },
   {
     key: 'restaurant',

@@ -962,6 +962,60 @@ async def notify_running_late(booking_id: str, body: RunningLate,
     )
 
 
+@router.post("/{booking_id}/payment-link")
+async def send_payment_link(booking_id: str,
+                            principal=Depends(require_service_auth)):
+    """Text the customer a checkout link for this booking's service price.
+
+    THE JOB THIS FINISHES: a mobile detailer closes the hatch, and the money
+    part is currently "I'll Venmo you?" shouted across a driveway. One tap
+    texts the customer a real checkout for the booked service, on the same
+    payment rail phone orders already settle through.
+
+    The link URL is always returned when one was created, even if the SMS
+    could not be sent — no number on file, or carrier rejection — so the
+    portal can offer copy-and-send-yourself instead of a dead end.
+    """
+    _validate_uuid(booking_id, "booking_id")
+    row = await _enforce_row_member(principal, "bookings", booking_id)
+    if not row:
+        raise HTTPException(404, "booking not found")
+
+    merchant_id = row.get("merchant_id") or ""
+
+    # The amount is the booked service's price, read at send time — this is a
+    # bill for the work, not a deposit, so it does not copy-on-book the way
+    # deposit_cents deliberately does.
+    price_cents = 0
+    service_id = row.get("service_id") or ""
+    if service_id:
+        svc_rows = await get_db().select(
+            "booking_services",
+            {"id": f"eq.{service_id}", "select": "price_cents"},
+        )
+        price_cents = int((svc_rows[0].get("price_cents") if svc_rows else 0) or 0)
+    if price_cents <= 0:
+        return {"sent": False, "url": "", "reason": "no_price"}
+
+    cfg_rows = await get_db().select(
+        "phone_agent_config",
+        {"merchant_id": f"eq.{merchant_id}",
+         "select": "business_name,pos_system,pos_access_token,pos_location_id"},
+    )
+    cfg_row = cfg_rows[0] if cfg_rows else {}
+    cfg = SimpleNamespace(
+        merchant_id=merchant_id,
+        business_name=(cfg_row.get("business_name") or ""),
+        pos_system=(cfg_row.get("pos_system") or ""),
+        pos_access_token=(cfg_row.get("pos_access_token") or ""),
+        pos_location_id=(cfg_row.get("pos_location_id") or ""),
+    )
+
+    from src.services.booking_links import text_payment_link
+
+    return await text_payment_link(cfg, row, price_cents)
+
+
 @router.get("/detail/{booking_id}")
 async def get_booking(booking_id: str, principal=Depends(require_service_auth)):
     _validate_uuid(booking_id, "booking_id")

@@ -484,6 +484,19 @@ export const bookingsApi = {
     })
   },
 
+  /**
+   * Text the customer a checkout link for this booking's service price.
+   *
+   * The url comes back even when the text could not be sent (no number on
+   * file, carrier rejection) so the UI can offer copy-and-send-yourself
+   * rather than a dead end.
+   */
+  async sendPaymentLink(id: string): Promise<{ sent: boolean; url?: string; reason?: string }> {
+    return call<{ sent: boolean; url?: string; reason?: string }>(`/${id}/payment-link`, {
+      method: 'POST',
+    })
+  },
+
   async listWaitlist(merchantId: string, status = 'waiting'): Promise<WaitlistEntry[]> {
     const r = await call<{ waitlist: any[] }>(`/waitlist/${merchantId}`, {
       params: { status },

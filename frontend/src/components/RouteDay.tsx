@@ -19,7 +19,7 @@
  * number it cannot stand behind.
  */
 import { useState } from 'react'
-import { AlertTriangle, Car, Clock3, MapPin, Navigation } from 'lucide-react'
+import { AlertTriangle, Car, Clock3, Copy, CreditCard, MapPin, Navigation } from 'lucide-react'
 import { bookingsApi, type Booking } from '@/lib/bookings-api'
 import RouteMap from '@/components/RouteMap'
 
@@ -79,6 +79,7 @@ const LATE_OPTIONS = [15, 30, 45]
 
 export default function RouteDay({
   stops, origin, timezone, onSelect, stopOverheadMin = STOP_OVERHEAD_MIN,
+  paymentLinks = false,
 }: {
   stops: Stop[]
   origin: RouteOrigin
@@ -88,6 +89,9 @@ export default function RouteDay({
    *  over a box. Six versus two is the difference between a believable run
    *  and an hour of phantom driving. */
   stopOverheadMin?: number
+  /** Pack-driven (pack.paymentLinks): a per-stop "Send payment link" action
+   *  for trades that get paid in a driveway rather than at a till. */
+  paymentLinks?: boolean
 }) {
   /**
    * "Running late" per stop.
@@ -122,6 +126,59 @@ export default function RouteDay({
       setLateFor(null)
     }
   }
+  /**
+   * "Send payment link" per stop.
+   *
+   * THE MOMENT THIS SERVES is the hatch closing: the job is done, the
+   * customer is standing there, and the alternative is "I'll Venmo you?"
+   * shouted across a driveway. One tap texts them a real checkout for the
+   * booked price.
+   *
+   * When the text cannot go (no number on file, carrier rejection — every US
+   * merchant until 10DLC clears) the link still exists, so the fallback is a
+   * copy button rather than a dead end: the operator pastes it into whatever
+   * channel the customer actually answers.
+   */
+  const [payState, setPayState] = useState<Record<string, {
+    label: string; url?: string; ok?: boolean
+  }>>({})
+  const [paying, setPaying] = useState<string | null>(null)
+  const [copied, setCopied] = useState<string | null>(null)
+
+  const sendPayLink = async (booking: Booking) => {
+    setPaying(booking.id)
+    try {
+      const res = await bookingsApi.sendPaymentLink(booking.id)
+      setPayState((prev) => ({
+        ...prev,
+        [booking.id]: res.sent
+          ? { label: 'Payment link texted', ok: true }
+          : res.url
+            ? { label: res.reason === 'no_phone'
+                  ? 'No number on file — copy the link instead'
+                  : 'Could not text — copy the link instead',
+                url: res.url }
+            : { label: res.reason === 'no_price'
+                  ? 'No price on this service'
+                  : 'Could not create a link' },
+      }))
+    } catch {
+      setPayState((prev) => ({
+        ...prev, [booking.id]: { label: 'Could not create a link' },
+      }))
+    } finally {
+      setPaying(null)
+    }
+  }
+
+  const copyPayLink = async (id: string, url: string) => {
+    try {
+      await navigator.clipboard.writeText(url)
+      setCopied(id)
+      setTimeout(() => setCopied((c) => (c === id ? null : c)), 2000)
+    } catch { /* clipboard denied — the url stays visible in the row */ }
+  }
+
   // Pointing at a stop in either place highlights it in the other. On a map
   // with four pins in one suburb, "which of these is the 2pm" is the question
   // being asked constantly.
@@ -312,6 +369,34 @@ export default function RouteDay({
                     <Clock3 className="h-3.5 w-3.5" />
                     Arriving late — notify customer
                   </button>
+                )}
+
+                {paymentLinks && (
+                  payState[stop.booking.id] ? (
+                    <span className={`inline-flex items-center gap-1.5 text-xs ${
+                      payState[stop.booking.id].ok ? 'text-[#17C5B0]' : 'text-[#A1A1A8]'
+                    }`}>
+                      {payState[stop.booking.id].label}
+                      {payState[stop.booking.id].url && (
+                        <button
+                          onClick={() => copyPayLink(stop.booking.id, payState[stop.booking.id].url!)}
+                          className="inline-flex items-center gap-1 rounded-md border border-[#1A8FD6]/40 bg-[#1A8FD6]/10 px-2 py-1 text-xs font-medium text-[#1A8FD6] transition-colors hover:bg-[#1A8FD6]/20"
+                        >
+                          <Copy className="h-3 w-3" />
+                          {copied === stop.booking.id ? 'Copied' : 'Copy link'}
+                        </button>
+                      )}
+                    </span>
+                  ) : (
+                    <button
+                      disabled={paying === stop.booking.id}
+                      onClick={() => sendPayLink(stop.booking)}
+                      className="inline-flex items-center gap-1.5 rounded-md border border-[#1F1F23] px-2 py-1 text-xs text-[#A1A1A8] transition-colors hover:border-[#17C5B0]/40 hover:text-[#17C5B0] disabled:opacity-50"
+                    >
+                      <CreditCard className="h-3.5 w-3.5" />
+                      {paying === stop.booking.id ? 'Creating link…' : 'Send payment link'}
+                    </button>
+                  )
                 )}
               </div>
             </li>
