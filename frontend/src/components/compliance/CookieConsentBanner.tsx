@@ -74,18 +74,20 @@ export default function CookieConsentBanner() {
     setConsent('essential')
   }
 
-  // z-40 keeps the mobile bottom nav (z-50) tappable; pointer-events-none on the
-  // gutter so only the visible card intercepts taps. Compact on small screens —
-  // the full-size banner buried the login CTA on 375x667.
+  // pointer-events-none on the gutter so only the visible card intercepts taps.
+  // Compact on small screens — the full-size banner buried the login CTA on
+  // 375x667.
   return (
     <div
       ref={bannerRef}
-      // ABOVE the mobile tab bar (z-50), not below it. At z-40 the tab bar
-      // painted over this banner on every phone, and "Accept All" sat
-      // underneath a nav button — the consent control was unreachable on
-      // mobile, which is the one place it has to work. Still below the demo's
-      // business-type modal (z-100), which is a full-screen gate of its own.
-      className="fixed bottom-0 inset-x-0 z-[60] p-2 sm:p-4 pointer-events-none"
+      // ABOVE the mobile tab bar, not over it. Earlier this sat at bottom-0 and
+      // overlapped the nav — first at z-40 the nav painted over "Accept All"
+      // (unreachable), then at z-60 the banner covered the nav's tabs. Both were
+      // the same mistake: two fixed bars sharing the same bottom edge. Offsetting
+      // by the published nav height stacks them instead, so each is fully
+      // visible and tappable. On routes with no tab bar the var is 0 → bottom-0.
+      // z stays below the demo's business-type modal (z-100).
+      className="fixed bottom-[var(--bottom-nav-h,0px)] inset-x-0 z-[60] p-2 sm:p-4 pointer-events-none"
     >
       <div className="pointer-events-auto mx-auto max-w-3xl rounded-xl border border-zinc-700 bg-zinc-900 p-3 sm:p-5 shadow-2xl">
         <div className="flex flex-col gap-2.5 sm:gap-4 sm:flex-row sm:items-center sm:justify-between">
