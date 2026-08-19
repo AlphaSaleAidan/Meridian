@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { clsx } from 'clsx'
-import { Menu, MapPin } from 'lucide-react'
+import { MoreHorizontal, MapPin } from 'lucide-react'
 import { MeridianEmblem, MeridianWordmark } from './MeridianLogo'
 import { useUnreadNotifications } from '@/hooks/useUnreadNotifications'
 import { merchantPillars, comingSoonPillars, orderPillars, MERCHANT_BASE_PATH, type Pillar } from '@/config/merchantPillars'
@@ -94,17 +94,39 @@ export default function MerchantLayout({ basePath = MERCHANT_BASE_PATH }: { base
     .filter(p => !(homePillar && p.path === ''))
   const secondaryPillars = visiblePillars.filter(p => p.secondary)
   const settingsPillar = visiblePillars.find(p => p.path === 'settings')
-  // Mobile bottom-nav: money pillars + settings only (no secondary tabs, no
-  // overflow) — except in the demo, where the secondary tabs (Camera) join the
-  // bar so the sidebar isn't needed at all on mobile.
-  const mobileNavPillars = [
-    // Today leads on mobile too — it is lifted out of moneyPillars above, so
-    // without this the bottom bar loses the home tab entirely.
+  /**
+   * ONE mobile nav, not two.
+   *
+   * The old layout showed a bottom tab bar AND a top hamburger opening the
+   * side drawer — two competing category selectors on the same screen, and on
+   * a demo the bottom bar was already carrying seven items at 55px each. The
+   * drawer only existed to reach whatever did not fit.
+   *
+   * Now the bottom bar is the single persistent nav. When there are more
+   * destinations than fit cleanly (five), the last slot becomes "More", which
+   * opens the same drawer — a progressive-disclosure overflow summoned from
+   * the one bar, not a second bar always on screen. The standalone hamburger
+   * is gone; the drawer still holds the full list (it is what the desktop
+   * sidebar already renders).
+   */
+  const MAX_BAR_SLOTS = 5
+  const primaryCandidates = [
+    // Today leads on mobile too — it is lifted out of moneyPillars above.
     ...(homePillar ? [{ ...homePillar, label: 'Today' }] : []),
     ...moneyPillars,
-    ...(isDemo ? secondaryPillars : []),
+  ]
+  // Anything reachable from the drawer that is NOT a primary tab.
+  const drawerExtras = [...secondaryPillars, ...roadmapPillars]
+  const barWithSettings = [
+    ...primaryCandidates,
     ...(settingsPillar ? [settingsPillar] : []),
   ]
+  // A "More" tab is needed when the drawer holds something the bar cannot, or
+  // when the primaries alone overflow the bar.
+  const needsMore = drawerExtras.length > 0 || barWithSettings.length > MAX_BAR_SLOTS
+  const mobileNavPillars = needsMore
+    ? primaryCandidates.slice(0, MAX_BAR_SLOTS - 1)
+    : barWithSettings
 
   return (
     // h-dvh (not h-screen): the shell scrolls via <main>, never the document,
@@ -192,18 +214,12 @@ export default function MerchantLayout({ basePath = MERCHANT_BASE_PATH }: { base
       */}
       <main
         id="main-content"
-        className="flex-1 overflow-y-auto"
+        className="flex-1 overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]"
         style={{ paddingBottom: 'calc(var(--cookie-bar-h, 0px) + var(--bottom-nav-h, 0px))' }}
       >
+        {/* Top bar is branding only now — navigation lives in the single bottom
+            bar (with its "More" tab). No hamburger competing with it. */}
         <div className="lg:hidden sticky top-0 z-30 h-14 bg-[#0A0A0B]/95 backdrop-blur-sm border-b border-[#1F1F23] flex items-center gap-3 px-4">
-          {/* Demos normally drop the hamburger because the bottom bar carries
-              every tab — but the roadmap previews are sidebar-only (four more
-              tabs will not fit in a bottom bar), so a demo keeps a way in. */}
-          {(!isDemo || roadmapPillars.length > 0) && (
-            <button aria-label="Open menu" onClick={() => setSidebarOpen(true)} className="p-1.5 rounded-lg hover:bg-[#111113]">
-              <Menu size={20} className="text-[#A1A1A8]" />
-            </button>
-          )}
           <Link to={basePath} aria-label="Meridian dashboard home" className="flex items-center gap-3">
             <MeridianEmblem size={24} animate />
             <MeridianWordmark height={11} />
@@ -236,15 +252,28 @@ export default function MerchantLayout({ basePath = MERCHANT_BASE_PATH }: { base
                 to={to}
                 end={!p.path}
                 className={({ isActive }) => clsx(
-                  'flex flex-col items-center justify-center gap-0.5 py-2 px-2 min-w-[56px] min-h-[50px] transition-colors',
+                  'flex flex-1 flex-col items-center justify-center gap-0.5 py-2 px-1 min-w-0 min-h-[54px] transition-colors',
                   isActive ? 'text-[#1A8FD6]' : 'text-[#A1A1A8]/60',
                 )}
               >
                 <Icon size={20} strokeWidth={1.8} />
-                <span className="text-[10px] font-medium">{p.label}</span>
+                <span className="text-[10px] font-medium truncate max-w-full">{p.label}</span>
               </NavLink>
             )
           })}
+          {needsMore && (
+            <button
+              onClick={() => setSidebarOpen(true)}
+              aria-label="More sections"
+              className={clsx(
+                'flex flex-1 flex-col items-center justify-center gap-0.5 py-2 px-1 min-w-0 min-h-[54px] transition-colors',
+                sidebarOpen ? 'text-[#1A8FD6]' : 'text-[#A1A1A8]/60',
+              )}
+            >
+              <MoreHorizontal size={20} strokeWidth={1.8} />
+              <span className="text-[10px] font-medium">More</span>
+            </button>
+          )}
         </div>
       </nav>
     </div>

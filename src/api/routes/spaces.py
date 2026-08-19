@@ -307,8 +307,14 @@ async def get_space_model(space_id: str, principal=Depends(require_service_auth)
 
 
 @router.get("/jobs/{job_id}")
-async def get_job_status(job_id: str):
-    """Get processing job status. Simulates progress for now."""
+async def get_job_status(job_id: str, principal=Depends(require_service_auth)):
+    """Get processing job status. Simulates progress for now.
+
+    Auth at the route, not the router: the router-level require_org_access is a
+    no-op for a path with no org_id (see the module note above), so without a
+    dep here this answered ANY anonymous caller — every sibling route already
+    carries require_service_auth, this one had been missed.
+    """
     return {
         "id": job_id,
         "status": "processing",

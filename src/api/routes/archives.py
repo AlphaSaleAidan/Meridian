@@ -21,7 +21,7 @@ logger = logging.getLogger("meridian.api.archives")
 router = APIRouter(prefix="/api/archives", tags=["archives"], dependencies=[Depends(require_org_access)])
 
 
-@router.get("/tiers")
+@router.get("/tiers", dependencies=[Depends(require_admin_jwt)])
 async def list_tiers():
     from ...workers.cold_storage import ARCHIVE_TIERS
     tiers = {}
@@ -38,7 +38,7 @@ async def list_tiers():
     return {"total_tiers": len(tiers), "total_tables": total_tables, "tiers": tiers}
 
 
-@router.get("/stats")
+@router.get("/stats", dependencies=[Depends(require_admin_jwt)])
 async def archive_stats():
     from ...workers.cold_storage import get_archive_stats
     return get_archive_stats()
