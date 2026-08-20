@@ -1,7 +1,7 @@
 import type { ComponentType, LazyExoticComponent } from 'react'
 import {
   LayoutDashboard, Zap, Layers, Users, Phone, Video, Settings, Receipt,
-  Contact, Lightbulb, Globe, CalendarClock, FileText,
+  Contact, Lightbulb, Globe, CalendarClock, FileText, RefreshCcw,
 } from 'lucide-react'
 import { lazyRetry } from '@/components/ErrorBoundary'
 import type { ModuleFlags } from '@/config/moduleFlags'
@@ -51,6 +51,7 @@ const RevenuePage = lazyRetry(() => import('@/pages/RevenuePage'))
 const CustomersPage = lazyRetry(() => import('@/pages/CustomersPage'))
 const InsightsPage = lazyRetry(() => import('@/pages/InsightsPage'))
 const InvoicesPage = lazyRetry(() => import('@/pages/InvoicesPage'))
+const SubscriptionsPage = lazyRetry(() => import('@/pages/SubscriptionsPage'))
 const MyWebsitePage = lazyRetry(() => import('@/pages/MyWebsitePage'))
 const SiteCarePage = lazyRetry(() => import('@/pages/canada/merchant/SiteCarePage'))
 
@@ -79,6 +80,13 @@ export interface Pillar {
   segments: PillarSegment[]
   /** When set, the pillar is hidden if the corresponding module flag is false. */
   flag?: keyof ModuleFlags
+  /**
+   * When set, the pillar shows ONLY for these pack keys (niches.ts). Module
+   * flags can only turn things off portal-wide; this is the inverse — a tab
+   * that exists for the two trades whose business is recurring, and for
+   * nobody else. A subscriptions tab on a restaurant demo is noise.
+   */
+  trades?: string[]
 }
 
 /**
@@ -249,6 +257,19 @@ export const comingSoonPillars: Pillar[] = [
     comingSoon: true,
     sampleData: true,
     segments: [{ view: 'send', label: 'Send Invoice', Component: InvoicesPage }],
+  },
+  {
+    // The recurring book, for the two trades whose business IS recurring:
+    // a peptide store's monthly reorders and a mobile detailer's wash plans.
+    // Real data arrives through the Tagada connector's subscriptions feed
+    // (docs/TAGADA_CONNECTOR.md); this page is already its shape.
+    path: 'subscriptions',
+    label: 'Subscriptions',
+    icon: RefreshCcw,
+    comingSoon: true,
+    sampleData: true,
+    trades: ['peptides', 'mobiledetailing'],
+    segments: [{ view: 'manage', label: 'Subscriptions', Component: SubscriptionsPage }],
   },
   // Taxes & Expenses and My Website were here and are deliberately gone.
   // Aidan's call: a demo is a pitch, and two roadmap tabs a prospect cannot

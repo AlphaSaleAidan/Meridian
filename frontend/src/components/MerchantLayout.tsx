@@ -93,9 +93,11 @@ export default function MerchantLayout({ basePath = MERCHANT_BASE_PATH }: { base
    * those pages already says so in a banner at the top. Sorting by what a
    * trade uses is the only order that means anything to them.
    */
-  const roadmapPillars = isDemo ? comingSoonPillars : []
+  // Trade-scoped tabs: a pillar that names its trades shows only there.
+  const forThisTrade = (p: Pillar) => !p.trades || p.trades.includes(pack.key)
+  const roadmapPillars = isDemo ? comingSoonPillars.filter(forThisTrade) : []
   const visiblePillars = orderPillars(
-    merchantPillars.filter(p => !p.flag || flags[p.flag]),
+    merchantPillars.filter(p => (!p.flag || flags[p.flag]) && forThisTrade(p)),
     pack.pillarOrder,
   )
   /**
