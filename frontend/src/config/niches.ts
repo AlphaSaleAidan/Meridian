@@ -530,6 +530,46 @@ export const NICHE_PACKS: NichePack[] = [
     ],
     counterTakingsCents: 418_000,
   },
+  {
+    key: 'peptides',
+    label: 'Peptide & wellness shop',
+    pitch: 'The first order is marketing. The reorder is the business, and it starts as a phone call.',
+    bookingNoun: 'order',
+    customerNoun: 'customer',
+    resourceKind: 'table',
+    countTitle: '',
+    countLabel: '',
+    // Retail with a mail-order tail, not a clinic. A peptide CLINIC books
+    // consultations and is the med spa pack wearing a different sign; a
+    // peptide SHOP has nothing to book and lives on the reorder cycle \u2014 the
+    // customer who bought a vial last month calls for the next one. The phone
+    // is reorder volume and stock questions, never dosing advice: the agent
+    // takes the order and reads what is on the label, full stop.
+    booksAtAll: false,
+    defaultCount: 0,
+    defaultSeats: 0,
+    partyBanded: false,
+    services: [],
+    days: [1, 2, 3, 4, 5, 6],
+    opens: '10:00',
+    closes: '18:00',
+    // An inventory business with a clock on it: cold-stored stock with lot
+    // numbers and expiry dates, which is the med spa's injectables problem in
+    // a shop with no treatment rooms. Menu Matrix is a food screen and goes;
+    // the camera watches the case, same as the smoke shop.
+    modules: { bookings: false },
+    hiddenViews: ['inventory/menu'],
+    pillarOrder: ['inventory', 'phone', '', 'camera', 'schedule'],
+    homeMetric: { label: 'Reorders taken today',
+                  help: 'Customers who bought before and came back. New faces are a tile underneath.' },
+    counterStats: [
+      { label: 'Transactions', value: '47' },
+      { label: 'Avg basket', cents: 9400 },
+      { label: 'Repeat customers', value: '64%', sub: 'ordered before', tone: 'good' },
+      { label: 'Expiring lots', value: '5', sub: 'within 60 days', tone: 'warn' },
+    ],
+    counterTakingsCents: 441_800,
+  },
 ]
 
 /** The pack a merchant with nothing chosen falls back to. Generic on purpose:
@@ -607,6 +647,7 @@ export const PACK_DECK_SLUGS: Record<string, string[]> = {
   restaurant: [],
   autoshop: [],
   mobiledetailing: [],
+  peptides: [],
 }
 
 /**
@@ -668,6 +709,11 @@ export const SELLABLE_TRADES: SellableTrade[] = [
 
   { key: 'smokeshop', label: 'Smoke & Vape Shops', group: 'Retail',
     deck: { ca: 'ca-smokeshop', us: 'us-smokeshop' } },
+  { key: 'peptides', label: 'Peptide & Wellness Shops', group: 'Retail',
+    // No deck exists in either catalogue yet — bare neutral slug, the
+    // autoshop precedent: a sellable product with a proposal gap to close,
+    // not a mapping to invent.
+    deck: { ca: 'peptides', us: 'peptides' } },
 ]
 
 export const SELLABLE_GROUPS = [
@@ -696,6 +742,7 @@ const PACK_ALIASES: Record<string, string> = {
   med_spa: 'medspa',
   nail_salon: 'nails',
   barber_shop: 'barbershop',
+  peptide_shop: 'peptides',
 }
 
 export function packFor(key: string | null | undefined): NichePack {
