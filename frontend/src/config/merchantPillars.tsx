@@ -1,7 +1,7 @@
 import type { ComponentType, LazyExoticComponent } from 'react'
 import {
   LayoutDashboard, Zap, Layers, Users, Phone, Video, Settings, Receipt,
-  Contact, Lightbulb, Globe, CalendarClock, Megaphone,
+  Contact, Lightbulb, Globe, CalendarClock, FileText,
 } from 'lucide-react'
 import { lazyRetry } from '@/components/ErrorBoundary'
 import type { ModuleFlags } from '@/config/moduleFlags'
@@ -50,7 +50,7 @@ const RevenuePage = lazyRetry(() => import('@/pages/RevenuePage'))
 // Coming Soon previews — Canada demo only (see comingSoonPillars).
 const CustomersPage = lazyRetry(() => import('@/pages/CustomersPage'))
 const InsightsPage = lazyRetry(() => import('@/pages/InsightsPage'))
-const ContentDashboardPage = lazyRetry(() => import('@/pages/ContentDashboardPage'))
+const InvoicesPage = lazyRetry(() => import('@/pages/InvoicesPage'))
 const MyWebsitePage = lazyRetry(() => import('@/pages/MyWebsitePage'))
 const SiteCarePage = lazyRetry(() => import('@/pages/canada/merchant/SiteCarePage'))
 
@@ -238,17 +238,17 @@ export const comingSoonPillars: Pillar[] = [
     segments: [{ view: 'customers', label: 'Customers', Component: CustomersPage }],
   },
   {
-    // The content engine — social posts written from POS data, local search
-    // rankings, AI-citation tracking. Every trade in content-demo-data.ts has
-    // its own brand, post and rankings, so this renders per-trade the moment
-    // the tab exists. For an online store it is the closest thing to a shop
-    // window; for everyone else it is how the phone starts ringing.
-    path: 'content',
-    label: 'Marketing',
-    icon: Megaphone,
+    // The custom bill: the bulk order quoted on the phone, the wholesale
+    // account — money that today leaves by PayPal link and never lands
+    // beside the rest of the revenue. Asked for by name (Aidan, 2026-08-20,
+    // for the online-store trades); shaped like a Stripe invoice so the real
+    // send is wiring, not rework.
+    path: 'invoices',
+    label: 'Invoices',
+    icon: FileText,
     comingSoon: true,
     sampleData: true,
-    segments: [{ view: 'studio', label: 'Marketing', Component: ContentDashboardPage }],
+    segments: [{ view: 'send', label: 'Send Invoice', Component: InvoicesPage }],
   },
   // Taxes & Expenses and My Website were here and are deliberately gone.
   // Aidan's call: a demo is a pitch, and two roadmap tabs a prospect cannot
@@ -256,6 +256,10 @@ export const comingSoonPillars: Pillar[] = [
   // deleted — Taxes & Expenses still ships to real merchants through the
   // `taxExpenses` flag (on for /app, off for Canada), and the website pages
   // are still routed. They just no longer sit in a demo sidebar.
+  //
+  // Marketing (the content engine) was added here on 2026-08-20 and removed
+  // the same day, by the same call — "too much". Do not re-add it; the page
+  // stays routed at /content for anyone who goes looking.
 ]
 
 /** Public demo route set: the shipped demo pillars plus the roadmap previews. */
