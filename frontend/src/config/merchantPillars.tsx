@@ -1,7 +1,7 @@
 import type { ComponentType, LazyExoticComponent } from 'react'
 import {
   LayoutDashboard, Zap, Layers, Users, Phone, Video, Settings, Receipt,
-  Contact, Lightbulb, Globe, CalendarClock,
+  Contact, Lightbulb, Globe, CalendarClock, Megaphone,
 } from 'lucide-react'
 import { lazyRetry } from '@/components/ErrorBoundary'
 import type { ModuleFlags } from '@/config/moduleFlags'
@@ -50,6 +50,7 @@ const RevenuePage = lazyRetry(() => import('@/pages/RevenuePage'))
 // Coming Soon previews — Canada demo only (see comingSoonPillars).
 const CustomersPage = lazyRetry(() => import('@/pages/CustomersPage'))
 const InsightsPage = lazyRetry(() => import('@/pages/InsightsPage'))
+const ContentDashboardPage = lazyRetry(() => import('@/pages/ContentDashboardPage'))
 const MyWebsitePage = lazyRetry(() => import('@/pages/MyWebsitePage'))
 const SiteCarePage = lazyRetry(() => import('@/pages/canada/merchant/SiteCarePage'))
 
@@ -235,6 +236,19 @@ export const comingSoonPillars: Pillar[] = [
     comingSoon: true,
     sampleData: true,
     segments: [{ view: 'customers', label: 'Customers', Component: CustomersPage }],
+  },
+  {
+    // The content engine — social posts written from POS data, local search
+    // rankings, AI-citation tracking. Every trade in content-demo-data.ts has
+    // its own brand, post and rankings, so this renders per-trade the moment
+    // the tab exists. For an online store it is the closest thing to a shop
+    // window; for everyone else it is how the phone starts ringing.
+    path: 'content',
+    label: 'Marketing',
+    icon: Megaphone,
+    comingSoon: true,
+    sampleData: true,
+    segments: [{ view: 'studio', label: 'Marketing', Component: ContentDashboardPage }],
   },
   // Taxes & Expenses and My Website were here and are deliberately gone.
   // Aidan's call: a demo is a pitch, and two roadmap tabs a prospect cannot

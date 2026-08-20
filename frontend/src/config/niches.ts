@@ -149,6 +149,19 @@ export interface NichePack {
    *  implemented — see docs; declared here because the packs that need it are
    *  exactly the packs worth building next. */
   travels?: boolean
+
+  /**
+   * Where a COUNTER trade's orders come from, most common first. Drives the
+   * channel chip on the day's order list — a smoke shop's orders walk in, an
+   * online store's arrive through the site. Defaults to counter + phone.
+   */
+  orderChannels?: Array<'web' | 'phone' | 'counter'>
+  /**
+   * True when an order leaves in a box rather than over the counter, which is
+   * what gives it a lifecycle worth showing: paid, packed, shipped. A trade
+   * that hands the bag across the till has nothing to track after the till.
+   */
+  ships?: boolean
 }
 
 /**
@@ -563,9 +576,13 @@ export const NICHE_PACKS: NichePack[] = [
     // the tools that manage a TEAM in a ROOM are exactly the ones that tell
     // an online merchant this product was not built for them. What is left is
     // the online store's console: stock with lot numbers and expiry dates,
-    // the phone line, and the day's orders.
+    // the phone line, the day's orders \u2014 and Top Actions, which is
+    // channel-agnostic: a stockout warning reads the same whether the till
+    // is a counter or a checkout page.
     modules: { bookings: false, camera: false, schedule: false,
-               topActions: false, taxExpenses: false },
+               taxExpenses: false },
+    orderChannels: ['web', 'phone'],
+    ships: true,
     hiddenViews: ['inventory/menu'],
     pillarOrder: ['', 'inventory', 'phone'],
     homeMetric: { label: 'Orders to ship today',

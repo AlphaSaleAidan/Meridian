@@ -155,7 +155,7 @@ function zoneOffsetMs(at: Date): number {
 /** Long enough that a full restaurant Friday never repeats a name — a book
  *  with the same guest twice at different tables is the first thing anyone
  *  notices in a demo. */
-const NAMES = [
+export const NAMES = [
   ['Priya Raman', '+1 604 555 0143'], ['Marcus Webb', '+1 604 555 0119'],
   ['Chen Wei', '+1 778 555 0188'], ['Sofia Duarte', '+1 604 555 0171'],
   ['Tom Ellery', '+1 236 555 0102'], ['Nadia Khoury', '+1 604 555 0166'],
