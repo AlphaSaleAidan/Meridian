@@ -447,13 +447,19 @@ async def _stripe_billing_state(db, org_id: str) -> dict | None:
     # Enrich with live Stripe detail — real status, next renewal, amount.
     if sub_id and STRIPE_SECRET_KEY:
         try:
-            sub = stripe.Subscription.retrieve(
+            sub_obj = stripe.Subscription.retrieve(
                 sub_id, api_key=STRIPE_SECRET_KEY, expand=["items.data.price"])
+            # StripeObject intercepts .get via __getattr__ — use a plain dict.
+            sub = sub_obj.to_dict()
             out["status"] = sub["status"]
-            if sub.get("current_period_end"):
-                out["current_period_end"] = datetime.fromtimestamp(
-                    sub["current_period_end"], tz=timezone.utc).isoformat()
             items = (sub.get("items") or {}).get("data") or []
+            # current_period_end moved to the item level in newer Stripe API
+            # versions; read either place.
+            cpe = sub.get("current_period_end") or (
+                items[0].get("current_period_end") if items else None)
+            if cpe:
+                out["current_period_end"] = datetime.fromtimestamp(
+                    cpe, tz=timezone.utc).isoformat()
             if items:
                 out["monthly_price_cents"] = items[0]["price"].get("unit_amount")
         except Exception as e:  # noqa: BLE001 — enrichment is best-effort
