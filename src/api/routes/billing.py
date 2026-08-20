@@ -29,11 +29,18 @@ from ..auth import (
 )
 from ...db import get_db
 
+import stripe  # noqa: E402 — Stripe subscription reads for the billing display
+
 logger = logging.getLogger("meridian.billing.routes")
 
 router = APIRouter(prefix="/api/billing", tags=["billing"])
 
 MAX_AMOUNT_CENTS = 10_000_00  # $10,000 safety cap
+
+# The subscription runs on the PLATFORM Stripe account (Meridian Checkout,
+# STRIPE_SECRET_KEY), the same key the subscribe-link + activation webhook use.
+STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "")
+_FRONTEND_URL = os.getenv("FRONTEND_URL", "https://meridian.tips")
 
 # Access-wind-down enforcement kill-switch (Workstream 4).
 # Proposed policy (flagged for Aidan in the PR):
@@ -401,6 +408,88 @@ async def self_cancel_subscription(
     }
 
 
+async def _stripe_billing_state(db, org_id: str) -> dict | None:
+    """Billing status from the org's Stripe subscription.
+
+    The checkout webhook (_activate_from_checkout) writes plan_tier /
+    payment_status / stripe_customer_id / stripe_subscription_id to
+    organizations.metadata. Returns None when the org has no Stripe subscription
+    yet, so the caller falls back to the legacy Square subscriptions table.
+    """
+    import json as _json
+    try:
+        rows = await db.select("organizations", "metadata",
+                               filters={"id": f"eq.{org_id}"}, limit=1)
+    except Exception:
+        return None
+    if not rows:
+        return None
+    meta = rows[0].get("metadata") or {}
+    if isinstance(meta, str):
+        try:
+            meta = _json.loads(meta)
+        except Exception:
+            meta = {}
+    sub_id = meta.get("stripe_subscription_id")
+    pay_status = meta.get("payment_status")
+    if not (sub_id or pay_status):
+        return None
+    out = {
+        "provider": "stripe",
+        "status": pay_status or ("active" if sub_id else "pending_payment"),
+        "tier": meta.get("plan_tier"),
+        "stripe_customer_id": meta.get("stripe_customer_id"),
+        "monthly_price_cents": None,
+        "current_period_end": None,
+        "setup_fee_cents": meta.get("setup_fee_cents", 0) or 0,
+        "manageable": bool(meta.get("stripe_customer_id")),
+    }
+    # Enrich with live Stripe detail — real status, next renewal, amount.
+    if sub_id and STRIPE_SECRET_KEY:
+        try:
+            sub = stripe.Subscription.retrieve(
+                sub_id, api_key=STRIPE_SECRET_KEY, expand=["items.data.price"])
+            out["status"] = sub["status"]
+            if sub.get("current_period_end"):
+                out["current_period_end"] = datetime.fromtimestamp(
+                    sub["current_period_end"], tz=timezone.utc).isoformat()
+            items = (sub.get("items") or {}).get("data") or []
+            if items:
+                out["monthly_price_cents"] = items[0]["price"].get("unit_amount")
+        except Exception as e:  # noqa: BLE001 — enrichment is best-effort
+            logger.warning("stripe subscription retrieve failed for %s: %s", org_id, e)
+    return out
+
+
+class _BillingPortalRequest(BaseModel):
+    return_path: str = "/settings"
+
+
+@router.post("/portal/{org_id}")
+async def open_billing_portal(org_id: str, req: _BillingPortalRequest,
+                              user: dict = Depends(require_jwt)):
+    """A Stripe Customer Portal link so the merchant manages their own
+    subscription (card on file, invoices, cancel). Needs the stripe customer set
+    on the org when they paid the subscribe-link."""
+    await _enforce_billing_org_access({"kind": "user", "user": user}, org_id)
+    if not STRIPE_SECRET_KEY:
+        raise HTTPException(503, "billing not configured")
+    state = await _stripe_billing_state(get_db(), org_id)
+    customer = (state or {}).get("stripe_customer_id")
+    if not customer:
+        raise HTTPException(404, "no Stripe customer on file yet")
+    try:
+        sess = stripe.billing_portal.Session.create(
+            customer=customer,
+            return_url=f"{_FRONTEND_URL}{req.return_path}",
+            api_key=STRIPE_SECRET_KEY,
+        )
+        return {"url": sess.url}
+    except Exception as e:  # noqa: BLE001
+        logger.warning("stripe billing portal failed for %s: %s", org_id, e)
+        raise HTTPException(502, "could not open the billing portal")
+
+
 @router.get("/status/{org_id}")
 async def get_billing_status(org_id: str, user: dict = Depends(require_jwt)):
     """Get current subscription/billing status for an organization.
@@ -413,6 +502,13 @@ async def get_billing_status(org_id: str, user: dict = Depends(require_jwt)):
     await _enforce_billing_org_access({"kind": "user", "user": user}, org_id)
     try:
         db = get_db()
+
+        # Stripe is the source of truth now: the checkout webhook writes the
+        # subscription state to the org record. Prefer it; the subscriptions
+        # table is legacy Square and is empty for Stripe merchants.
+        stripe_state = await _stripe_billing_state(db, org_id)
+        if stripe_state:
+            return stripe_state
 
         try:
             rows = await db.select(
