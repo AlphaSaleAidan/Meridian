@@ -15,8 +15,10 @@ from datetime import datetime, timezone
 from urllib.parse import urlencode
 from uuid import uuid4
 
-from fastapi import APIRouter, BackgroundTasks, Request, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, Request, HTTPException
 from fastapi.responses import RedirectResponse
+
+from ..auth import require_jwt, require_org_member
 
 from ...pos_connect.registry import get_provider, enabled_providers
 from ...pos_connect.oauth import GenericOAuthManager, OAuthError, sign_state, verify_state
@@ -66,16 +68,22 @@ async def list_providers():
 
 
 @router.get("/{provider}/status")
-async def status(provider: str, org_id: str):
+async def status(provider: str, org_id: str, user: dict = Depends(require_jwt)):
     """Connection status for a framework provider (same shape as the dedicated
     /api/square/status and /api/clover/status endpoints — the frontend's
-    post-OAuth poller reads `connected`)."""
+    post-OAuth poller reads `connected`).
+
+    BOLA guard: previously unauthenticated — anyone could read any org's POS
+    connection state (external_merchant_id, location count) by UUID. Now requires
+    a JWT and org membership.
+    """
     cfg = get_provider(provider)
     if cfg is None:
         raise HTTPException(404, "Unknown POS provider")
     if not org_id or not _ORG_ID_RE.match(org_id):
         return {"connected": False, "status": "not_connected",
                 "oauth_available": cfg.enabled()}
+    await require_org_member(user, org_id)
 
     from ...db import _db_instance
     from ...db.org_ids import connection_org_id

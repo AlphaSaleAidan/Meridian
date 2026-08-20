@@ -226,7 +226,15 @@ async def create_pos_for_config(order: dict, config, pos_result: dict | None = N
             if conns:
                 conn = conns[0]
                 pos_system = pos_system or (conn.get("provider") or "").strip()
-                location = location or (conn.get("external_location_id") or "").strip()
+                # create_clover_order() uses this value as Clover's MERCHANT id
+                # in /v3/merchants/{id}/orders — for an OAuth Clover connection
+                # that id lives in external_merchant_id (external_location_id is
+                # empty), so feeding the location here yields /merchants//orders
+                # and the order never reaches the POS. Resolve per provider.
+                if (pos_system or "").lower() == "clover":
+                    location = location or (conn.get("external_merchant_id") or "").strip()
+                else:
+                    location = location or (conn.get("external_location_id") or "").strip()
                 token = await _fresh_connection_token(conn)
         except Exception as e:  # noqa: BLE001 — degrade to the env fallback below
             logger.warning("live POS OAuth resolution failed for %s: %s", merchant_id, e)

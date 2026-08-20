@@ -34,6 +34,8 @@ from merchant_config import MerchantPhoneConfig, get_merchant_config, get_mercha
 from order_normalizer import normalize_order
 from pos_connector import create_pos_order
 from payment_links import create_checkout
+from delivery_channels import base_order_row, save_order_row
+from pay_on_phone import POS_PUSH_AFTER_PAYMENT
 
 # Credit metering lives in src/credits/. Add the project root to sys.path so
 # this sidecar file can import it whether running standalone (python main.py)
@@ -312,13 +314,23 @@ async def _handle_order_submission(
     order_input["caller_phone"] = customer_phone
     normalized = normalize_order(order_input, config)
 
-    pos_result = await create_pos_order(
-        normalized,
-        config.pos_system,
-        config.pos_access_token,
-        config.pos_location_id,
-        demo_safe=getattr(config, "demo_safe", False),
-    )
+    # Anti-scam parity with the voice pay-now path: when the customer must pay
+    # first (sms_checkout_enabled), DEFER the POS push — an unpaid SMS order must
+    # not reach the kitchen. mark_order_paid() pushes the ticket + notifies the
+    # merchant once the payment webhook confirms. Only push up front when there
+    # is no payment gate (pay-at-pickup style).
+    payment_required = bool(config.sms_checkout_enabled)
+    if payment_required and POS_PUSH_AFTER_PAYMENT:
+        pos_result = {"success": False, "method": "deferred",
+                      "pos_order_id": "", "deferred": True}
+    else:
+        pos_result = await create_pos_order(
+            normalized,
+            config.pos_system,
+            config.pos_access_token,
+            config.pos_location_id,
+            demo_safe=getattr(config, "demo_safe", False),
+        )
 
     payment_link_result: dict = {}
     if config.sms_checkout_enabled:
@@ -331,7 +343,8 @@ async def _handle_order_submission(
             pos_order_id=pos_order_id,
         )
 
-    await _log_sms_order(normalized, pos_result, customer_phone)
+    await _log_sms_order(normalized, pos_result, customer_phone,
+                         payment_link_result, held=bool(payment_required))
 
     items = normalized.get("items", [])
     sym = "CA$" if (normalized.get("currency") or "").upper() == "CAD" else "$"
@@ -364,41 +377,34 @@ async def _handle_order_submission(
     return reply
 
 
-async def _log_sms_order(order: dict, pos_result: dict, customer_phone: str):
-    supabase_url = os.getenv("SUPABASE_URL", "")
-    supabase_key = os.getenv("SUPABASE_ANON_KEY", "")
-    if not supabase_url or not supabase_key:
-        return
+async def _log_sms_order(order: dict, pos_result: dict, customer_phone: str,
+                         payment_result: dict | None = None, held: bool = False):
+    """Persist the SMS order to phone_orders via the SERVICE-key writer.
 
+    The old writer used SUPABASE_ANON_KEY, which lacks INSERT grant on
+    phone_orders (RLS) — so the row silently vanished and the Stripe webhook's
+    mark_order_paid() found nothing to release (no paid flag, no receipt). Now it
+    goes through save_order_row (service key), matching the voice path.
+
+    When the order is pay-first (held=True) it is written in the HELD state
+    (awaiting_payment / kitchen_released=false) so the deferred POS ticket is
+    pushed only after payment confirms — otherwise it is a normal released row."""
+    payment_result = payment_result or {}
+    row = {
+        **base_order_row({**order, "caller_phone": customer_phone}, pos_result),
+        "source": "sms_order",
+    }
+    if held:
+        row.update({
+            "status": "awaiting_payment",
+            "kitchen_released": False,
+            "payment_status": "pending",
+            "payment_link": payment_result.get("url", ""),
+            "payment_method": payment_result.get("method", ""),
+        })
     try:
-        async with httpx.AsyncClient() as client:
-            await client.post(
-                f"{supabase_url}/rest/v1/phone_orders",
-                json={
-                    "merchant_id": order.get("merchant_id", ""),
-                    "customer_name": order.get("customer_name", ""),
-                    "order_type": order.get("order_type", "pickup"),
-                    "items": order.get("items", []),
-                    "subtotal": order.get("subtotal", 0),
-                    "tax": order.get("tax", 0),
-                    "total": order.get("total", 0),
-                    "delivery_address": order.get("delivery_address", ""),
-                    "special_requests": order.get("special_requests", ""),
-                    "caller_phone": customer_phone,
-                    "pos_system": order.get("pos_system", ""),
-                    "pos_order_id": pos_result.get("pos_order_id", ""),
-                    "pos_success": pos_result.get("success", False),
-                    "source": "sms_order",
-                },
-                headers={
-                    "apikey": supabase_key,
-                    "Authorization": f"Bearer {supabase_key}",
-                    "Content-Type": "application/json",
-                    "Prefer": "return=minimal",
-                },
-                timeout=10,
-            )
-    except Exception as e:
+        await save_order_row(row)
+    except Exception as e:  # noqa: BLE001 — persistence never blocks the SMS reply
         logger.error("Failed to log SMS order: %s", e)
 
 

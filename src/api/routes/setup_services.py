@@ -27,6 +27,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, field_validator
 
 from ..auth import require_admin_jwt, require_jwt
+from ..hierarchy import resolve_scope, visible_rep_ids
 from ...services.setup_services import (
     CATALOG,
     post_to_marketplace,
@@ -167,13 +168,29 @@ async def list_work_orders(
     status: Optional[str] = None,
     user: dict = Depends(require_jwt),
 ):
-    """Work orders for a rep, or the 100 most recent."""
+    """Work orders for a rep, or the 100 most recent — scoped to the caller.
+
+    BOLA guard: setup_service_orders carry customer PII (business/contact name +
+    email, price, org/rep). A non-admin caller may only see orders within their
+    own rep hierarchy; only admins see the cross-org list. Without this any
+    logged-in user could read every rep's B2B pipeline by hitting this route.
+    """
+    scope = await resolve_scope(user)
+    allowed = await visible_rep_ids(scope)  # None = admin (unrestricted)
+
     url, key = _supabase()
     query = "select=*&order=created_at.desc&limit=100"
     if repId:
         if not re.match(r"^[A-Za-z0-9_.@-]{1,100}$", repId):
             raise HTTPException(400, "Invalid rep id")
+        if allowed is not None and repId not in allowed:
+            raise HTTPException(403, "Rep is outside your scope")
         query += f"&rep_id=eq.{repId}"
+    elif allowed is not None:
+        # No specific rep requested → restrict to the caller's own hierarchy.
+        if not allowed:
+            return {"ok": True, "orders": []}
+        query += f"&rep_id=in.({','.join(sorted(allowed))})"
     if status:
         if not re.match(r"^[a-z_]{1,30}$", status):
             raise HTTPException(400, "Invalid status")
@@ -189,6 +206,8 @@ async def list_work_orders(
 async def get_work_order(order_id: str, user: dict = Depends(require_jwt)):
     if not _UUID_RE.match(order_id):
         raise HTTPException(400, "Invalid order id")
+    scope = await resolve_scope(user)
+    allowed = await visible_rep_ids(scope)  # None = admin (unrestricted)
     url, key = _supabase()
 
     async with httpx.AsyncClient(timeout=15.0) as client:
@@ -200,6 +219,10 @@ async def get_work_order(order_id: str, user: dict = Depends(require_jwt)):
         raise HTTPException(404, "Work order not found")
 
     order = rows[0]
+    # BOLA guard: a non-admin may only read an order within their rep hierarchy.
+    # 404 (not 403) so a UUID-guessing probe can't confirm the order exists.
+    if allowed is not None and (order.get("rep_id") not in allowed):
+        raise HTTPException(404, "Work order not found")
     return {
         "ok": True,
         "order": order,

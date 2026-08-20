@@ -229,6 +229,22 @@ async def callback(
         f"expires_at={tokens['expires_at']}"
     )
 
+    # Square needs the merchant's LOCATION id to inject orders (Orders API /
+    # KDS). Without it, every paid website/mobile order fails
+    # `square_missing_location_id` in square_kitchen and never reaches the POS —
+    # so fetch and persist it at connect time. Non-fatal: the connection still
+    # saves if this fails (order dispatch degrades to notify, as before).
+    square_location_id = ""
+    try:
+        from ...square.client import SquareClient
+        _locs = await SquareClient(access_token=tokens["access_token"]).list_locations()
+        _active = [loc for loc in _locs if (loc.get("status") or "").upper() == "ACTIVE"]
+        _pick = (_active or _locs)
+        square_location_id = (_pick[0].get("id") if _pick else "") or ""
+        logger.info("Square location resolved for org %s: %s", org_id, square_location_id or "(none)")
+    except Exception as e:  # noqa: BLE001 — location fetch never blocks the connect
+        logger.warning("Square location fetch failed for org %s: %s", org_id, e)
+
     # ── Store tokens in Supabase ──────────────────────────
     try:
         from ...db import _db_instance
@@ -271,6 +287,7 @@ async def callback(
                 "provider": "square",
                 "status": "connected",
                 "external_merchant_id": tokens["merchant_id"],
+                "external_location_id": square_location_id,
                 "access_token_enc": encrypt_token(tokens["access_token"]),
                 "refresh_token_enc": encrypt_token(tokens.get("refresh_token", "")),
                 "token_expires_at": tokens.get("expires_at"),
@@ -291,16 +308,21 @@ async def callback(
 
             if existing:
                 # Update existing connection
+                _upd = {
+                    "status": "connected",
+                    "access_token_enc": encrypt_token(tokens["access_token"]),
+                    "refresh_token_enc": encrypt_token(tokens.get("refresh_token", "")),
+                    "token_expires_at": tokens.get("expires_at"),
+                    "last_error": None,
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                }
+                # Only overwrite the stored location when we actually resolved one,
+                # so a reconnect whose location fetch failed doesn't blank a good id.
+                if square_location_id:
+                    _upd["external_location_id"] = square_location_id
                 await _db_instance.update(
                     "pos_connections",
-                    {
-                        "status": "connected",
-                        "access_token_enc": encrypt_token(tokens["access_token"]),
-                        "refresh_token_enc": encrypt_token(tokens.get("refresh_token", "")),
-                        "token_expires_at": tokens.get("expires_at"),
-                        "last_error": None,
-                        "updated_at": datetime.now(timezone.utc).isoformat(),
-                    },
+                    _upd,
                     filters={"id": f"eq.{existing[0]['id']}"},
                 )
                 logger.info(f"Updated existing connection for org {org_id}")
