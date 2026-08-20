@@ -417,6 +417,7 @@ async def _create_sub_session(row: dict):
             "org_id": org_id,
             "lead_id": lead_id,
             "business_name": business_name,
+            "setup_fee_cents": str(setup_fee_cents),
         },
     }
     if first_month_free:
@@ -433,6 +434,7 @@ async def _create_sub_session(row: dict):
             "org_id": org_id,
             "lead_id": lead_id,
             "business_name": business_name,
+            "setup_fee_cents": str(setup_fee_cents),
         },
         allow_promotion_codes=True,
         billing_address_collection="required",
