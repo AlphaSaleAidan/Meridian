@@ -260,26 +260,30 @@ const SMOKE_SHOP: BusinessProfile = {
 const PEPTIDE_SHOP: BusinessProfile = {
   businessName: 'Apex Peptide Supply',
   businessNameCA: 'Northern Peptide Co.',
-  industryLabel: 'Peptides & Wellness Retail',
-  peakLabel: '11:00 AM–2:00 PM',
+  industryLabel: 'Online Peptide & Wellness Store',
+  // Online orders peak in the evening, after work — the pattern a walk-in
+  // shop never sees. The site takes orders around the clock; the bench ships
+  // them 9-5.
+  peakLabel: '7:00–10:00 PM',
   topBundlePair: ['BPC-157 5mg', 'Bacteriostatic Water 30ml'],
   deadStockItems: ['Epitalon 10mg', 'Collagen Peptide Powder', 'Creatine Gummies', 'Vial Travel Case'],
   hourlyPattern: [
-    0, 0, 0, 0, 0, 0,
-    0, 0, 0, 10, 35, 55,
-    70, 65, 45, 40, 45, 40,
-    15, 0, 0, 0, 0, 0,
+    5, 5, 0, 0, 0, 5,
+    10, 20, 25, 30, 35, 40,
+    45, 40, 35, 30, 35, 45,
+    60, 80, 90, 70, 35, 15,
   ],
   revenue: {
     weekdayMin: 90000, weekdayMax: 180000,
     weekendMin: 70000, weekendMax: 140000,
     avgTicketMin: 6000, avgTicketMax: 12000,
   },
+  // An online store's whole roster: nobody stands at a register.
   staff: [
-    { name: 'Marcus D.', role: 'Store Manager' },
+    { name: 'Marcus D.', role: 'Owner / Operator' },
     { name: 'Elena V.', role: 'Fulfillment Lead' },
-    { name: 'Tyler S.', role: 'Sales Associate' },
-    { name: 'Priya N.', role: 'Inventory Clerk' },
+    { name: 'Tyler S.', role: 'Customer Support' },
+    { name: 'Priya N.', role: 'Inventory & Receiving' },
   ],
   products: [
     { name: 'BPC-157 5mg', sku: 'PEP-001', price: 5499, category: 'peptides', popularity: 0.90 },

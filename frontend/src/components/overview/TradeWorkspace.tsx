@@ -517,15 +517,16 @@ export default function TradeWorkspace(data: WorkspaceData) {
         </div>
         {/* The portal's own do-this-next panel, fed niche-specific actions from
             /api/dashboard/actions. Not a lookalike — the same component, with its
-            reasoning chain, evidence and complete/reject behaviour intact. */}
-        <Top3ActionsPanel />
+            reasoning chain, evidence and complete/reject behaviour intact.
+            Gated on the pack: a trade that declares topActions off (an online
+            store has no till to watch) must not see it here either — the demo
+            showing a module the pack removed makes the pack a theme. */}
+        {pack.modules?.topActions !== false && <Top3ActionsPanel />}
         </>
       ) : (
         <>
-        {/* The portal's own do-this-next panel, fed niche-specific actions from
-            /api/dashboard/actions. Not a lookalike — the same component, with its
-            reasoning chain, evidence and complete/reject behaviour intact. */}
-        <Top3ActionsPanel />
+        {/* Same gate as the booking branch above. */}
+        {pack.modules?.topActions !== false && <Top3ActionsPanel />}
         {/*
           ── The work, and what needs a human ────────────────────────
 

@@ -532,41 +532,49 @@ export const NICHE_PACKS: NichePack[] = [
   },
   {
     key: 'peptides',
-    label: 'Peptide & wellness shop',
-    pitch: 'The first order is marketing. The reorder is the business, and it starts as a phone call.',
+    label: 'Peptide & wellness store',
+    pitch: 'Every order \u2014 site or phone \u2014 lands in one queue, and the stock knows its own expiry.',
     bookingNoun: 'order',
     customerNoun: 'customer',
     resourceKind: 'table',
     countTitle: '',
     countLabel: '',
-    // Retail with a mail-order tail, not a clinic. A peptide CLINIC books
-    // consultations and is the med spa pack wearing a different sign; a
-    // peptide SHOP has nothing to book and lives on the reorder cycle \u2014 the
-    // customer who bought a vial last month calls for the next one. The phone
-    // is reorder volume and stock questions, never dosing advice: the agent
-    // takes the order and reads what is on the label, full stop.
+    // An ONLINE store, not a walk-in counter \u2014 that is the whole shape of
+    // this pack. Revenue arrives through the website; the phone is the
+    // reorder call and stock questions, never dosing advice: the agent takes
+    // the order and reads what is on the label, full stop. (A peptide CLINIC
+    // books consultations and is the med spa pack wearing a different sign.)
+    //
+    // MISSING CAPABILITY, logged here the way routing is on the mobile packs:
+    // connecting the merchant's own storefront (Shopify/Woo order ingest) the
+    // way Square connects a till. Until that exists the web-order figures
+    // below are the demo's claim, not a live feed \u2014 the pack is sellable, the
+    // connector is the build.
     booksAtAll: false,
     defaultCount: 0,
     defaultSeats: 0,
     partyBanded: false,
     services: [],
-    days: [1, 2, 3, 4, 5, 6],
-    opens: '10:00',
-    closes: '18:00',
-    // An inventory business with a clock on it: cold-stored stock with lot
-    // numbers and expiry dates, which is the med spa's injectables problem in
-    // a shop with no treatment rooms. Menu Matrix is a food screen and goes;
-    // the camera watches the case, same as the smoke shop.
-    modules: { bookings: false },
+    days: [1, 2, 3, 4, 5],
+    opens: '09:00',
+    closes: '17:00',
+    // Cut everything that assumes a floor and a roster. No shop floor means
+    // no camera; a two-person packing bench does not need shift scheduling \u2014
+    // the tools that manage a TEAM in a ROOM are exactly the ones that tell
+    // an online merchant this product was not built for them. What is left is
+    // the online store's console: stock with lot numbers and expiry dates,
+    // the phone line, and the day's orders.
+    modules: { bookings: false, camera: false, schedule: false,
+               topActions: false, taxExpenses: false },
     hiddenViews: ['inventory/menu'],
-    pillarOrder: ['inventory', 'phone', '', 'camera', 'schedule'],
-    homeMetric: { label: 'Reorders taken today',
-                  help: 'Customers who bought before and came back. New faces are a tile underneath.' },
+    pillarOrder: ['', 'inventory', 'phone'],
+    homeMetric: { label: 'Orders to ship today',
+                  help: 'Web and phone orders together \u2014 the number that empties the packing bench.' },
     counterStats: [
-      { label: 'Transactions', value: '47' },
-      { label: 'Avg basket', cents: 9400 },
+      { label: 'Web orders', value: '38', sub: 'through the site today' },
+      { label: 'Phone reorders', value: '9', sub: 'taken by the agent' },
+      { label: 'Awaiting shipment', value: '12', sub: 'oldest 26h', tone: 'warn' },
       { label: 'Repeat customers', value: '64%', sub: 'ordered before', tone: 'good' },
-      { label: 'Expiring lots', value: '5', sub: 'within 60 days', tone: 'warn' },
     ],
     counterTakingsCents: 441_800,
   },
@@ -709,7 +717,7 @@ export const SELLABLE_TRADES: SellableTrade[] = [
 
   { key: 'smokeshop', label: 'Smoke & Vape Shops', group: 'Retail',
     deck: { ca: 'ca-smokeshop', us: 'us-smokeshop' } },
-  { key: 'peptides', label: 'Peptide & Wellness Shops', group: 'Retail',
+  { key: 'peptides', label: 'Peptide & Wellness Stores', group: 'Retail',
     // No deck exists in either catalogue yet — bare neutral slug, the
     // autoshop precedent: a sellable product with a proposal gap to close,
     // not a mapping to invent.

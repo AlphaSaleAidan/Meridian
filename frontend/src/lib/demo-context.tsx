@@ -44,7 +44,7 @@ export const BUSINESS_TYPES: BusinessTypeOption[] = [
 
   // Retail
   { id: 'smoke_shop', icon: Store, group: 'Retail', label: 'Smoke Shop', description: 'Tobacco and accessories — product zone dwell, repeat customers' },
-  { id: 'peptide_shop', icon: FlaskConical, group: 'Retail', label: 'Peptide Shop', description: 'Peptides and wellness retail — cold stock, lot expiry, monthly reorders' },
+  { id: 'peptide_shop', icon: FlaskConical, group: 'Retail', label: 'Peptide Store', description: 'Online peptide store — web orders, fulfillment queue, monthly reorders' },
 ]
 
 /** The order the sections appear in, so a group cannot be added and silently
