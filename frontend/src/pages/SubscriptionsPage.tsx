@@ -101,6 +101,12 @@ function renewLabel(days: number): string {
 
 export default function SubscriptionsPage() {
   const [subs, setSubs] = useState<Sub[]>(demoSubscriptions)
+  // Dunning, the demo take: a past-due card is money leaking on a schedule,
+  // and the recovery move is a fresh payment link in a text — or the agent
+  // calling, which is the rail this product already owns. Real send rides
+  // the phone agent's send_payment_text tool (live on the ResearchChem
+  // line); consent captured at signup, same rule as the Reorder Radar.
+  const [recovery, setRecovery] = useState<Record<string, 'link' | 'call'>>({})
 
   const stats = useMemo(() => {
     const active = subs.filter((s) => s.status === 'active')
@@ -161,6 +167,28 @@ export default function SubscriptionsPage() {
                 {formatCents(s.cents)}
                 <span className="text-[10px] text-[#6B6B73]">/mo</span>
               </span>
+              {s.status === 'past_due' && (
+                recovery[s.id] ? (
+                  <span className={`shrink-0 rounded border px-2 py-1 text-[10px] font-medium ${
+                    recovery[s.id] === 'link'
+                      ? 'border-[#17C5B0]/30 bg-[#17C5B0]/5 text-[#17C5B0]'
+                      : 'border-[#1A8FD6]/30 bg-[#1A8FD6]/5 text-[#1A8FD6]'
+                  }`}>
+                    {recovery[s.id] === 'link' ? 'New payment link sent' : 'Queued for the agent'}
+                  </span>
+                ) : (
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <button onClick={() => setRecovery((r) => ({ ...r, [s.id]: 'link' }))}
+                            className="rounded-lg border border-[#1F1F23] px-2 py-1 text-[10px] text-[#D4D4D8] transition-colors hover:border-[#17C5B0]/50 hover:text-[#17C5B0]">
+                      Text new link
+                    </button>
+                    <button onClick={() => setRecovery((r) => ({ ...r, [s.id]: 'call' }))}
+                            className="rounded-lg border border-[#1F1F23] px-2 py-1 text-[10px] text-[#D4D4D8] transition-colors hover:border-[#1A8FD6]/50 hover:text-[#1A8FD6]">
+                      Agent call
+                    </button>
+                  </div>
+                )
+              )}
               <div className="flex shrink-0 items-center gap-1">
                 {s.status === 'paused' ? (
                   <button aria-label="Resume" title="Resume" onClick={() => setStatus(s.id, 'active')}

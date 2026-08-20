@@ -1,7 +1,7 @@
 import type { ComponentType, LazyExoticComponent } from 'react'
 import {
   LayoutDashboard, Zap, Layers, Users, Phone, Video, Settings, Receipt,
-  Contact, Lightbulb, Globe, CalendarClock, FileText, RefreshCcw,
+  Contact, Lightbulb, Globe, CalendarClock, FileText, RefreshCcw, Radar,
 } from 'lucide-react'
 import { lazyRetry } from '@/components/ErrorBoundary'
 import type { ModuleFlags } from '@/config/moduleFlags'
@@ -52,6 +52,7 @@ const CustomersPage = lazyRetry(() => import('@/pages/CustomersPage'))
 const InsightsPage = lazyRetry(() => import('@/pages/InsightsPage'))
 const InvoicesPage = lazyRetry(() => import('@/pages/InvoicesPage'))
 const SubscriptionsPage = lazyRetry(() => import('@/pages/SubscriptionsPage'))
+const ReordersPage = lazyRetry(() => import('@/pages/ReordersPage'))
 const MyWebsitePage = lazyRetry(() => import('@/pages/MyWebsitePage'))
 const SiteCarePage = lazyRetry(() => import('@/pages/canada/merchant/SiteCarePage'))
 
@@ -270,6 +271,20 @@ export const comingSoonPillars: Pillar[] = [
     sampleData: true,
     trades: ['peptides', 'mobiledetailing'],
     segments: [{ view: 'manage', label: 'Subscriptions', Component: SubscriptionsPage }],
+  },
+  {
+    // The lapsed-cycle board — repeat customers past their usual gap, and the
+    // two buttons that close the loop (text a reorder link / agent call).
+    // Same trades as Subscriptions: the recurring half is the subscription
+    // book, this is everyone who reorders by habit instead. Feed and consent
+    // rules: docs/TAGADA_CONNECTOR.md § Reorder loop.
+    path: 'reorders',
+    label: 'Reorders',
+    icon: Radar,
+    comingSoon: true,
+    sampleData: true,
+    trades: ['peptides', 'mobiledetailing'],
+    segments: [{ view: 'radar', label: 'Reorder Radar', Component: ReordersPage }],
   },
   // Taxes & Expenses and My Website were here and are deliberately gone.
   // Aidan's call: a demo is a pitch, and two roadmap tabs a prospect cannot

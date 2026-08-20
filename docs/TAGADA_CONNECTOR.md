@@ -120,6 +120,52 @@ trick, which is a demo convention, not bookkeeping.
    from their Tagada dashboard (Settings → Access Tokens), we verify with
    `stores.list` and register the webhook.
 
+## Reorder loop (the money feature the connector unlocks)
+
+The connector's real payoff is not a dashboard — it is closing the reorder
+cycle automatically. A repeat-purchase trade's revenue is a set of clocks;
+this is the machinery that reads them and acts.
+
+**Cycle detection** (pure SQL over connector-ingested orders, no ML):
+per (customer, product), take the gaps between consecutive paid orders;
+`cycle = median(gaps)` once a customer has ≥3 orders of the product;
+`lapsed` when `today − last_order > cycle + grace` (grace = max(4 days,
+cycle × 0.25)). Surface: the Reorder Radar tab (built, demo-fed today) —
+lapsed customers sorted by days late, expected value = their usual order.
+
+**Outreach — two rails that already exist and were verified live 2026-08-20
+on the ResearchChem line:**
+1. *Text a reorder link*: the phone agent's `create_order_link` +
+   `send_payment_text` tools, invoked directly (server-side call into the
+   same endpoints Vapi's webhook hits — no call needed for the text path).
+2. *Agent call*: Vapi outbound call API with the assistant given a
+   `reorder_context` (customer, product, cycle, last order) via
+   `assistantOverrides.variableValues`; the agent takes the reorder on the
+   call and texts the link itself.
+
+**Dunning is the same machine pointed at subscriptions:** on
+`subscription/rebillDeclined` / `subscription/pastDue` webhook events, wait
+one processor retry, then rail 1 (fresh payment link by text); if unpaid
+after 48h, rail 2 (agent call). The Subscriptions tab's past-due rows carry
+these two actions (built, demo-state today).
+
+**Consent is load-bearing, not a checkbox.** Outbound marketing/collection
+texts and calls to US numbers require prior express consent (TCPA) — and
+autodialed/marketing texts specifically want prior express *written*
+consent. So: `contact_consent` is a first-class column ingested from the
+storefront checkout (Tagada checkout gets an opt-in field; the connector
+carries it), every outreach row logs consent provenance + timestamp, texts
+carry STOP handling (Telnyx opt-out lists), quiet hours enforced
+(8am–9pm customer-local), and the Radar/dunning surfaces are HARD-FILTERED
+to consented customers — a customer without consent must never render as a
+button. Frequency cap: one touch per lapse, one per declined rebill; a
+second touch only if the first got a click but no purchase.
+
+**Rollout**: ResearchChem is merchant zero — its own Tagada history trains
+the cycle detector, its own line does the outreach, and the measured number
+("X reorders recovered, $Y") becomes the pitch slide for every other
+peptide store.
+
 ## Open items
 
 - The stored token is **read-only**: webhook registration and subscription
