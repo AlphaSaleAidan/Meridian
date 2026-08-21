@@ -14,12 +14,13 @@
  * Every call is a call the portal already makes, so the numbers are derived
  * from what is actually on the book rather than written into a mock.
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { api } from '@/lib/api'
 import { bookingsApi, type Booking, type BusyBlock, type Resource, type Service } from '@/lib/bookings-api'
 import type { NichePack } from '@/config/niches'
 import type { RouteOrigin } from '@/components/RouteDay'
 import TradeWorkspace from '@/components/overview/TradeWorkspace'
+import { demoOrdersFor } from '@/lib/demo-orders'
 import { formatCentsCompact as money } from '@/lib/format'
 
 /**
@@ -171,6 +172,12 @@ export default function TradeWorkspaceHost({
       lng: b.serviceLng as number,
     }))
 
+  // A counter trade's day, order by order. demo-orders is deterministic per
+  // day and trade — the storefront connector replaces this call, same shape.
+  const orders = useMemo(
+    () => (pack.booksAtAll ? undefined : demoOrdersFor(pack, day)),
+    [pack, day])
+
   const shiftDay = (delta: number) => {
     const d = new Date(`${day}T12:00:00`)
     d.setDate(d.getDate() + delta)
@@ -194,6 +201,7 @@ export default function TradeWorkspaceHost({
       onShiftDay={shiftDay}
       stops={stops}
       origin={origin}
+      orders={orders}
     />
   )
 }

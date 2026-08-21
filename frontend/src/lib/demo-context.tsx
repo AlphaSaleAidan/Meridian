@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
 import {
-  Car, Coffee, Pizza, Sandwich, Scissors, Sparkles, Store, Syringe, Truck,
-  UtensilsCrossed, Wrench, type LucideIcon,
+  Car, Coffee, FlaskConical, Pizza, Sandwich, Scissors, Sparkles, Store,
+  Syringe, Truck, UtensilsCrossed, Wrench, type LucideIcon,
 } from 'lucide-react'
 import { useAuth } from './auth'
 
@@ -11,7 +11,7 @@ export type BusinessType =
   // business-config.ts — a barbershop demo shows pomade and blades, not
   // croissants, because a prospect reads the wrong products as "not for me".
   | 'barbershop' | 'nails' | 'medspa' | 'detailing' | 'mobile_detailing'
-  | 'pizzeria'
+  | 'pizzeria' | 'peptide_shop'
 
 export interface BusinessTypeOption {
   id: BusinessType
@@ -44,6 +44,7 @@ export const BUSINESS_TYPES: BusinessTypeOption[] = [
 
   // Retail
   { id: 'smoke_shop', icon: Store, group: 'Retail', label: 'Smoke Shop', description: 'Tobacco and accessories — product zone dwell, repeat customers' },
+  { id: 'peptide_shop', icon: FlaskConical, group: 'Retail', label: 'Peptide Store', description: 'Online peptide store — web orders, fulfillment queue, monthly reorders' },
 ]
 
 /** The order the sections appear in, so a group cannot be added and silently
@@ -126,6 +127,7 @@ function detectBusinessType(org: { business_type?: string | null; pos_provider?:
   //   - "barbershop" contains "bar", which the restaurant rule below matches —
   //     that is exactly the bug this ordering exists to prevent.
   if (bt.includes('pizza')) return 'pizzeria'
+  if (bt.includes('peptide')) return 'peptide_shop'
   if (bt.includes('mobile detail') || bt.includes('mobile_detail')) return 'mobile_detailing'
   if (bt.includes('detail')) return 'detailing'
   if (bt.includes('barber') || bt.includes('salon') || bt.includes('haircut')) return 'barbershop'
@@ -146,6 +148,7 @@ function detectBusinessType(org: { business_type?: string | null; pos_provider?:
   if (name.includes('detail')) return 'detailing'
   if (name.includes('coffee') || name.includes('cafe') || name.includes('café')) return 'coffee_shop'
   if (name.includes('auto') || name.includes('tire') || name.includes('mechanic')) return 'auto_shop'
+  if (name.includes('peptide')) return 'peptide_shop'
   if (name.includes('smoke') || name.includes('vape')) return 'smoke_shop'
   if (name.includes('pizza') || name.includes('burger') || name.includes('taco')) return 'fast_food'
 

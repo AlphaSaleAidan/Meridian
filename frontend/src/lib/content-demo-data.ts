@@ -522,6 +522,43 @@ const DEMO_BUSINESSES: Record<BusinessType, DemoBusiness> = {
       { keyword: 'hand blown glass', rank_position: 9, rank_change: 2, checked_at: daysAgo(0), ai_citation_count: 0, ai_platforms_cited: [] },
     ],
   },
+
+  peptide_shop: {
+    brand: {
+      business_name: 'Apex Peptide Supply',
+      business_type: 'peptide_shop',
+      content_tier: 'starter',
+      ayrshare_connected_platforms: ['instagram'],
+      voice_profile: {
+        // Deliberately plain: this trade's content NEVER makes a health
+        // claim. Stock, lots, and availability are the whole vocabulary.
+        tone: 'precise',
+        emoji_usage: 'none',
+        top_products: ['BPC-157 5mg', 'Bacteriostatic Water 30ml', 'NAD+ 500mg'],
+        keywords: ['peptide shop', 'BPC-157', 'bacteriostatic water'],
+      },
+    },
+    post: {
+      id: 'demo-peptide-ad',
+      post_type: 'social',
+      platform: 'instagram',
+      status: 'published',
+      hook: 'Fresh lots landed this morning.',
+      body: 'New BPC-157 and NAD+ lots are live on the site, third-party tested with certificates linked on every product page.\n\nStanding reorder customers: your usual is reserved until Saturday — order online or call and the agent has your history.',
+      hashtags: ['#ApexPeptideSupply', '#Restock', '#ThirdPartyTested'],
+      call_to_action: 'Order online — in-stock lots ship same day',
+      pos_data_reference: { item: 'BPC-157 5mg', repeat_share: '64%', period: 'this month' },
+      published_at: daysAgo(1),
+      publish_url: 'https://instagram.com/p/demo-apex',
+      created_at: daysAgo(2),
+    },
+    rankings: [
+      { keyword: 'peptide shop near me', rank_position: 4, rank_change: 5, checked_at: daysAgo(0), ai_citation_count: 1, ai_platforms_cited: ['perplexity'] },
+      { keyword: 'bpc-157 in stock', rank_position: 6, rank_change: 3, checked_at: daysAgo(0), ai_citation_count: 0, ai_platforms_cited: [] },
+      { keyword: 'bacteriostatic water', rank_position: 9, rank_change: 1, checked_at: daysAgo(0), ai_citation_count: 0, ai_platforms_cited: [] },
+      { keyword: 'third party tested peptides', rank_position: 7, rank_change: 4, checked_at: daysAgo(0), ai_citation_count: 2, ai_platforms_cited: ['chatgpt', 'claude'] },
+    ],
+  },
 }
 
 export function fetchDemoContentData(): ContentDashboardData {

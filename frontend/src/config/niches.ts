@@ -149,6 +149,19 @@ export interface NichePack {
    *  implemented — see docs; declared here because the packs that need it are
    *  exactly the packs worth building next. */
   travels?: boolean
+
+  /**
+   * Where a COUNTER trade's orders come from, most common first. Drives the
+   * channel chip on the day's order list — a smoke shop's orders walk in, an
+   * online store's arrive through the site. Defaults to counter + phone.
+   */
+  orderChannels?: Array<'web' | 'phone' | 'counter'>
+  /**
+   * True when an order leaves in a box rather than over the counter, which is
+   * what gives it a lifecycle worth showing: paid, packed, shipped. A trade
+   * that hands the bag across the till has nothing to track after the till.
+   */
+  ships?: boolean
 }
 
 /**
@@ -530,6 +543,58 @@ export const NICHE_PACKS: NichePack[] = [
     ],
     counterTakingsCents: 418_000,
   },
+  {
+    key: 'peptides',
+    label: 'Peptide & wellness store',
+    pitch: 'Every order \u2014 site or phone \u2014 lands in one queue, and the stock knows its own expiry.',
+    bookingNoun: 'order',
+    customerNoun: 'customer',
+    resourceKind: 'table',
+    countTitle: '',
+    countLabel: '',
+    // An ONLINE store, not a walk-in counter \u2014 that is the whole shape of
+    // this pack. Revenue arrives through the website; the phone is the
+    // reorder call and stock questions, never dosing advice: the agent takes
+    // the order and reads what is on the label, full stop. (A peptide CLINIC
+    // books consultations and is the med spa pack wearing a different sign.)
+    //
+    // MISSING CAPABILITY, logged here the way routing is on the mobile packs:
+    // connecting the merchant's own storefront (Shopify/Woo order ingest) the
+    // way Square connects a till. Until that exists the web-order figures
+    // below are the demo's claim, not a live feed \u2014 the pack is sellable, the
+    // connector is the build.
+    booksAtAll: false,
+    defaultCount: 0,
+    defaultSeats: 0,
+    partyBanded: false,
+    services: [],
+    days: [1, 2, 3, 4, 5],
+    opens: '09:00',
+    closes: '17:00',
+    // Cut everything that assumes a floor and a roster. No shop floor means
+    // no camera; a two-person packing bench does not need shift scheduling \u2014
+    // the tools that manage a TEAM in a ROOM are exactly the ones that tell
+    // an online merchant this product was not built for them. What is left is
+    // the online store's console: stock with lot numbers and expiry dates,
+    // the phone line, the day's orders \u2014 and Top Actions, which is
+    // channel-agnostic: a stockout warning reads the same whether the till
+    // is a counter or a checkout page.
+    modules: { bookings: false, camera: false, schedule: false,
+               taxExpenses: false },
+    orderChannels: ['web', 'phone'],
+    ships: true,
+    hiddenViews: ['inventory/menu'],
+    pillarOrder: ['', 'inventory', 'phone'],
+    homeMetric: { label: 'Orders to ship today',
+                  help: 'Web and phone orders together \u2014 the number that empties the packing bench.' },
+    counterStats: [
+      { label: 'Web orders', value: '38', sub: 'through the site today' },
+      { label: 'Phone reorders', value: '9', sub: 'taken by the agent' },
+      { label: 'Awaiting shipment', value: '12', sub: 'oldest 26h', tone: 'warn' },
+      { label: 'Repeat customers', value: '64%', sub: 'ordered before', tone: 'good' },
+    ],
+    counterTakingsCents: 441_800,
+  },
 ]
 
 /** The pack a merchant with nothing chosen falls back to. Generic on purpose:
@@ -607,6 +672,7 @@ export const PACK_DECK_SLUGS: Record<string, string[]> = {
   restaurant: [],
   autoshop: [],
   mobiledetailing: [],
+  peptides: [],
 }
 
 /**
@@ -668,6 +734,11 @@ export const SELLABLE_TRADES: SellableTrade[] = [
 
   { key: 'smokeshop', label: 'Smoke & Vape Shops', group: 'Retail',
     deck: { ca: 'ca-smokeshop', us: 'us-smokeshop' } },
+  { key: 'peptides', label: 'Peptide & Wellness Stores', group: 'Retail',
+    // No deck exists in either catalogue yet — bare neutral slug, the
+    // autoshop precedent: a sellable product with a proposal gap to close,
+    // not a mapping to invent.
+    deck: { ca: 'peptides', us: 'peptides' } },
 ]
 
 export const SELLABLE_GROUPS = [
@@ -696,6 +767,7 @@ const PACK_ALIASES: Record<string, string> = {
   med_spa: 'medspa',
   nail_salon: 'nails',
   barber_shop: 'barbershop',
+  peptide_shop: 'peptides',
 }
 
 export function packFor(key: string | null | undefined): NichePack {

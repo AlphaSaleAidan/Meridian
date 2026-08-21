@@ -255,6 +255,53 @@ const SMOKE_SHOP: BusinessProfile = {
   ],
 }
 
+// Retail with a clock on it: the expensive stock is cold-stored with lot
+// numbers and expiry dates, and the business is the monthly reorder call.
+const PEPTIDE_SHOP: BusinessProfile = {
+  businessName: 'Apex Peptide Supply',
+  businessNameCA: 'Northern Peptide Co.',
+  industryLabel: 'Online Peptide & Wellness Store',
+  // Online orders peak in the evening, after work — the pattern a walk-in
+  // shop never sees. The site takes orders around the clock; the bench ships
+  // them 9-5.
+  peakLabel: '7:00–10:00 PM',
+  topBundlePair: ['BPC-157 5mg', 'Bacteriostatic Water 30ml'],
+  deadStockItems: ['Epitalon 10mg', 'Collagen Peptide Powder', 'Creatine Gummies', 'Vial Travel Case'],
+  hourlyPattern: [
+    5, 5, 0, 0, 0, 5,
+    10, 20, 25, 30, 35, 40,
+    45, 40, 35, 30, 35, 45,
+    60, 80, 90, 70, 35, 15,
+  ],
+  revenue: {
+    weekdayMin: 90000, weekdayMax: 180000,
+    weekendMin: 70000, weekendMax: 140000,
+    avgTicketMin: 6000, avgTicketMax: 12000,
+  },
+  // An online store's whole roster: nobody stands at a register.
+  staff: [
+    { name: 'Marcus D.', role: 'Owner / Operator' },
+    { name: 'Elena V.', role: 'Fulfillment Lead' },
+    { name: 'Tyler S.', role: 'Customer Support' },
+    { name: 'Priya N.', role: 'Inventory & Receiving' },
+  ],
+  products: [
+    { name: 'BPC-157 5mg', sku: 'PEP-001', price: 5499, category: 'peptides', popularity: 0.90 },
+    { name: 'TB-500 5mg', sku: 'PEP-002', price: 6499, category: 'peptides', popularity: 0.75 },
+    { name: 'GHK-Cu 50mg', sku: 'PEP-003', price: 4999, category: 'peptides', popularity: 0.60 },
+    { name: 'Epitalon 10mg', sku: 'PEP-004', price: 5999, category: 'peptides', popularity: 0.35 },
+    { name: 'NAD+ 500mg', sku: 'PEP-005', price: 8999, category: 'peptides', popularity: 0.55 },
+    { name: 'Glutathione 600mg', sku: 'PEP-006', price: 4499, category: 'peptides', popularity: 0.50 },
+    { name: 'Bacteriostatic Water 30ml', sku: 'SUP-001', price: 1499, category: 'supplies', popularity: 0.85 },
+    { name: 'Insulin Syringe 10-Pack', sku: 'SUP-002', price: 899, category: 'supplies', popularity: 0.70 },
+    { name: 'Alcohol Prep Pads 100ct', sku: 'SUP-003', price: 599, category: 'supplies', popularity: 0.65 },
+    { name: 'Vial Travel Case', sku: 'SUP-004', price: 2499, category: 'supplies', popularity: 0.30 },
+    { name: 'Collagen Peptide Powder', sku: 'WEL-001', price: 3499, category: 'wellness', popularity: 0.45 },
+    { name: 'Creatine Gummies', sku: 'WEL-002', price: 2999, category: 'wellness', popularity: 0.40 },
+    { name: 'Electrolyte Sticks 20ct', sku: 'WEL-003', price: 1999, category: 'wellness', popularity: 0.55 },
+  ],
+}
+
 
 /**
  * The service trades.
@@ -491,6 +538,7 @@ const PROFILES: Record<BusinessType, BusinessProfile> = {
   fast_food: FAST_FOOD,
   auto_shop: AUTO_SHOP,
   smoke_shop: SMOKE_SHOP,
+  peptide_shop: PEPTIDE_SHOP,
   barbershop: BARBERSHOP,
   nails: NAIL_STUDIO,
   medspa: MED_SPA,

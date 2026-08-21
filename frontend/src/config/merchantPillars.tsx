@@ -1,7 +1,7 @@
 import type { ComponentType, LazyExoticComponent } from 'react'
 import {
   LayoutDashboard, Zap, Layers, Users, Phone, Video, Settings, Receipt,
-  Contact, Lightbulb, Globe, CalendarClock,
+  Contact, Lightbulb, Globe, CalendarClock, FileText, RefreshCcw, Radar,
 } from 'lucide-react'
 import { lazyRetry } from '@/components/ErrorBoundary'
 import type { ModuleFlags } from '@/config/moduleFlags'
@@ -50,6 +50,9 @@ const RevenuePage = lazyRetry(() => import('@/pages/RevenuePage'))
 // Coming Soon previews — Canada demo only (see comingSoonPillars).
 const CustomersPage = lazyRetry(() => import('@/pages/CustomersPage'))
 const InsightsPage = lazyRetry(() => import('@/pages/InsightsPage'))
+const InvoicesPage = lazyRetry(() => import('@/pages/InvoicesPage'))
+const SubscriptionsPage = lazyRetry(() => import('@/pages/SubscriptionsPage'))
+const ReordersPage = lazyRetry(() => import('@/pages/ReordersPage'))
 const MyWebsitePage = lazyRetry(() => import('@/pages/MyWebsitePage'))
 const SiteCarePage = lazyRetry(() => import('@/pages/canada/merchant/SiteCarePage'))
 
@@ -78,6 +81,13 @@ export interface Pillar {
   segments: PillarSegment[]
   /** When set, the pillar is hidden if the corresponding module flag is false. */
   flag?: keyof ModuleFlags
+  /**
+   * When set, the pillar shows ONLY for these pack keys (niches.ts). Module
+   * flags can only turn things off portal-wide; this is the inverse — a tab
+   * that exists for the two trades whose business is recurring, and for
+   * nobody else. A subscriptions tab on a restaurant demo is noise.
+   */
+  trades?: string[]
 }
 
 /**
@@ -236,12 +246,56 @@ export const comingSoonPillars: Pillar[] = [
     sampleData: true,
     segments: [{ view: 'customers', label: 'Customers', Component: CustomersPage }],
   },
+  {
+    // The custom bill: the bulk order quoted on the phone, the wholesale
+    // account — money that today leaves by PayPal link and never lands
+    // beside the rest of the revenue. Asked for by name (Aidan, 2026-08-20,
+    // for the online-store trades); shaped like a Stripe invoice so the real
+    // send is wiring, not rework.
+    path: 'invoices',
+    label: 'Invoices',
+    icon: FileText,
+    comingSoon: true,
+    sampleData: true,
+    segments: [{ view: 'send', label: 'Send Invoice', Component: InvoicesPage }],
+  },
+  {
+    // The recurring book, for the two trades whose business IS recurring:
+    // a peptide store's monthly reorders and a mobile detailer's wash plans.
+    // Real data arrives through the Tagada connector's subscriptions feed
+    // (docs/TAGADA_CONNECTOR.md); this page is already its shape.
+    path: 'subscriptions',
+    label: 'Subscriptions',
+    icon: RefreshCcw,
+    comingSoon: true,
+    sampleData: true,
+    trades: ['peptides', 'mobiledetailing'],
+    segments: [{ view: 'manage', label: 'Subscriptions', Component: SubscriptionsPage }],
+  },
+  {
+    // The lapsed-cycle board — repeat customers past their usual gap, and the
+    // two buttons that close the loop (text a reorder link / agent call).
+    // Same trades as Subscriptions: the recurring half is the subscription
+    // book, this is everyone who reorders by habit instead. Feed and consent
+    // rules: docs/TAGADA_CONNECTOR.md § Reorder loop.
+    path: 'reorders',
+    label: 'Reorders',
+    icon: Radar,
+    comingSoon: true,
+    sampleData: true,
+    trades: ['peptides', 'mobiledetailing'],
+    segments: [{ view: 'radar', label: 'Reorder Radar', Component: ReordersPage }],
+  },
   // Taxes & Expenses and My Website were here and are deliberately gone.
   // Aidan's call: a demo is a pitch, and two roadmap tabs a prospect cannot
   // buy today dilute the four that are actually the product. Neither page is
   // deleted — Taxes & Expenses still ships to real merchants through the
   // `taxExpenses` flag (on for /app, off for Canada), and the website pages
   // are still routed. They just no longer sit in a demo sidebar.
+  //
+  // Marketing (the content engine) was added here on 2026-08-20 and removed
+  // the same day, by the same call — "too much". Do not re-add it; the page
+  // stays routed at /content for anyone who goes looking.
 ]
 
 /** Public demo route set: the shipped demo pillars plus the roadmap previews. */

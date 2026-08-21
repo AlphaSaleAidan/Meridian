@@ -34,6 +34,7 @@ import InsightCard from '@/components/InsightCard'
 import type { Insight } from '@/lib/api'
 import { formatCentsCompact } from '@/lib/format'
 import { getCurrencyMultiplier } from '@/lib/demo-context'
+import type { WorkspaceOrder } from '@/lib/demo-orders'
 import {
   CalendarCheck, Car, Clock, DollarSign, Navigation, PhoneCall,
   Receipt, Sparkles, Users, type LucideIcon,
@@ -75,6 +76,12 @@ export interface WorkspaceData {
   anomalies?: { title: string; detail: string; row?: string; tone?: 'warn' | 'note' }[]
   /** The fortnight of bookings behind the trend, for the peak-hours heatmap. */
   fortnight?: Booking[]
+  /**
+   * A counter trade's day, order by order. Today this is demo-orders'
+   * deterministic feed; when the storefront connector exists, real web
+   * orders arrive in the same shape and this screen does not change.
+   */
+  orders?: WorkspaceOrder[]
 }
 
 /**
@@ -158,7 +165,7 @@ function openWindow(pack: NichePack): [number, number] {
 }
 
 export default function TradeWorkspace(data: WorkspaceData) {
-  const { pack, bookings, resources, busy, timezone, day, onShiftDay, stops, origin } = data
+  const { pack, bookings, resources, busy, timezone, day, onShiftDay, stops, origin, orders } = data
 
   /**
    * Only THIS day.
@@ -446,7 +453,7 @@ export default function TradeWorkspace(data: WorkspaceData) {
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
           <section className="min-w-0 rounded-xl border border-[#1F1F23] bg-[#111113] p-5">
             <div className="mb-4 flex items-center justify-between gap-3">
-              <h2 className="text-sm font-semibold text-[#F5F5F7]">{mainTitle(pack)}</h2>
+              <h2 className="text-sm font-semibold text-[#F5F5F7]">{mainTitle(pack, !!orders?.length)}</h2>
             </div>
 
             {/* A trade that DRIVES gets its route first — checked before the
@@ -456,7 +463,7 @@ export default function TradeWorkspace(data: WorkspaceData) {
               <RouteDay stops={routeStops} origin={origin} timezone={timezone}
                         stopOverheadMin={pack.bookingNoun === 'delivery' ? 2 : undefined} />
             ) : !pack.booksAtAll ? (
-              <PhoneVolume />
+              orders && orders.length > 0 ? <OrdersDay orders={orders} /> : <PhoneVolume />
             ) : pack.travels && stops && origin ? (
               <RouteDay stops={stops} origin={origin} timezone={timezone} />
             ) : live.length === 0 ? (
@@ -517,15 +524,16 @@ export default function TradeWorkspace(data: WorkspaceData) {
         </div>
         {/* The portal's own do-this-next panel, fed niche-specific actions from
             /api/dashboard/actions. Not a lookalike — the same component, with its
-            reasoning chain, evidence and complete/reject behaviour intact. */}
-        <Top3ActionsPanel />
+            reasoning chain, evidence and complete/reject behaviour intact.
+            Gated on the pack: a trade that declares topActions off (an online
+            store has no till to watch) must not see it here either — the demo
+            showing a module the pack removed makes the pack a theme. */}
+        {pack.modules?.topActions !== false && <Top3ActionsPanel />}
         </>
       ) : (
         <>
-        {/* The portal's own do-this-next panel, fed niche-specific actions from
-            /api/dashboard/actions. Not a lookalike — the same component, with its
-            reasoning chain, evidence and complete/reject behaviour intact. */}
-        <Top3ActionsPanel />
+        {/* Same gate as the booking branch above. */}
+        {pack.modules?.topActions !== false && <Top3ActionsPanel />}
         {/*
           ── The work, and what needs a human ────────────────────────
 
@@ -537,7 +545,7 @@ export default function TradeWorkspace(data: WorkspaceData) {
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
           <section className="min-w-0 rounded-xl border border-[#1F1F23] bg-[#111113] p-5">
             <div className="mb-4 flex items-center justify-between gap-3">
-              <h2 className="text-sm font-semibold text-[#F5F5F7]">{mainTitle(pack)}</h2>
+              <h2 className="text-sm font-semibold text-[#F5F5F7]">{mainTitle(pack, !!orders?.length)}</h2>
             </div>
 
             {/* A trade that DRIVES gets its route first — checked before the
@@ -547,7 +555,7 @@ export default function TradeWorkspace(data: WorkspaceData) {
               <RouteDay stops={routeStops} origin={origin} timezone={timezone}
                         stopOverheadMin={pack.bookingNoun === 'delivery' ? 2 : undefined} />
             ) : !pack.booksAtAll ? (
-              <PhoneVolume />
+              orders && orders.length > 0 ? <OrdersDay orders={orders} /> : <PhoneVolume />
             ) : pack.travels && stops && origin ? (
               <RouteDay stops={stops} origin={origin} timezone={timezone} />
             ) : live.length === 0 ? (
@@ -606,6 +614,17 @@ export default function TradeWorkspace(data: WorkspaceData) {
             )}
           </aside>
         </div>
+
+        {/* The phone panel does not disappear when orders take the main
+            surface — the agent's catch is the pitch. It moves below, whole. */}
+        {!pack.booksAtAll && orders && orders.length > 0 && (
+          <section className="rounded-xl border border-[#1F1F23] bg-[#111113] p-5">
+            <h2 className="mb-4 text-sm font-semibold text-[#F5F5F7]">
+              What the phone caught today
+            </h2>
+            <PhoneVolume />
+          </section>
+        )}
         </>
       )}
 
@@ -652,14 +671,16 @@ export default function TradeWorkspace(data: WorkspaceData) {
   )
 }
 
-function mainTitle(pack: NichePack): string {
+function mainTitle(pack: NichePack, hasOrders: boolean): string {
   // Travels FIRST. A pizza shop books nothing and drives everything, and
   // checking booksAtAll first titled its delivery map "What the phone caught
   // today" — the phone panel's heading over a map of drivers.
   if (pack.travels) {
     return pack.bookingNoun === 'delivery' ? 'Out for delivery' : "Today's route"
   }
-  if (!pack.booksAtAll) return 'What the phone caught today'
+  // With an order feed the main surface is the orders themselves; the phone
+  // chart moves to its own section below and keeps its own heading.
+  if (!pack.booksAtAll) return hasOrders ? "Today's orders" : 'What the phone caught today'
   return 'The floor'
 }
 
@@ -936,6 +957,58 @@ function routeLegs(stops: Stop[], origin?: RouteOrigin, stopOverheadMin?: number
 
 /** Takeout has no book, so the main surface is the phone. Illustrative in the
  *  preview; in production this reads voice_call_endings. */
+/**
+ * The day's orders, newest first — a counter trade's equivalent of the floor.
+ *
+ * One row per order: when, who, what, through which channel, and where it is
+ * in its life. Status is the column an owner actually scans — "packed" at
+ * 4pm is fine, "paid" from this morning is a parcel running late.
+ */
+const CHANNEL_LABEL: Record<WorkspaceOrder['channel'], string> = {
+  web: 'Site', phone: 'Phone', counter: 'Counter',
+}
+const STATUS_STYLE: Record<WorkspaceOrder['status'], string> = {
+  paid: 'text-[#1A8FD6] border-[#1A8FD6]/30 bg-[#1A8FD6]/5',
+  packed: 'text-[#F5A524] border-[#F5A524]/30 bg-[#F5A524]/5',
+  shipped: 'text-[#17C5B0] border-[#17C5B0]/30 bg-[#17C5B0]/5',
+  completed: 'text-[#A1A1A8] border-[#1F1F23] bg-transparent',
+  refunded: 'text-[#E5484D] border-[#E5484D]/30 bg-[#E5484D]/5',
+}
+const STATUS_LABEL: Record<WorkspaceOrder['status'], string> = {
+  paid: 'To pack', packed: 'Packed', shipped: 'Shipped',
+  completed: 'Completed', refunded: 'Refunded',
+}
+
+function OrdersDay({ orders }: { orders: WorkspaceOrder[] }) {
+  return (
+    <div className="-mx-2 divide-y divide-[#1F1F23]">
+      {orders.map((o, i) => (
+        <div key={`${o.id}-${i}`} className="flex items-center gap-3 px-2 py-2.5">
+          <div className="w-16 shrink-0 font-mono text-[11px] text-[#6B6B73]">{o.timeLabel}</div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-baseline gap-2">
+              <span className="truncate text-sm font-medium text-[#F5F5F7]">{o.customer}</span>
+              <span className="shrink-0 font-mono text-[10px] text-[#6B6B73]">{o.id}</span>
+            </div>
+            <div className="truncate text-xs text-[#A1A1A8]">{o.items}</div>
+          </div>
+          <span className="hidden shrink-0 rounded border border-[#1F1F23] px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-[#6B6B73] sm:inline">
+            {CHANNEL_LABEL[o.channel]}
+          </span>
+          <span className={`shrink-0 rounded border px-1.5 py-0.5 text-[10px] font-medium ${STATUS_STYLE[o.status]}`}>
+            {STATUS_LABEL[o.status]}
+          </span>
+          <div className={`w-16 shrink-0 text-right font-mono text-sm ${
+            o.status === 'refunded' ? 'text-[#6B6B73] line-through' : 'text-[#F5F5F7]'
+          }`}>
+            {money(o.totalCents)}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function PhoneVolume() {
   const hours = [11, 12, 13, 17, 18, 19, 20, 21]
   const taken = [4, 9, 6, 8, 17, 22, 14, 6]
@@ -944,14 +1017,16 @@ function PhoneVolume() {
     <div>
       <div className="flex h-48 items-end gap-3">
         {taken.map((n, i) => (
-          <div key={hours[i]} className="flex flex-1 flex-col items-center gap-1.5">
+          // h-full + justify-end, or the bar's percentage height resolves
+          // against an auto-height column and every bar renders at zero.
+          <div key={hours[i]} className="flex h-full flex-1 flex-col items-center justify-end gap-1.5">
             <span className="font-mono text-xs text-[#A1A1A8]">{n}</span>
             <div
               className={`w-full rounded-t ${n === peak ? 'bg-[#E5484D]/70' : 'bg-[#1A8FD6]/60'}`}
               style={{ height: `${(n / peak) * 100}%` }}
             />
             <span className="text-[10px] text-[#6B6B73]">
-              {hours[i] > 12 ? `${hours[i] - 12}pm` : `${hours[i]}am`}
+              {hours[i] === 12 ? '12pm' : hours[i] > 12 ? `${hours[i] - 12}pm` : `${hours[i]}am`}
             </span>
           </div>
         ))}
