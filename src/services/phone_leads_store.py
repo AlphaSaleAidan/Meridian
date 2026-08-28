@@ -5,8 +5,8 @@ preview store), this data is DURABLE and always hits Supabase with the
 service-role key:
   * canada_phone_leads — the dialing pool (capture / recapture / enrichment).
   * dialer_appointments — booked demos.
-  * canada_leads — READ never; WRITE only via promote() (the one deliberate
-    bridge from the pool into the real pipeline).
+  * canada_leads / us_leads — READ never; WRITE only via promote() (the one
+    deliberate bridge from the pool into the market's real pipeline).
 
 All mutations are backend-only (RLS gives reps/managers scoped SELECT for
 Realtime). The router owns auth + hierarchy scoping; this layer is CRUD.
@@ -127,9 +127,11 @@ async def dedupe_phones(rep_id: str, phones: list[str]) -> set[str]:
     return {r["phone_e164"] for r in rows}
 
 
-async def promote_to_pipeline(lead: dict, rep_id: str) -> dict:
-    """The one-click bridge: create a canada_leads pipeline row from a phone
-    lead, link both, mark the phone lead converted. Returns the new lead row.
+async def promote_to_pipeline(lead: dict, rep_id: str,
+                              table: str = "canada_leads") -> dict:
+    """The one-click bridge: create a pipeline row (canada_leads, or us_leads
+    for US-market phone leads — same column shape) from a phone lead, link
+    both, mark the phone lead converted. Returns the new lead row.
 
     Idempotent-ish: if already converted, returns the existing linkage without
     inserting a duplicate."""
@@ -152,7 +154,7 @@ async def promote_to_pipeline(lead: dict, rep_id: str) -> dict:
             f"\n[from phone dialer — POS: {lead.get('pos_system') or 'unknown'}]"),
         "rep_id": rep_id,
     }
-    created = await _req("POST", "canada_leads", json=pipeline_row)
+    created = await _req("POST", table, json=pipeline_row)
     new_lead = created[0]
     await update(lead["id"], {
         "status": "converted",
