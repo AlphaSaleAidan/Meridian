@@ -340,9 +340,16 @@ async def webrtc_token(user: dict = Depends(require_jwt)):
     scope = await _rep_scope(user)
     connection_id = os.environ.get("TELNYX_WEBRTC_CONNECTION_ID", "").strip()
     api_key = os.environ.get("TELNYX_API_KEY", "").strip()
-    caller_id = (os.environ.get("TELNYX_DIALER_CALLER_ID", "").strip()
-                 or os.environ.get("TELNYX_PHONE_NUMBER_CA", "").strip()
-                 or os.environ.get("TELNYX_PHONE_NUMBER", "").strip())
+    # Market-aware caller ID: US-portal reps present the US number so US
+    # prospects don't see a Canadian caller ID (and vice versa).
+    if scope.portal_context == "us":
+        caller_id = (os.environ.get("TELNYX_DIALER_CALLER_ID_US", "").strip()
+                     or os.environ.get("TELNYX_PHONE_NUMBER", "").strip()
+                     or os.environ.get("TELNYX_DIALER_CALLER_ID", "").strip())
+    else:
+        caller_id = (os.environ.get("TELNYX_DIALER_CALLER_ID", "").strip()
+                     or os.environ.get("TELNYX_PHONE_NUMBER_CA", "").strip()
+                     or os.environ.get("TELNYX_PHONE_NUMBER", "").strip())
     if not connection_id or not api_key:
         return {"mode": "sim", "caller_id": caller_id}
 

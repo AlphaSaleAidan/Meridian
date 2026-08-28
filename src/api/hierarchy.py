@@ -53,6 +53,8 @@ class RepScope:
     is_admin: bool
     # Isolated territory slug (20260812, e.g. 'odyssey'); None = core team.
     region: str | None = None
+    # sales_reps.portal_context ('canada'|'us'|'all'); None = no rep row.
+    portal_context: str | None = None
 
 
 def _supabase_env() -> tuple[str, str]:
@@ -137,6 +139,7 @@ async def resolve_scope(user: dict) -> RepScope:
         path=row.get("path"),
         is_admin=(role == "admin" or allowlisted),
         region=(row.get("region") or None),
+        portal_context=(row.get("portal_context") or None),
     )
 
 
