@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 
 from ..auth import require_org_access
+from ...config import DEEPSEEK_BASE_URL, DEEPSEEK_MODEL
 
 logger = logging.getLogger("meridian.api.inventory_docs")
 
@@ -295,9 +296,9 @@ async def _extract_with_ai(file_bytes: bytes, file_type: str, file_name: str) ->
     try:
         async with httpx.AsyncClient(timeout=60.0) as http:
             resp = await http.post(
-                "https://api.deepseek.com/v1/chat/completions",
+                f"{DEEPSEEK_BASE_URL}/chat/completions",
                 headers={"Authorization": f"Bearer {deepseek_key}", "Content-Type": "application/json"},
-                json={"model": "deepseek-chat", "messages": messages, "temperature": 0.1, "max_tokens": 4000},
+                json={"model": DEEPSEEK_MODEL, "messages": messages, "temperature": 0.1, "max_tokens": 4000},
             )
             if resp.status_code != 200:
                 return {"items": [], "error": f"AI API returned {resp.status_code}"}
