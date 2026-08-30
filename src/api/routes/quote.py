@@ -131,5 +131,14 @@ async def create_quote_request(req: QuoteRequest) -> dict:
     except Exception as e:
         logger.warning("quote request notification email failed: %s", e)
 
+    # 6) Foundry bridge (best-effort): website/CRM-shaped interest also lands
+    #    in the build division's pipeline (foundry.meridian.tips). Inert unless
+    #    FOUNDRY_INBOUND_URL/KEY are set; a Foundry hiccup never bounces a lead.
+    try:
+        from ...services.foundry_bridge import forward_quote_lead
+        await forward_quote_lead(row)
+    except Exception as e:
+        logger.warning("foundry bridge failed: %s", e)
+
     logger.info("quote request received: %s (%s) [source=%s]", business_name, email, row["source"])
     return {"ok": True}
