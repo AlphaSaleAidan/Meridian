@@ -32,6 +32,10 @@ class ProviderConfig:
     #   "token:<field>"  → read <field> straight from the token response
     #   "userinfo:<url>:<dotted.path>" → GET <url> with bearer token, read path
     merchant_id_strategy: str
+    # Integration category for the v1.5 hub (pos, payments, accounting,
+    # scheduling, payroll, delivery, marketing, …). Purely descriptive —
+    # routing/storage is identical for every category.
+    category: str = "pos"
     uses_pkce: bool = False
     # Optional env var that overrides authorize_url when set (Stripe Apps:
     # pre-publish installs go through a channel-scoped external-test link;
@@ -41,6 +45,10 @@ class ProviderConfig:
     # body (the common OAuth2 pattern); True → HTTP basic with client_secret
     # as the username (Stripe Apps' /v1/oauth/token contract).
     token_basic_auth: bool = False
+    # Standard RFC 6749 client auth: HTTP basic with client_id as username and
+    # client_secret as password (Intuit/QuickBooks REQUIRES this; Xero accepts
+    # it). Mutually exclusive with token_basic_auth.
+    token_basic_pair: bool = False
     # Seconds an access token lives when the token response omits expires_in
     # (Stripe Apps: fixed 1h, not echoed in the response). 0 = trust expires_in.
     default_token_ttl: int = 0
@@ -128,6 +136,7 @@ _REGISTRY: dict[str, ProviderConfig] = {
             scopes=[],  # permissions are declared in stripe-app/stripe-app.json
             client_id_env="STRIPE_POS_CLIENT_ID",
             client_secret_env="STRIPE_POS_CLIENT_SECRET",
+            category="payments",
             # Token response carries stripe_user_id = acct_… directly.
             merchant_id_strategy="token:stripe_user_id",
             token_basic_auth=True,
@@ -150,6 +159,7 @@ _REGISTRY: dict[str, ProviderConfig] = {
             scopes=["transactions.history"],
             client_id_env="SUMUP_CLIENT_ID",
             client_secret_env="SUMUP_CLIENT_SECRET",
+            category="payments",
             merchant_id_strategy="userinfo:https://api.sumup.com/v0.1/me:merchant_profile.merchant_code",
             verified=False,
             market_note="Self-serve OAuth2. Low US restaurant share.",
@@ -164,11 +174,100 @@ _REGISTRY: dict[str, ProviderConfig] = {
             scopes=["READ:PURCHASE"],
             client_id_env="ZETTLE_CLIENT_ID",
             client_secret_env="ZETTLE_CLIENT_SECRET",
+            category="payments",
             merchant_id_strategy="userinfo:https://oauth.zettle.com/users/self:uuid",
             uses_pkce=True,
             verified=False,
             market_note="Self-serve OAuth2 (PKCE). EU-leaning.",
             docs_url="https://developer.zettle.com/docs/api/oauth",
+        ),
+        # ── v1.5 hub — beyond-POS categories (all start verified=False) ──────
+        # QuickBooks Online — self-serve OAuth2 via an Intuit developer app.
+        # Intuit REQUIRES basic client auth on the token endpoint and returns
+        # the company id as `realmId` on the callback query, not in the token
+        # response. Production keys unlock after Intuit's app questionnaire.
+        ProviderConfig(
+            key="quickbooks",
+            label="QuickBooks Online",
+            authorize_url="https://appcenter.intuit.com/connect/oauth2",
+            token_url="https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer",
+            scopes=["com.intuit.quickbooks.accounting"],
+            client_id_env="QUICKBOOKS_CLIENT_ID",
+            client_secret_env="QUICKBOOKS_CLIENT_SECRET",
+            category="accounting",
+            merchant_id_strategy="callback:realmId",
+            token_basic_pair=True,
+            verified=False,
+            market_note="Self-serve OAuth2. #1 SMB accounting in the US.",
+            docs_url="https://developer.intuit.com/app/developer/qbo/docs/develop/authentication-and-authorization/oauth-2.0",
+        ),
+        # Xero — self-serve OAuth2. Tenant id comes from GET /connections
+        # (a JSON array), hence the list-index userinfo path. offline_access
+        # is required for a refresh token (access tokens live 30 min).
+        ProviderConfig(
+            key="xero",
+            label="Xero",
+            authorize_url="https://login.xero.com/identity/connect/authorize",
+            token_url="https://identity.xero.com/connect/token",
+            scopes=["offline_access", "accounting.transactions.read",
+                    "accounting.reports.read", "accounting.settings.read"],
+            client_id_env="XERO_CLIENT_ID",
+            client_secret_env="XERO_CLIENT_SECRET",
+            category="accounting",
+            merchant_id_strategy="userinfo:https://api.xero.com/connections:0.tenantId",
+            token_basic_pair=True,
+            verified=False,
+            market_note="Self-serve OAuth2. Strong outside-US accounting share (fits Canada).",
+            docs_url="https://developer.xero.com/documentation/guides/oauth2/auth-flow/",
+        ),
+        # Gusto — payroll/HR. OAuth2 authorization-code; app registration is
+        # self-serve for the demo env, production access is approval-gated.
+        ProviderConfig(
+            key="gusto",
+            label="Gusto",
+            authorize_url="https://api.gusto.com/oauth/authorize",
+            token_url="https://api.gusto.com/oauth/token",
+            scopes=[],  # Gusto scopes are declared on the app, not the URL
+            client_id_env="GUSTO_CLIENT_ID",
+            client_secret_env="GUSTO_CLIENT_SECRET",
+            category="payroll",
+            merchant_id_strategy="userinfo:https://api.gusto.com/v1/token_info:resource.uuid",
+            verified=False,
+            market_note="OAuth2; production app approval required by Gusto. Labor-cost joins POS revenue.",
+            docs_url="https://docs.gusto.com/embedded-payroll/docs/oauth2",
+        ),
+        # Uber Eats — real authorization_code flow for store activation, but
+        # eats.* scope access is granted by Uber per-application. Config sits
+        # here ready to flip once Meridian's app is approved.
+        ProviderConfig(
+            key="uber_eats",
+            label="Uber Eats",
+            authorize_url="https://auth.uber.com/oauth/v2/authorize",
+            token_url="https://auth.uber.com/oauth/v2/token",
+            scopes=["eats.store"],
+            client_id_env="UBER_EATS_CLIENT_ID",
+            client_secret_env="UBER_EATS_CLIENT_SECRET",
+            category="delivery",
+            merchant_id_strategy="token:merchant_id",  # revisit on approval — activation flow returns store ids via API
+            verified=False,
+            market_note="OAuth2; eats.* scopes need Uber approval of our app.",
+            docs_url="https://developer.uber.com/docs/eats/guides/authentication",
+        ),
+        # Mailchimp — marketing/email. Self-serve OAuth2, no scopes; the
+        # account is identified via the post-auth metadata endpoint.
+        ProviderConfig(
+            key="mailchimp",
+            label="Mailchimp",
+            authorize_url="https://login.mailchimp.com/oauth2/authorize",
+            token_url="https://login.mailchimp.com/oauth2/token",
+            scopes=[],
+            client_id_env="MAILCHIMP_CLIENT_ID",
+            client_secret_env="MAILCHIMP_CLIENT_SECRET",
+            category="marketing",
+            merchant_id_strategy="userinfo:https://login.mailchimp.com/oauth2/metadata:accountname",
+            verified=False,
+            market_note="Self-serve OAuth2. Campaign performance next to revenue.",
+            docs_url="https://mailchimp.com/developer/marketing/guides/access-user-data-oauth-2/",
         ),
     ]
 }

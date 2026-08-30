@@ -134,6 +134,10 @@ class GenericOAuthManager:
             # basic-auth username; client credentials never go in the body.
             auth = (data.pop("client_secret", ""), "")
             data.pop("client_id", None)
+        elif self.cfg.token_basic_pair:
+            # RFC 6749 client auth: id:secret as HTTP basic (Intuit requires
+            # this and rejects credentials in the form body).
+            auth = (data.pop("client_id", ""), data.pop("client_secret", ""))
         async with httpx.AsyncClient(timeout=30.0) as http:
             resp = await http.post(
                 self._token_url(domain_prefix),
@@ -168,7 +172,10 @@ class GenericOAuthManager:
                 field = strat.split(":", 1)[1]
                 return str(tokens.get("raw", {}).get(field, "") or "")
             if strat.startswith("userinfo:"):
-                _, url, path = strat.split(":", 2)
+                # rpartition, not split(":", 2) — the URL itself contains
+                # "https:" so a left split truncated it to the scheme.
+                rest = strat.split(":", 1)[1]
+                url, _, path = rest.rpartition(":")
                 async with httpx.AsyncClient(timeout=20.0) as http:
                     resp = await http.get(url, headers={
                         "Authorization": f"Bearer {tokens['access_token']}",
@@ -178,8 +185,15 @@ class GenericOAuthManager:
                     return ""
                 node: Any = resp.json()
                 for part in path.split("."):
-                    node = node.get(part, {}) if isinstance(node, dict) else {}
-                return str(node) if node and not isinstance(node, dict) else ""
+                    # Numeric parts index into JSON arrays (Xero's /connections
+                    # returns a list of tenants: path "0.tenantId").
+                    if isinstance(node, list) and part.isdigit():
+                        node = node[int(part)] if int(part) < len(node) else {}
+                    elif isinstance(node, dict):
+                        node = node.get(part, {})
+                    else:
+                        node = {}
+                return str(node) if node and not isinstance(node, (dict, list)) else ""
         except Exception as e:
             logger.warning("merchant id resolution failed for %s: %s", self.cfg.key, e)
         return ""

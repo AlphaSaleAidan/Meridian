@@ -1,0 +1,19 @@
+{
+  "_purpose": "Canonical answers for integration-vendor developer-portal forms. Every registration (agent-driven or human) fills from THIS file so answers never drift. Keep factual — vendor reviewers verify URLs.",
+  "legal_name": "ASP EPC1",
+  "product_name": "Meridian Intelligence",
+  "website": "https://meridian.tips",
+  "privacy_policy_url": "https://meridian.tips/privacy",
+  "terms_of_service_url": "https://meridian.tips/terms",
+  "support_email": "support@meridian.tips",
+  "app_description_short": "Analytics and forecasting for restaurants: sales, menu, inventory and labor insights computed from the merchant's own POS data.",
+  "app_description_long": "Meridian Intelligence is a read-only analytics platform for independent restaurants and retailers. Merchants connect their point-of-sale and back-office tools; Meridian computes dashboards, demand forecasts, menu engineering and labor insights from that data. We request read-only scopes wherever the provider offers them and never write to the merchant's system of record.",
+  "data_use_statement": "Data is used solely to provide analytics to the merchant who authorized the connection. No resale, no cross-merchant use, no advertising use.",
+  "scopes_justification": "Read-only access to transactions/sales, catalog/menu items, inventory levels and labor summaries — the minimum needed to compute revenue analytics, forecasts and menu insights for the authorizing merchant.",
+  "redirect_uri_template": "https://api.meridian.tips/api/pos/{provider_key}/callback",
+  "webhook_uri_template": "https://api.meridian.tips/api/webhooks/{provider_key}",
+  "backend_base_url": "https://api.meridian.tips",
+  "logo_note": "Use the Meridian 'M' mark; PNG exports live in frontend/public/. Most portals want 512x512 PNG.",
+  "company_address_note": "US entity address — see /root/.secrets/asp-epc1.txt (Sheridan WY registered agent). Never paste into this file.",
+  "security_summary": "OAuth tokens encrypted at rest (AES-256-GCM), TLS in transit, least-privilege scopes, per-merchant data isolation, access logging."
+}

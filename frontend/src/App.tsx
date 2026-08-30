@@ -26,6 +26,7 @@ const InsightsPage = lazyRetry(() => import('@/pages/InsightsPage'))
 const ForecastsPage = lazyRetry(() => import('@/pages/ForecastsPage'))
 const NotificationsPage = lazyRetry(() => import('@/pages/NotificationsPage'))
 const SettingsPage = lazyRetry(() => import('@/pages/SettingsPage'))
+const IntegrationsHubPage = lazyRetry(() => import('@/pages/IntegrationsHubPage'))
 const InventoryPage = lazyRetry(() => import('@/pages/InventoryPage'))
 const AgentDashboardPage = lazyRetry(() => import('@/pages/AgentDashboardPage'))
 const HubPage = lazyRetry(() => import('@/pages/HubPage'))
@@ -204,6 +205,7 @@ function CustomerDashboardRoutes() {
       <Route path="content" element={<Suspense fallback={<InlineFallback />}><ContentDashboardPage /></Suspense>} />
       <Route path="content/settings" element={<Suspense fallback={<InlineFallback />}><ContentSettingsPage /></Suspense>} />
       <Route path="notifications" element={<Suspense fallback={<InlineFallback />}><NotificationsPage /></Suspense>} />
+      <Route path="integrations" element={<Suspense fallback={<InlineFallback />}><IntegrationsHubPage /></Suspense>} />
       <Route path="settings" element={<Suspense fallback={<InlineFallback />}><SettingsPage /></Suspense>} />
     </>
   )
