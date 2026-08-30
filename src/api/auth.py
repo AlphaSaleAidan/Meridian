@@ -12,6 +12,7 @@ import logging
 import os
 import time
 from collections import defaultdict
+from datetime import datetime, timezone
 from ipaddress import ip_address, ip_network
 from threading import Lock
 
@@ -228,6 +229,34 @@ async def require_org_access(
     raise HTTPException(403, "Access denied: you are not a member of this organization")
 
 
+async def _subscription_wound_down(user: dict, org_id: str) -> bool:
+    """True when SUBSCRIPTION_WINDDOWN_ENFORCED is on AND this org's paid period
+    has ended after a cancellation — a wound-down merchant loses member access
+    to the product (settings, POS connect, credits, etc.). Exempt: the flag-off
+    default and ADMIN_EMAILS (support). Fail-open: any lookup error returns
+    False, so a DB hiccup never locks out a paying merchant."""
+    if os.environ.get("SUBSCRIPTION_WINDDOWN_ENFORCED", "").strip().lower() not in (
+            "1", "true", "yes", "on"):
+        return False
+    email = (user.get("email") or "").lower()
+    if email and email in [e.lower() for e in ADMIN_EMAILS]:
+        return False
+    try:
+        from ..db import get_db
+        rows = await get_db().select(
+            "subscription_cancellations", "access_until",
+            filters={"org_id": f"eq.{org_id}"},
+            order="canceled_at.desc", limit=1,
+        )
+        access_until = rows[0].get("access_until") if rows else None
+        if not access_until:
+            return False
+        exp = datetime.fromisoformat(str(access_until).replace("Z", "+00:00"))
+        return datetime.now(timezone.utc) > exp
+    except Exception:  # noqa: BLE001 — never lock out on a lookup error
+        return False
+
+
 async def require_org_member(user: dict, org_id: str) -> None:
     """Explicit org-membership check for endpoints that carry the org id in the
     request body or under a different param name (require_org_access only sees
@@ -239,6 +268,10 @@ async def require_org_member(user: dict, org_id: str) -> None:
     Honors the same TENANCY_ENFORCEMENT_DISABLED rollback knob as require_org_access.
     """
     if await _check_org_membership(user, org_id):
+        # Subscription wind-down (flag-gated): a cancelled merchant past their
+        # paid period loses member access to the product. Admins/flag-off exempt.
+        if await _subscription_wound_down(user, org_id):
+            raise HTTPException(402, "Your subscription has ended — reactivate to continue.")
         return
 
     disabled = os.environ.get("TENANCY_ENFORCEMENT_DISABLED", "").lower() in ("true", "1", "yes")
