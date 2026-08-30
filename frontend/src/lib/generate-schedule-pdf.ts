@@ -1,4 +1,7 @@
-import jsPDF from 'jspdf'
+// jsPDF (~592KB) is lazy-imported inside generateSchedulePdf so it loads only
+// when someone actually exports a schedule — not eagerly in the route chunk.
+// ponytail: same treatment as generate-invoice-pdf(-us).ts.
+import type { jsPDF } from 'jspdf'
 import type { ScheduleShift, ScheduleStaffMember } from '@/lib/agent-data'
 
 const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
@@ -53,6 +56,7 @@ export interface SchedulePdfInput {
 
 export async function generateSchedulePdf(input: SchedulePdfInput): Promise<Blob> {
   const { shifts, staff, weekStartDate, businessName } = input
+  const { jsPDF } = await import('jspdf')
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'landscape' })
   const pageW = 297
   const pageH = 210

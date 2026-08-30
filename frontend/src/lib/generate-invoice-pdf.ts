@@ -1,4 +1,6 @@
-import jsPDF from 'jspdf'
+// jsPDF (~592KB) is lazy-imported inside generateInvoicePdf so it loads only
+// when a rep actually exports an invoice — not eagerly in the lead-detail
+// route chunk. ponytail: fix at the module so both lead-detail pages benefit.
 import QRCode from 'qrcode'
 
 export interface InvoiceInput {
@@ -39,6 +41,7 @@ export function generateInvoiceUrl(invoiceNumber: string): string {
 }
 
 export async function generateInvoicePdf(input: InvoiceInput): Promise<Blob> {
+  const { default: jsPDF } = await import('jspdf')
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   const W = 210
   const margin = 20
