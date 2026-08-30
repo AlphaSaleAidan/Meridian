@@ -19,7 +19,7 @@ Quick lookup. Before promising anything to a merchant, **check the status column
 |-----|--------|----------|-----|
 | Square | **LIVE** (one-click OAuth connect) | multi-vertical | [square.md](./square.md) |
 | Clover | **LIVE** (one-click connect + phone-order injection into the POS) | multi-vertical | [clover.md](./clover.md) |
-| Stripe | **LIVE** (Stripe App — merchant installs from the Stripe marketplace) | multi-vertical / payments-led | — |
+| Stripe | **LIVE** (Stripe App — merchant installs from the Stripe marketplace; revenue analytics only, no line items) | multi-vertical / payments-led | [stripe.md](./stripe.md) |
 | Toast | **LIVE** (webhooks shipping) | restaurant | [toast.md](./toast.md) |
 | Lightspeed Retail | WAVE 1 BUILDING | retail | [lightspeed-retail.md](./lightspeed-retail.md) |
 | Korona POS | WAVE 1 BUILDING | retail | [korona-pos.md](./korona-pos.md) |
