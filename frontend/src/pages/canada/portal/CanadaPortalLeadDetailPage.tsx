@@ -937,8 +937,10 @@ export default function CanadaPortalLeadDetailPage() {
     }
   }
 
-  // Files state
-  const [files, setFiles] = useState(DEMO_FILES)
+  // Files state — start EMPTY. DEMO_FILES must never render on a live lead (it
+  // implied a proposal + contract were already on file for every brand-new
+  // prospect). Real files come from the SLA-append path below.
+  const [files, setFiles] = useState<typeof DEMO_FILES>([])
 
   useEffect(() => { dealRef.current = deal }, [deal])
 

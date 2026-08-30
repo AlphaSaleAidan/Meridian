@@ -189,7 +189,11 @@ export default function CanadaPortalTeamPage() {
   const canSeeTeam = admin || isManager || !!region
   const hideBoard = isLeaderboardHidden() || regionBoardHidden
   const [search, setSearch] = useState('')
-  const [team, setTeam] = useState<TeamMember[]>(DEMO_TEAM)
+  // Start EMPTY, not DEMO_TEAM. The fetch only overwrites team when reps.length
+  // > 0, so on an empty roster or a fetch error the seed persisted → real reps
+  // saw 3 phantom admins and computeTeamStats summed over them. (US twin
+  // already starts []; this aligns Canada.)
+  const [team, setTeam] = useState<TeamMember[]>([])
   const [applicants, setApplicants] = useState<Applicant[]>([])
   const [teamLoading, setTeamLoading] = useState(true)
   const [teamError, setTeamError] = useState<string | null>(null)
@@ -227,7 +231,8 @@ export default function CanadaPortalTeamPage() {
       const apiBase = import.meta.env.VITE_API_URL || ''
       // Demo mode (no Supabase configured): no roster API. Region members get
       // a self-seeded roster (DEMO_TEAM is core-only and would be fenced off);
-      // core demo keeps the DEMO_TEAM initial state.
+      // core demo seeds DEMO_TEAM explicitly here — the initial state is []
+      // so real reps never see phantom teammates on fetch failure.
       if (!supabase) {
         if (region) {
           setTeam([{
@@ -238,6 +243,8 @@ export default function CanadaPortalTeamPage() {
             role: admin ? 'admin' : 'active', org_role: rep?.role || 'sales_rep',
             manager_id: null, region: rep?.region || null, location: 'Canada',
           }])
+        } else {
+          setTeam(DEMO_TEAM)
         }
         setTeamLoading(false)
         return
