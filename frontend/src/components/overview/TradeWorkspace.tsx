@@ -26,6 +26,7 @@ import { AlertTriangle, ChevronLeft, ChevronRight, Plus } from 'lucide-react'
 import type { Booking, BusyBlock, Resource, Service } from '@/lib/bookings-api'
 import type { NichePack } from '@/config/niches'
 import BookingCalendar from '@/components/BookingCalendar'
+import TeeSheet from '@/components/TeeSheet'
 import StatCard from '@/components/StatCard'
 import Top3ActionsPanel from '@/components/Top3ActionsPanel'
 import ForecastChart, { type ForecastPoint } from '@/components/ForecastChart'
@@ -76,6 +77,9 @@ export interface WorkspaceData {
   anomalies?: { title: string; detail: string; row?: string; tone?: 'warn' | 'note' }[]
   /** The fortnight of bookings behind the trend, for the peak-hours heatmap. */
   fortnight?: Booking[]
+  /** Where the money came from, for packs that declare revenueCenters —
+   *  computed by the host, rendered under the revenue chart. */
+  revenueMix?: { label: string; cents: number }[]
   /**
    * A counter trade's day, order by order. Today this is demo-orders'
    * deterministic feed; when the storefront connector exists, real web
@@ -165,7 +169,7 @@ function openWindow(pack: NichePack): [number, number] {
 }
 
 export default function TradeWorkspace(data: WorkspaceData) {
-  const { pack, bookings, resources, busy, timezone, day, onShiftDay, stops, origin, orders } = data
+  const { pack, bookings, resources, busy, timezone, day, onShiftDay, stops, origin, orders, revenueMix } = data
 
   /**
    * Only THIS day.
@@ -329,7 +333,13 @@ export default function TradeWorkspace(data: WorkspaceData) {
     // today, but the workspace can be looking at any day — without this the
     // axis ran Aug 18, Aug 17, Aug 18 and the curve doubled back on itself.
     const lastActual = hist.length ? hist[hist.length - 1].day : ''
-    for (const f of days.filter((x) => x.period_start > lastActual)) {
+    const future = days.filter((x) => x.period_start > lastActual)
+    // A fortnight ahead against a fortnight behind. The endpoint can return
+    // ninety days; drawing them all squeezed two weeks of ACTUALS into a
+    // tenth of the axis, and the headline summed the whole quarter under a
+    // label that said "next 7 days" — a $10K-a-day shop read $563K a week
+    // and stopped believing every other number on the page.
+    for (const f of future.slice(0, hist.length || 14)) {
       series.push({
         date: f.period_start,
         actual: null,
@@ -341,9 +351,8 @@ export default function TradeWorkspace(data: WorkspaceData) {
     return {
       days,
       series,
-      total: days
-        .filter((f) => !hist.length || f.period_start > hist[hist.length - 1].day)
-        .reduce((s, f) => s + f.predicted_cents, 0),
+      // Exactly what the label claims: the next seven days, no more.
+      total: future.slice(0, 7).reduce((s, f) => s + f.predicted_cents, 0),
     }
   }, [data.forecasts, history])
 
@@ -354,7 +363,9 @@ export default function TradeWorkspace(data: WorkspaceData) {
   return (
     <div className="space-y-4">
       {/* ── The money line ────────────────────────────────────────── */}
-      <section className="rounded-xl border border-[#1F1F23] bg-gradient-to-br from-[#12171C] to-[#111113] p-6">
+      {/* Compact below sm: on a phone this band was a full screen before any
+          work appeared, and the work is what the owner opened the app for. */}
+      <section className="rounded-xl border border-[#1F1F23] bg-gradient-to-br from-[#12171C] to-[#111113] p-4 sm:p-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="text-[11px] uppercase tracking-[0.14em] text-[#6B6B73]">
@@ -362,7 +373,7 @@ export default function TradeWorkspace(data: WorkspaceData) {
                 ? 'taken so far' : 'booked so far'}
             </div>
             <div className="mt-2 flex flex-wrap items-end gap-x-4 gap-y-1">
-              <div className="font-mono text-[56px] font-semibold leading-none tracking-tight text-[#F5F5F7]">
+              <div className="font-mono text-4xl sm:text-[56px] font-semibold leading-none tracking-tight text-[#F5F5F7]">
                 {money(booked)}
               </div>
               {typeof changePct === 'number' && (
@@ -413,8 +424,10 @@ export default function TradeWorkspace(data: WorkspaceData) {
 
       </section>
 
-      {/* The portal's own money tiles, not a second set drawn beside them. */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      {/* The portal's own money tiles, not a second set drawn beside them.
+          Two-up on a phone: four stacked cards pushed the day's work three
+          screens down, and a tile is a glance, not a destination. */}
+      <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
         {tiles.map((t) => (
           <StatCard
             key={t.label}
@@ -470,6 +483,16 @@ export default function TradeWorkspace(data: WorkspaceData) {
               <p className="py-10 text-center text-sm text-[#6B6B73]">
                 Nothing on the book for this day.
               </p>
+            ) : pack.resourceKind === 'tee' ? (
+              <TeeSheet
+                bookings={today}
+                resources={resources}
+                busy={busy}
+                timezone={timezone}
+                openMinutes={[open, close]}
+                services={services}
+                day={day}
+              />
             ) : (
               <BookingCalendar
                 bookings={today}
@@ -562,6 +585,16 @@ export default function TradeWorkspace(data: WorkspaceData) {
               <p className="py-10 text-center text-sm text-[#6B6B73]">
                 Nothing on the book for this day.
               </p>
+            ) : pack.resourceKind === 'tee' ? (
+              <TeeSheet
+                bookings={today}
+                resources={resources}
+                busy={busy}
+                timezone={timezone}
+                openMinutes={[open, close]}
+                services={services}
+                day={day}
+              />
             ) : (
               <BookingCalendar
                 bookings={today}
@@ -657,7 +690,52 @@ export default function TradeWorkspace(data: WorkspaceData) {
             </div>
           </div>
 
-          <div className="mt-4">
+          {/* Where it came from — FIRST, above the chart, only for the trades
+              that are several businesses under one roof. The chart answers
+              "how much"; a course owner's first question is "from which
+              register" — green fees, the grille, the bar — and an answer that
+              hides below a 240px chart is an answer half of them never see. */}
+          {revenueMix && revenueMix.length > 0 && (() => {
+            const mixTotal = revenueMix.reduce((s, c) => s + c.cents, 0)
+            if (!mixTotal) return null
+            const COLORS = ['#1A8FD6', '#17C5B0', '#F5A524', '#8dcef2', '#A1A1A8']
+            return (
+              <div className="mt-4">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-[#6B6B73]">
+                  Where it comes from
+                </h3>
+                <div className="mt-3 flex h-2.5 w-full overflow-hidden rounded-full">
+                  {revenueMix.map((c, i) => (
+                    <div
+                      key={c.label}
+                      style={{ width: `${(c.cents / mixTotal) * 100}%`, background: COLORS[i % COLORS.length] }}
+                      title={`${c.label} · ${money(c.cents)}`}
+                    />
+                  ))}
+                </div>
+                <div className="mt-3 grid gap-x-6 gap-y-1.5 sm:grid-cols-2 lg:grid-cols-3">
+                  {revenueMix.map((c, i) => (
+                    <div key={c.label} className="flex items-center gap-2 text-xs">
+                      <span
+                        className="h-2 w-2 shrink-0 rounded-full"
+                        style={{ background: COLORS[i % COLORS.length] }}
+                      />
+                      <span className="text-[#D4D4D8]">{c.label}</span>
+                      <span className="ml-auto font-mono text-[#F5F5F7]">{money(c.cents)}</span>
+                      <span className="w-9 text-right font-mono text-[#6B6B73]">
+                        {Math.round((c.cents / mixTotal) * 100)}%
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-2 text-[10px] text-[#6B6B73]">
+                  Last 14 days, by revenue centre.
+                </p>
+              </div>
+            )
+          })()}
+
+          <div className="mt-5">
             <ForecastChart
               data={forecast.series}
               height={240}
@@ -681,6 +759,8 @@ function mainTitle(pack: NichePack, hasOrders: boolean): string {
   // With an order feed the main surface is the orders themselves; the phone
   // chart moves to its own section below and keeps its own heading.
   if (!pack.booksAtAll) return hasOrders ? "Today's orders" : 'What the phone caught today'
+  // A course's book is not a floor — it is THE sheet, and operators call it that.
+  if (pack.resourceKind === 'tee') return 'The tee sheet'
   return 'The floor'
 }
 
@@ -759,6 +839,22 @@ function computeTiles(
           sub: peak.covers ? `${peak.covers} covers land` : undefined,
           tone: peak.covers > 20 ? 'warn' : undefined },
         { label: 'Tables in use', value: `${new Set(live.map((b) => b.resourceId)).size}/${active.length}` },
+      ]
+    }
+    case 'golf': {
+      // Covers and spend wearing golf shoes: the unit sold is the start, the
+      // money is players x green fee, and the scarce thing is daylight — a
+      // start window that passes unsold cannot be resold this evening.
+      const players = live.reduce((s, b) => s + b.partySize, 0)
+      const peak = peakBucket(live, timezone, open, close)
+      return [
+        { label: 'Players on the sheet', value: String(players),
+          sub: `${live.length} tee times`, icon: Users },
+        { label: 'Avg green fee / player', value: packMoney(pack.avgCoverCents ?? 0), icon: Receipt },
+        { label: 'Busiest start window', value: peak.covers ? clock(peak.at) : '—',
+          sub: peak.covers ? `${peak.covers} players off` : undefined,
+          tone: peak.covers > 12 ? 'warn' : undefined },
+        { label: 'Tees in play', value: `${new Set(live.map((b) => b.resourceId)).size}/${active.length}` },
       ]
     }
     case 'autoshop': {

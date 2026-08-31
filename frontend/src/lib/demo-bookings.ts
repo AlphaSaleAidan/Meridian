@@ -276,7 +276,11 @@ function seedDay(dayKey: string) {
   const lengths = trade.services.map((x: any) => x.duration + x.buffer)
   const shortest = Math.min(...lengths)
   // Snapped to the quarter hour. Nobody books a car in at 9:46.
-  const step = Math.max(30, Math.round(shortest / 2 / 15) * 15)
+  // A TEE walks at its own interval: groups go off every fifteen minutes and
+  // a sheet seeded at half-hour steps reads as a course nobody plays.
+  const step = trade.resourceKind === 'tee'
+    ? Math.max(15, shortest)
+    : Math.max(30, Math.round(shortest / 2 / 15) * 15)
   const slots: number[] = []
   for (let m = openH * 60 + openM; m + shortest <= closeH * 60; m += step) slots.push(m)
 
@@ -291,9 +295,22 @@ function seedDay(dayKey: string) {
       // let the exclusion logic decide what actually fits.
       if (rand() > 0.82) continue
       const [name, phone] = NAMES[(made + d) % NAMES.length]
-      const party = trade.partyBanded ? 2 + Math.floor(rand() * 4) : 1
+      // Clamped to the largest band the trade actually sells: a restaurant
+      // banding to 8 seats parties of five, a golf course capping at a
+      // foursome never draws a five that no service can take.
+      const maxBand = trade.partyBanded
+        ? Math.max(...trade.services.map((x: any) => x.max))
+        : 1
+      const party = trade.partyBanded
+        ? Math.min(2 + Math.floor(rand() * 4), maxBand)
+        : 1
       const r = rand()
-      const status = r > 0.88 ? 'completed' : r > 0.8 ? 'seated' : 'confirmed'
+      // A tee sheet keeps a couple of HELD times on it — a slot mid-checkout
+      // online, or an offer out to the waitlist. Operators look for that
+      // freeze cue: it is what proves the sheet is live inventory and not a
+      // copy. Rare, and tee-only — other trades' books never showed holds.
+      const status = r > 0.88 ? 'completed' : r > 0.8 ? 'seated'
+        : trade.resourceKind === 'tee' && r > 0.775 ? 'offered' : 'confirmed'
       // Weighted to the shorter services: every shop sells more haircuts than
       // ceramic coatings, and a day made of only the flagship job is a day
       // nobody recognises.
@@ -474,9 +491,14 @@ export function configureForTrade(pack: any) {
         ? VAN_NAMES[i % VAN_NAMES.length]
         : pack.resourceKind === 'staff'
           ? STAFF_NAMES[i % STAFF_NAMES.length]
-          : `${base} ${i + 1}`,
+          : pack.resourceKind === 'tee'
+            ? TEE_NAMES[i % TEE_NAMES.length]
+            : `${base} ${i + 1}`,
       kind: pack.resourceKind,
-      seats: pack.resourceKind === 'table' ? (i < 2 ? 2 : i > 4 ? 6 : 4) : 1,
+      // A tee holds a group of up to four; a table seats its cover band.
+      seats: pack.resourceKind === 'tee'
+        ? 4
+        : pack.resourceKind === 'table' ? (i < 2 ? 2 : i > 4 ? 6 : 4) : 1,
       sort_order: i,
       active: true,
     })
@@ -544,10 +566,14 @@ export function configureForTrade(pack: any) {
 
 const RESOURCE_NAME: Record<string, string> = {
   table: 'Table', chair: 'Chair', bay: 'Bay', room: 'Room', staff: 'Staff',
+  tee: 'Tee',
 }
 
 /** A van is not a person, so it does not get a person's name. */
 const VAN_NAMES = ['Van 1', 'Van 2', 'Van 3']
+
+/** Golfers say "off the 1st" and "off the 10th", never "Tee 2". */
+const TEE_NAMES = ['1st Tee', '10th Tee', 'Practice Tee']
 
 const STAFF_NAMES = ['Mia', 'Jordan', 'Alexis', 'Sam', 'Rae', 'Kit']
 
@@ -560,6 +586,7 @@ const NOTE_EXAMPLE: Record<string, string> = {
   detailing: 'Black SUV, pet hair',
   mobiledetailing: 'Driveway — gate code 4402',
   medspa: 'First visit — consult first',
+  golf: 'Two carts — one walker in the group',
   other: 'Called ahead',
 }
 
@@ -571,6 +598,10 @@ const BUSY: Record<string, [string, number, number][]> = {
   nails: [['Supplier visit', 13, 14]],
   detailing: [['Equipment service', 12, 13]],
   medspa: [['Clinical meeting', 12, 13]],
+  // Evening league and an afternoon maintenance window — the demo seeds its
+  // public play from opening forward, so blocks that sat on the busy morning
+  // drew ON TOP of booked groups. Real courses block these hours anyway.
+  golf: [['Men\'s league block', 17, 19], ['Course maintenance — back nine', 14, 15]],
   other: [],
 }
 
@@ -819,19 +850,29 @@ function topActions(): any[] {
 
   if (trade.partyBanded) {
     const covers = day.reduce((s, b) => s + (b.party_size || 1), 0)
+    // Two trades band by party and they bunch differently: a restaurant's
+    // wave hits the kitchen, a golf course's hits the starter and the grille
+    // at the turn. Same mechanic, each trade's own words.
+    const golf = trade.key === 'golf'
     out.push({
       type: 'pacing',
-      title: 'Your covers land in one wave',
-      summary: `${covers} covers booked, most of them inside two seatings. The kitchen feels that, not the daily total.`,
+      title: golf ? 'Your starts bunch into one wave' : 'Your covers land in one wave',
+      summary: golf
+        ? `${covers} players booked, most of them inside two start windows. The starter feels that, not the daily total.`
+        : `${covers} covers booked, most of them inside two seatings. The kitchen feels that, not the daily total.`,
       impact_cents: Math.round(covers * (trade.avgCoverCents || 0) * 0.08 * tradingDaysPerMonth),
       confidence: 0.7,
       priority: 'medium',
       grounded: true,
       evidence: [
-        { signal: 'Covers', detail: String(covers) },
-        { signal: 'Tables', detail: `${RESOURCES.length} on the floor` },
+        { signal: golf ? 'Players' : 'Covers', detail: String(covers) },
+        golf
+          ? { signal: 'Tees', detail: `${RESOURCES.length} in play` }
+          : { signal: 'Tables', detail: `${RESOURCES.length} on the floor` },
       ],
-      action_item: 'Cap covers per fifteen minutes in Set up so the agent spreads the next bookings instead of stacking them.',
+      action_item: golf
+        ? 'Cap starts per fifteen minutes in Set up so the agent spreads the next groups instead of stacking them.'
+        : 'Cap covers per fifteen minutes in Set up so the agent spreads the next bookings instead of stacking them.',
     })
   }
 

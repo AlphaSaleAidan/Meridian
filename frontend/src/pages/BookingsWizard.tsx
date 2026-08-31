@@ -165,7 +165,10 @@ export default function BookingsWizard({ merchantId, onDone, onSkip }: {
         resources: mode === 'native'
           ? resourceNames.map((name, i) => ({
               name, kind: preset.resourceKind,
-              seats: preset.resourceKind === 'table' ? seats : 1,
+              // A tee holds a group of up to four players; that is the band,
+              // not a question to ask the operator.
+              seats: preset.resourceKind === 'table' ? seats
+                : preset.resourceKind === 'tee' ? 4 : 1,
               sortOrder: i,
             }))
           : [],
@@ -357,9 +360,15 @@ export default function BookingsWizard({ merchantId, onDone, onSkip }: {
 
         {step === 'services' && (
           <Question
-            title={preset.partyBanded ? 'How long does a table turn?' : 'What do you book, and for how long?'}
+            title={preset.partyBanded
+              ? preset.resourceKind === 'tee'
+                ? 'How far apart are your tee times?'
+                : 'How long does a table turn?'
+              : 'What do you book, and for how long?'}
             hint={preset.partyBanded
-              ? 'The agent picks the right one from the party size. Turnaround is held after they leave, and never quoted to the guest.'
+              ? preset.resourceKind === 'tee'
+                ? 'The agent books groups of one to four into each start. The length here is the gap between groups off the tee, not the round.'
+                : 'The agent picks the right one from the party size. Turnaround is held after they leave, and never quoted to the guest.'
               : `Turnaround is the gap you need afterwards. It holds the ${preset.countLabel.toLowerCase().replace(/s$/, '')} without being part of what the customer is quoted.`}
           >
             <div className="space-y-2">

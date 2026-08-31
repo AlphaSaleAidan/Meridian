@@ -231,3 +231,37 @@ describe('a pizza shop books its deliveries and sees them on a map', () => {
     }
   })
 })
+
+
+describe('a golf course opens on its tee sheet', () => {
+  it('books tee times, banded like a table but capped at a foursome', () => {
+    // A tee time IS a booking: the unit sold is the interval on the tee, the
+    // party is 1-4 players, and revenue is players x green fee — covers and
+    // spend wearing golf shoes. Same engine, same exclusion guarantee.
+    const golf = packFor('golf')
+    expect(golf.key).toBe('golf')
+    expect(golf.booksAtAll).toBe(true)
+    expect(golf.partyBanded).toBe(true)
+    expect(golf.bookingNoun).toBe('tee time')
+    expect(golf.resourceKind).toBe('tee')
+    expect(Math.max(...golf.services.map((s) => s.max))).toBe(4)
+    expect(golf.avgCoverCents).toBeGreaterThan(0)
+  })
+
+  it('resolves the vocabularies that write golf onto an org', () => {
+    // The demo picker writes golf_course; a rep or Square detection may leave
+    // country_club or golf_club. All of them must land on the same product.
+    for (const alias of ['golf_course', 'golf_club', 'country_club', 'golf']) {
+      expect(packFor(alias).key, alias).toBe('golf')
+    }
+  })
+
+  it('keeps the three businesses in the building', () => {
+    // A course is a tee sheet, a grille and a pro shop under one roof: the
+    // book, the menu screens and retail inventory all stay on.
+    const flags = flagsForMerchant('/merchant', packFor('golf').modules)
+    expect(flags.bookings).toBe(true)
+    expect(flags.inventory).toBe(true)
+    expect(packFor('golf').hiddenViews ?? []).not.toContain('inventory/menu')
+  })
+})

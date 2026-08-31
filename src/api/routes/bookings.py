@@ -44,7 +44,7 @@ _UUID_RE = re.compile(
 )
 _MERCHANT_ID_RE = re.compile(r"^[A-Za-z0-9_\-]{1,64}$")
 
-_RESOURCE_KINDS = ("table", "staff", "chair", "bay", "room")
+_RESOURCE_KINDS = ("table", "staff", "chair", "bay", "room", "tee")
 
 
 def _validate_uuid(value: str, label: str = "id") -> None:
@@ -772,7 +772,7 @@ async def wizard_setup(req: WizardSetup, principal=Depends(require_service_auth)
     for r in req.resources:
         if r.name.strip().lower() in existing_resources:
             continue
-        if r.kind not in ("table", "staff", "chair", "bay", "room"):
+        if r.kind not in _RESOURCE_KINDS:
             raise HTTPException(400, f"unknown resource kind: {r.kind}")
         await store.create_resource({
             "merchant_id": req.merchant_id, "name": r.name.strip(),

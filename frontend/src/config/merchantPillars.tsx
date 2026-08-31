@@ -88,6 +88,14 @@ export interface Pillar {
    * nobody else. A subscriptions tab on a restaurant demo is noise.
    */
   trades?: string[]
+  /**
+   * The inverse: a pillar that exists for everyone EXCEPT these packs. Rare
+   * on purpose — reach for `trades` first. This exists because Invoices is a
+   * default-on tab that one trade demonstrably does not bill through, and
+   * listing every other trade in `trades` would break the moment a pack is
+   * added and forgotten there.
+   */
+  excludeTrades?: string[]
 }
 
 /**
@@ -257,6 +265,9 @@ export const comingSoonPillars: Pillar[] = [
     icon: FileText,
     comingSoon: true,
     sampleData: true,
+    // A golf course bills at the counter and the tee sheet, not by invoice —
+    // the wholesale-account story this tab tells has no buyer there.
+    excludeTrades: ['golf'],
     segments: [{ view: 'send', label: 'Send Invoice', Component: InvoicesPage }],
   },
   {

@@ -31,6 +31,7 @@ const KIND_LABEL: Record<ResourceKind, string> = {
   staff: 'Staff member',
   bay: 'Bay',
   room: 'Room',
+  tee: 'Tee',
 }
 
 export default function BookingsSetupPage() {
@@ -327,7 +328,8 @@ function ResourcesCard({ merchantId, resources, onChanged }: {
     try {
       await bookingsApi.createResource({
         merchantId, name: name.trim(), kind,
-        seats: kind === 'table' || kind === 'room' ? seats : 1,
+        // A tee's seats are the foursome — fixed, not asked.
+        seats: kind === 'table' || kind === 'room' ? seats : kind === 'tee' ? 4 : 1,
       })
       setName('')
       onChanged()
