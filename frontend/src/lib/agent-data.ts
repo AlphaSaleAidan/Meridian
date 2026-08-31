@@ -906,12 +906,17 @@ export function generateMarginWaterfall(): MarginItem[] {
       ], 0),
     ]
   }
-  // For other business types, generate from product catalog
-  const products = getProducts(bt)
+  // For other business types, generate from product catalog. Time and hired
+  // assets stay out — pour-cost math on a green fee tells a course operator
+  // the screen was written for someone else; the margins that matter to them
+  // are the grille, the bar and the pro-shop shelf.
+  const nonStock = new Set(getBusinessProfile(bt).nonStockCategories ?? [])
+  const products = getProducts(bt).filter((p) => !nonStock.has(p.category))
   const primaryName = bt === 'auto_shop' ? 'Parts & materials'
     : bt === 'smoke_shop' ? 'Wholesale cost'
     : bt === 'restaurant' ? 'Ingredients'
     : bt === 'fast_food' ? 'Food cost'
+    : bt === 'golf_course' ? 'Food & goods cost'
     : 'Ingredients'
   const wastePctBase = bt === 'auto_shop' ? 2 : 5
   let ms = 200

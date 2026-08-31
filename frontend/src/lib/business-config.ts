@@ -25,6 +25,10 @@ export interface StaffDef {
 export interface BusinessProfile {
   businessName: string
   businessNameCA: string
+  /** Categories that are sold TIME or hired assets, not stock — a green fee
+   *  cannot be low on units and a cart fleet has no reorder point. The
+   *  inventory table skips these; revenue surfaces still count them. */
+  nonStockCategories?: string[]
   products: ProductDef[]
   revenue: RevenueConfig
   hourlyPattern: number[]
@@ -536,6 +540,7 @@ const GOLF_COURSE: BusinessProfile = {
   businessName: 'Fairway Pines Golf Club',
   businessNameCA: 'Cedar Creek Golf Club',
   industryLabel: 'Golf Course',
+  nonStockCategories: ['green fees', 'rentals'],
   peakLabel: '7:00–11:00 AM',
   topBundlePair: ['18 Holes', 'Cart Rental'],
   deadStockItems: ['Logo Windbreaker', 'Golf Umbrella', 'Bucket Hat'],

@@ -35,9 +35,9 @@ export default function DemoCallCard({ accent = '#1A8FD6', variant = 'demo' }: P
         <h2 className="text-sm font-bold text-white">Call a Demo Agent</h2>
       </header>
       <p className="text-[11px] text-white/40 mb-4">
-        These are live AI order-taking agents, not recordings. Hand the owner your phone, let them
-        order a pizza, and they will watch the order land and the pay-by-text arrive for real.
-        Nothing is ever charged.
+        These are live AI agents, not recordings. Hand the owner your phone, let them place a real
+        order, and they will watch it land and the pay-by-text arrive for real. Nothing is ever
+        charged.
       </p>
 
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">

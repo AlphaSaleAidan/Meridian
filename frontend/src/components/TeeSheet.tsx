@@ -107,6 +107,10 @@ export default function TeeSheet({
   // the view narrows. Rows also grow to a real touch target.
   const isNarrow = useIsNarrow()
   const [teeIdx, setTeeIdx] = useState(0)
+  // A chip that looks tappable must DO something when tapped. When the host
+  // wires no onSelect, the sheet answers with its own detail card — the same
+  // question a starter asks at the window: who is this, how many, paid yet?
+  const [detail, setDetail] = useState<Placed | null>(null)
   const rowH = isNarrow ? 44 : 34
   const displayTees = isNarrow && tees.length > 1
     ? [tees[Math.min(teeIdx, tees.length - 1)]]
@@ -383,7 +387,7 @@ export default function TeeSheet({
                       className="z-10 flex min-w-0 items-stretch gap-0.5 p-0.5"
                     >
                       <button
-                        onClick={() => onSelect?.(b)}
+                        onClick={() => (onSelect ? onSelect(b) : setDetail(p))}
                         title={`${b.customerName} — party of ${b.partySize}, ${word}`}
                         className={`flex min-w-0 items-center gap-1.5 overflow-hidden rounded border px-2 text-left text-[11px] transition-colors hover:brightness-125 ${cls}`}
                         style={p.seatTracked
@@ -456,6 +460,79 @@ export default function TeeSheet({
           <Check className="h-2.5 w-2.5 text-[#17C5B0]" /> checked in
         </span>
       </div>
+
+      {/* The party card — what the starter needs at the window, one tap in,
+          one tap out. The phone number is a tel: link because "call the 9:15
+          who has not shown" is the single most common action on a sheet. */}
+      {detail && (() => {
+        const b = detail.booking
+        const teeName = tees.find((t) => t.id === b.resourceId)?.name ?? ''
+        const start = timeLabel(localMinutes(b.startsAt, timezone))
+        const word = STATUS_WORD[b.status] || b.status
+        const openHere = detail.seatTracked ? SEATS - b.partySize : 0
+        return (
+          <>
+            <button
+              aria-label="Close details"
+              onClick={() => setDetail(null)}
+              className="fixed inset-0 z-40 bg-black/40"
+            />
+            <div
+              className="fixed inset-x-3 z-50 mx-auto max-w-md rounded-xl border border-[#1F1F23] bg-[#0E0E11]/98 p-4 backdrop-blur-lg sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 sm:w-[380px]"
+              // Clears the mobile tab bar — a Call button behind the nav is a
+              // button that does not exist.
+              style={{ bottom: 'calc(var(--bottom-nav-h, 0px) + 16px)' }}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-semibold text-[#F5F5F7]">{b.customerName}</div>
+                  <div className="mt-0.5 text-xs text-[#A1A1A8]">
+                    {start} off {teeName} · party of {b.partySize}
+                    {detail.holes ? ` · ${detail.holes} holes` : ''}
+                  </div>
+                </div>
+                <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] ${
+                  PARTY_BLOCK[b.status] || PARTY_BLOCK.confirmed
+                }`}>
+                  {word}
+                </span>
+              </div>
+              <div className="mt-3 space-y-1.5 text-xs text-[#D4D4D8]">
+                <div className="flex items-center gap-2">
+                  <span className={`font-mono ${isPaid(b) ? 'text-[#17C5B0]' : 'text-[#F5A524]'}`}>$</span>
+                  {isPaid(b) ? 'Paid' : 'Pays at check-in'}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Phone className="h-3 w-3 text-[#1A8FD6]" />
+                  {b.source === 'phone' ? 'Booked by the phone agent' : 'Booked online'}
+                </div>
+                {openHere > 0 && (
+                  <div className="text-[#17C5B0]">
+                    {openHere} seat{openHere > 1 ? 's' : ''} still open in this group
+                  </div>
+                )}
+                {b.notes && <div className="text-[#A1A1A8]">“{b.notes}”</div>}
+              </div>
+              <div className="mt-4 flex gap-2">
+                {b.customerPhone && (
+                  <a
+                    href={`tel:${b.customerPhone}`}
+                    className="flex-1 rounded-lg border border-[#1A8FD6]/40 bg-[#1A8FD6]/10 px-3 py-2 text-center text-xs font-medium text-[#8dcef2] transition-colors hover:bg-[#1A8FD6]/20"
+                  >
+                    Call {b.customerPhone}
+                  </a>
+                )}
+                <button
+                  onClick={() => setDetail(null)}
+                  className="rounded-lg border border-[#1F1F23] px-4 py-2 text-xs text-[#A1A1A8] transition-colors hover:text-[#F5F5F7]"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </>
+        )
+      })()}
     </div>
   )
 }

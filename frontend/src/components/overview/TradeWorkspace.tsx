@@ -333,7 +333,13 @@ export default function TradeWorkspace(data: WorkspaceData) {
     // today, but the workspace can be looking at any day — without this the
     // axis ran Aug 18, Aug 17, Aug 18 and the curve doubled back on itself.
     const lastActual = hist.length ? hist[hist.length - 1].day : ''
-    for (const f of days.filter((x) => x.period_start > lastActual)) {
+    const future = days.filter((x) => x.period_start > lastActual)
+    // A fortnight ahead against a fortnight behind. The endpoint can return
+    // ninety days; drawing them all squeezed two weeks of ACTUALS into a
+    // tenth of the axis, and the headline summed the whole quarter under a
+    // label that said "next 7 days" — a $10K-a-day shop read $563K a week
+    // and stopped believing every other number on the page.
+    for (const f of future.slice(0, hist.length || 14)) {
       series.push({
         date: f.period_start,
         actual: null,
@@ -345,9 +351,8 @@ export default function TradeWorkspace(data: WorkspaceData) {
     return {
       days,
       series,
-      total: days
-        .filter((f) => !hist.length || f.period_start > hist[hist.length - 1].day)
-        .reduce((s, f) => s + f.predicted_cents, 0),
+      // Exactly what the label claims: the next seven days, no more.
+      total: future.slice(0, 7).reduce((s, f) => s + f.predicted_cents, 0),
     }
   }, [data.forecasts, history])
 
@@ -685,23 +690,17 @@ export default function TradeWorkspace(data: WorkspaceData) {
             </div>
           </div>
 
-          <div className="mt-4">
-            <ForecastChart
-              data={forecast.series}
-              height={240}
-              gradientId="workspace-forecast"
-            />
-          </div>
-
-          {/* Where it came from — only for the trades that are several
-              businesses under one roof. One stacked bar and the rows behind
-              it; an owner reads a split, not a second chart. */}
+          {/* Where it came from — FIRST, above the chart, only for the trades
+              that are several businesses under one roof. The chart answers
+              "how much"; a course owner's first question is "from which
+              register" — green fees, the grille, the bar — and an answer that
+              hides below a 240px chart is an answer half of them never see. */}
           {revenueMix && revenueMix.length > 0 && (() => {
             const mixTotal = revenueMix.reduce((s, c) => s + c.cents, 0)
             if (!mixTotal) return null
             const COLORS = ['#1A8FD6', '#17C5B0', '#F5A524', '#8dcef2', '#A1A1A8']
             return (
-              <div className="mt-6 border-t border-[#1F1F23] pt-4">
+              <div className="mt-4">
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-[#6B6B73]">
                   Where it comes from
                 </h3>
@@ -735,6 +734,14 @@ export default function TradeWorkspace(data: WorkspaceData) {
               </div>
             )
           })()}
+
+          <div className="mt-5">
+            <ForecastChart
+              data={forecast.series}
+              height={240}
+              gradientId="workspace-forecast"
+            />
+          </div>
         </section>
       )}
 

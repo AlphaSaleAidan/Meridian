@@ -850,7 +850,13 @@ function generateDayTransactions(date: string): DayTransactions {
 // ─── Inventory ──────────────────────────────────────────
 
 function generateInventory(): InventoryData {
-  const items: InventoryItem[] = getActiveProducts().map((p, i) => {
+  // "18 Holes — 27 units, reorder at 21" is the kind of line that tells an
+  // operator the demo was not built for them. Time and hired assets stay out
+  // of the stockroom; they still count everywhere revenue is measured.
+  const nonStock = new Set(getBusinessProfile(getActiveBusinessType()).nonStockCategories ?? [])
+  const items: InventoryItem[] = getActiveProducts()
+    .filter((p) => !nonStock.has(p.category))
+    .map((p, i) => {
     seed = 100 + i * 7
     const dailyUsage = Math.floor(p.popularity * seededRandRange(8, 35))
     const currentStock = seededRandRange(dailyUsage * 2, dailyUsage * 14)
