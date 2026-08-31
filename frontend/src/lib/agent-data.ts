@@ -266,6 +266,7 @@ export function generateTopActions(): TopAction[] {
   const scaleMap: Record<string, number> = {
     coffee_shop: 1, restaurant: 3, fast_food: 2, auto_shop: 2.5, smoke_shop: 0.7,
     barbershop: 1.2, nails: 1.6, medspa: 4, detailing: 2.2, mobile_detailing: 1.4,
+    golf_course: 3,
   }
   const m = scaleMap[bt] || 1
   // cx() applies the currency multiplier (1.38 on Canada, 1.0 elsewhere) so the
@@ -289,6 +290,118 @@ export function generateTopActions(): TopAction[] {
   const bTotal = pFmt(p1.price + p9.price)
   const bBundle = pFmt(Math.round((p1.price + p9.price) * 0.90))
   const bSave = pFmt(Math.round((p1.price + p9.price) * 0.10))
+
+  /**
+   * Golf gets its own list, written whole rather than templated.
+   *
+   * The generic actions below price single products and staff a counter —
+   * sensible for a cafe, nonsense on a course, where the money problems are
+   * the afternoon half of the sheet expiring unsold, the empty seats riding
+   * inside booked groups, and a Saturday rate the market has already said
+   * yes to. Figures match the rest of the golf demo: the sheet the operator
+   * is looking at really does empty after 2pm, really does carry ~40 open
+   * seats, and really does show the windbreaker rack dead for a month.
+   */
+  if (bt === 'golf_course') {
+    const golfFee = (cents: number) => pFmt(cents)
+    return [
+      {
+        rank: 1,
+        title: 'Offer afternoon times at the twilight rate when callers ask for a full morning',
+        description: `The sheet sells out to about 1:30 and sits near-empty from 2pm. The agent already books ~17 tee times a day — when the morning is gone, offering 2pm-on at the ${golfFee(4200)} twilight rate turns "sorry, we're full" into starts that today expire unsold.`,
+        expectedImpact: `+${$s(1120)}/month from afternoon starts that currently expire`,
+        impactCents: cx(sm(112000)),
+        effort: 'Low', confidence: 86, priority: 'Critical',
+        agentSource: 'gap-filler',
+        model: 'Tee-sheet gap detection',
+        reasoning: {
+          observation: `Average 19 starts open after 2pm on weekdays; agent turned away 6 morning callers yesterday without offering an afternoon alternative.`,
+          reasoning: `A caller refused a morning time is not a lost golfer — they are a golfer without an offer. Filling 3 of the 19 open afternoon starts a day at the twilight rate, at the current 2.9 players per group, recovers revenue with zero cost: the course is open and staffed either way.`,
+          conclusion: `Turn on the afternoon fallback in the agent's script: when the requested window is full, offer the first three open times after 2pm at the twilight rate.`,
+          impact: `+${$s(1120)}/month at a conservative 3 extra starts a day`,
+          confidence: 86, priority: 'Critical',
+          rawData: { open_starts_after_2pm: 19, agent_bookings_per_day: 17, twilight_rate: golfFee(4200), avg_party: 2.9 },
+          agentId: 'gap-filler', agentName: 'Gap Filler',
+        },
+      },
+      {
+        rank: 2,
+        title: 'Sell the empty seats inside booked groups',
+        description: `Most groups book as twos and threes, so ~40 seats ride out empty on a typical day. When a single calls, the agent can offer a seat in an existing group instead of burning a fresh tee time — the green fee is pure gain on a start already sold.`,
+        expectedImpact: `+${$s(940)}/month from seats that already have a tee time`,
+        impactCents: cx(sm(94000)),
+        effort: 'Low', confidence: 82, priority: 'Critical',
+        agentSource: 'gap-filler',
+        model: 'Open-seat inventory on the sheet',
+        reasoning: {
+          observation: `43 open seats across booked groups on today's sheet; singles and twosomes are 60% of phone requests.`,
+          reasoning: `Pairing singles into partial groups is standard practice at every busy course — the sheet already marks each open seat. One extra seat sold per day at the ${golfFee(7200)} average fee is revenue with no new start consumed, leaving the open times for full groups.`,
+          conclusion: `Let the agent ask singles: "I can pair you with a group at 9:15, or you have your own time at 2:40." Both answers fill the sheet.`,
+          impact: `+${$s(940)}/month at roughly one paired seat a day`,
+          confidence: 82, priority: 'Critical',
+          rawData: { open_seats_today: 43, single_twosome_share: '60%', avg_green_fee: golfFee(7200) },
+          agentId: 'gap-filler', agentName: 'Gap Filler',
+        },
+      },
+      {
+        rank: 3,
+        title: `Raise the Saturday morning rate ${golfFee(600)}`,
+        description: `Saturday 7–10am has been fully booked by Thursday for six straight weeks. A rate that sells out two days early is priced under what the weekend market has already agreed to pay — ${golfFee(600)} across ~90 weekend-morning players is revenue with nothing to build.`,
+        expectedImpact: `+${$s(780)}/month from weekend mornings already selling out`,
+        impactCents: cx(sm(78000)),
+        effort: 'Medium', confidence: 77, priority: 'High',
+        agentSource: 'margin-optimizer',
+        model: 'Sell-out lead-time pricing',
+        reasoning: {
+          observation: `Saturday 7–10am reached 100% booked 2+ days ahead in each of the last 6 weeks; no other window sells out earlier than same-day.`,
+          reasoning: `Lead time to sell-out is the cleanest demand signal a course has. A window that is gone by Thursday can carry a modest increase without losing a single start — the risk shows up as slower sell-out, which the sheet will report within two weekends.`,
+          conclusion: `Raise the Saturday 7–10am rate by ${golfFee(600)} and watch sell-out lead time. If it still sells out by Friday, the price was right.`,
+          impact: `+${$s(780)}/month across ~90 weekend-morning players`,
+          confidence: 77, priority: 'High',
+          rawData: { sellout_lead_days: 2, weeks_observed: 6, weekend_morning_players: 90, proposed_increase: golfFee(600) },
+          agentId: 'margin-optimizer', agentName: 'Margin Optimizer',
+        },
+      },
+      {
+        rank: 4,
+        title: 'Clear the Logo Windbreaker rack before the season turns',
+        description: `No windbreaker has sold in 30 days while the rack holds ${$s(180)} of cost. Mark them 40% down now — end-of-season they are worth less, and the shelf space belongs to the balls and gloves that move every day.`,
+        expectedImpact: `+${$s(180)} recovered from a dead line`,
+        impactCents: cx(sm(18000)),
+        effort: 'Low', confidence: 90, priority: 'High',
+        agentSource: 'inventory-intelligence',
+        model: 'Days-since-sale threshold',
+        reasoning: {
+          observation: `Logo Windbreaker: 30 days without a sale against a 7-day expectation for pro-shop apparel; stock on hand covers a full season at zero velocity.`,
+          reasoning: `Seasonal apparel loses value on a calendar, not a shelf-life label. A 40% markdown now recovers most of the cost; the same markdown in October recovers half of it. The freed shelf goes to the two highest-velocity pro-shop lines.`,
+          conclusion: `Mark the rack down 40% this week and re-face the shelf with Dozen Balls and Golf Glove stock.`,
+          impact: `+${$s(180)} recovered, plus the shelf back for lines that sell daily`,
+          confidence: 90, priority: 'High',
+          rawData: { days_since_sale: 30, expected_max_days: 7, markdown_pct: 40 },
+          agentId: 'inventory-intelligence', agentName: 'Inventory Intelligence',
+        },
+      },
+      {
+        rank: 5,
+        title: 'Give your twelve weekly groups their standing times',
+        description: `Twelve groups play nearly every week — the same foursome has taken Saturday 8:30 eleven of the last twelve weeks, and they book it by phone every time. Hold each regular group's usual time for them until Thursday, have the agent greet them by name, and comp the range bucket on every tenth round. A standing time is the cheapest loyalty program in golf.`,
+        expectedImpact: `+${$s(1240)}/month of weekly revenue protected`,
+        impactCents: cx(sm(124000)),
+        effort: 'Low', confidence: 84, priority: 'High',
+        agentSource: 'retention-strategist',
+        model: 'Repeat-group detection on the book',
+        reasoning: {
+          observation: `12 groups with 8+ bookings in the last 12 weeks; together they are ~30% of weekday play. Each books the same window within 15 minutes, almost always by phone.`,
+          reasoning: `A weekly foursome is worth about ${$s(1150)}/month before they touch the grille — and they leave over one thing: calling for "their" time and hearing it is gone. Holding it until Thursday costs nothing on windows they take 90% of anyway; the agent recognising the caller and confirming "your usual 8:30?" is the treatment they tell their friends about.`,
+          conclusion: `Mark the twelve recurring groups as standing times, released Thursday if unclaimed. Add the tenth-round range-bucket comp so the gesture is felt, not silent.`,
+          impact: `+${$s(1240)}/month protected, at the cost of a few comped range buckets`,
+          confidence: 84, priority: 'High',
+          rawData: { weekly_groups: 12, weekday_play_share: '30%', foursome_monthly_value: $s(1150), hold_release: 'Thursday' },
+          agentId: 'retention-strategist', agentName: 'Retention Strategist',
+        },
+      },
+    ]
+  }
 
   /**
    * The fourth action, per trade family.

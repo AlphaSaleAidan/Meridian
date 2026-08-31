@@ -588,8 +588,10 @@ export const NICHE_PACKS: NichePack[] = [
     // building: the tee sheet (bookings), the grille (menu, margins — Menu
     // Matrix is exactly right here), the pro shop (retail inventory), plus a
     // roster of starters, marshals and grille staff. Camera watches the
-    // pro-shop shelf and the grille queue at the turn.
-    modules: { taxExpenses: false, topActions: false },
+    // pro-shop shelf and the grille queue at the turn. Top Actions stays ON
+    // (Aidan, 2026-08-31): the actions are written for the course — filling
+    // the afternoon sheet, selling empty seats — not generic retail advice.
+    modules: { taxExpenses: false },
     pillarOrder: ['bookings', 'phone', '', 'inventory', 'schedule'],
     avgCoverCents: 7200,
     homeMetric: { label: 'Tee sheet filled today',
