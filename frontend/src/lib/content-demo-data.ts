@@ -523,6 +523,41 @@ const DEMO_BUSINESSES: Record<BusinessType, DemoBusiness> = {
     ],
   },
 
+  golf_course: {
+    brand: {
+      business_name: 'Fairway Pines Golf Club',
+      business_type: 'golf_course',
+      content_tier: 'starter',
+      ayrshare_connected_platforms: ['instagram', 'facebook'],
+      voice_profile: {
+        tone: 'welcoming',
+        emoji_usage: 'minimal',
+        top_products: ['18 Holes', 'Cart Rental', 'Twilight Rate'],
+        keywords: ['tee times', 'golf course', 'twilight golf'],
+      },
+    },
+    post: {
+      id: 'demo-golf-ad',
+      post_type: 'social',
+      platform: 'instagram',
+      status: 'published',
+      hook: 'Twilight rates start at 3pm all week.',
+      body: 'The course quiets down after three and the light gets good. Nine or eighteen at the twilight rate, carts included on weekdays.\n\nCall or book online — the tee sheet answers even when the pro shop line is busy.',
+      hashtags: ['#FairwayPines', '#TwilightGolf', '#TeeTimes'],
+      call_to_action: 'Book your twilight tee time',
+      pos_data_reference: { item: 'Twilight Rate', share_after_3pm: '31%', period: 'this month' },
+      published_at: daysAgo(1),
+      publish_url: 'https://instagram.com/p/demo-fairwaypines',
+      created_at: daysAgo(2),
+    },
+    rankings: [
+      { keyword: 'tee times near me', rank_position: 3, rank_change: 4, checked_at: daysAgo(0), ai_citation_count: 2, ai_platforms_cited: ['chatgpt', 'perplexity'] },
+      { keyword: 'public golf course', rank_position: 5, rank_change: 2, checked_at: daysAgo(0), ai_citation_count: 1, ai_platforms_cited: ['claude'] },
+      { keyword: 'twilight golf rates', rank_position: 2, rank_change: 6, checked_at: daysAgo(0), ai_citation_count: 1, ai_platforms_cited: ['perplexity'] },
+      { keyword: 'golf lessons', rank_position: 8, rank_change: 1, checked_at: daysAgo(0), ai_citation_count: 0, ai_platforms_cited: [] },
+    ],
+  },
+
   peptide_shop: {
     brand: {
       business_name: 'Apex Peptide Supply',

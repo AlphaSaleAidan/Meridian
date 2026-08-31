@@ -532,6 +532,54 @@ const PIZZERIA: BusinessProfile = {
   ],
 }
 
+const GOLF_COURSE: BusinessProfile = {
+  businessName: 'Fairway Pines Golf Club',
+  businessNameCA: 'Cedar Creek Golf Club',
+  industryLabel: 'Golf Course',
+  peakLabel: '7:00–11:00 AM',
+  topBundlePair: ['18 Holes', 'Cart Rental'],
+  deadStockItems: ['Logo Windbreaker', 'Golf Umbrella', 'Bucket Hat'],
+  // A course's day is front-loaded harder than any trade here: the morning
+  // tee sheet decides the whole day, with a smaller wave after work for nine.
+  hourlyPattern: [
+    0, 0, 0, 0, 0, 10,
+    45, 90, 100, 95, 85, 70,
+    60, 55, 50, 55, 60, 50,
+    30, 10, 0, 0, 0, 0,
+  ],
+  revenue: {
+    weekdayMin: 350000, weekdayMax: 600000,
+    weekendMin: 700000, weekendMax: 1100000,
+    avgTicketMin: 5500, avgTicketMax: 11000,
+  },
+  staff: [
+    { name: 'Walt P.', role: 'Head Professional' },
+    { name: 'Dana R.', role: 'Pro Shop Lead' },
+    { name: 'Gus M.', role: 'Starter' },
+    { name: 'Lena K.', role: 'Grille Lead' },
+    { name: 'Ray T.', role: 'Marshal' },
+    { name: 'Sofia B.', role: 'Grille Cook' },
+  ],
+  products: [
+    // Index 1 is the line the demo's shrink anomaly names, so it must be a
+    // PHYSICAL product — counted stock cannot come up short on a green fee.
+    { name: '18 Holes', sku: 'GRN-18', price: 6500, category: 'green fees', popularity: 0.95 },
+    { name: 'Dozen Balls', sku: 'PRO-BAL', price: 3400, category: 'pro shop', popularity: 0.65 },
+    { name: 'Twilight Rate', sku: 'GRN-TWI', price: 4200, category: 'green fees', popularity: 0.60 },
+    { name: 'Cart Rental', sku: 'CRT-001', price: 2200, category: 'rentals', popularity: 0.90 },
+    { name: 'Range Bucket', sku: 'RNG-001', price: 1200, category: 'rentals', popularity: 0.75 },
+    { name: 'Club Rental Set', sku: 'CLB-001', price: 4500, category: 'rentals', popularity: 0.20 },
+    { name: '9 Holes', sku: 'GRN-09', price: 3800, category: 'green fees', popularity: 0.70 },
+    { name: 'Golf Glove', sku: 'PRO-GLV', price: 2400, category: 'pro shop', popularity: 0.55 },
+    { name: 'Logo Polo', sku: 'PRO-POL', price: 5800, category: 'pro shop', popularity: 0.35 },
+    { name: 'Logo Windbreaker', sku: 'PRO-WND', price: 8900, category: 'pro shop', popularity: 0.10 },
+    { name: 'Turn Dog & Chips', sku: 'GRL-DOG', price: 950, category: 'grille', popularity: 0.85 },
+    { name: 'Clubhouse Burger', sku: 'GRL-BRG', price: 1600, category: 'grille', popularity: 0.70 },
+    { name: 'Domestic Beer', sku: 'GRL-BER', price: 650, category: 'grille', popularity: 0.80 },
+    { name: 'Iced Tea', sku: 'GRL-TEA', price: 400, category: 'grille', popularity: 0.60 },
+  ],
+}
+
 const PROFILES: Record<BusinessType, BusinessProfile> = {
   coffee_shop: COFFEE_SHOP,
   restaurant: RESTAURANT,
@@ -545,6 +593,7 @@ const PROFILES: Record<BusinessType, BusinessProfile> = {
   detailing: DETAILING,
   mobile_detailing: MOBILE_DETAILING,
   pizzeria: PIZZERIA,
+  golf_course: GOLF_COURSE,
 }
 
 export function getBusinessProfile(type: BusinessType): BusinessProfile {

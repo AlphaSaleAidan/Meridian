@@ -77,7 +77,7 @@ export class BookingsApiError extends Error {
   }
 }
 
-export type ResourceKind = 'table' | 'staff' | 'chair' | 'bay' | 'room'
+export type ResourceKind = 'table' | 'staff' | 'chair' | 'bay' | 'room' | 'tee'
 /** 'offered' is a real row: a slot HELD for one waitlist guest while they
  *  decide (migration 082 puts it inside the exclusion constraint, so the hold
  *  is exclusive). It was missing here, so a held row rendered a blank chip. */

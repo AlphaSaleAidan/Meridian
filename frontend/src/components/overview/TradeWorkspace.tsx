@@ -681,6 +681,8 @@ function mainTitle(pack: NichePack, hasOrders: boolean): string {
   // With an order feed the main surface is the orders themselves; the phone
   // chart moves to its own section below and keeps its own heading.
   if (!pack.booksAtAll) return hasOrders ? "Today's orders" : 'What the phone caught today'
+  // A course's book is not a floor — it is THE sheet, and operators call it that.
+  if (pack.resourceKind === 'tee') return 'The tee sheet'
   return 'The floor'
 }
 
@@ -759,6 +761,22 @@ function computeTiles(
           sub: peak.covers ? `${peak.covers} covers land` : undefined,
           tone: peak.covers > 20 ? 'warn' : undefined },
         { label: 'Tables in use', value: `${new Set(live.map((b) => b.resourceId)).size}/${active.length}` },
+      ]
+    }
+    case 'golf': {
+      // Covers and spend wearing golf shoes: the unit sold is the start, the
+      // money is players x green fee, and the scarce thing is daylight — a
+      // start window that passes unsold cannot be resold this evening.
+      const players = live.reduce((s, b) => s + b.partySize, 0)
+      const peak = peakBucket(live, timezone, open, close)
+      return [
+        { label: 'Players on the sheet', value: String(players),
+          sub: `${live.length} tee times`, icon: Users },
+        { label: 'Avg green fee / player', value: packMoney(pack.avgCoverCents ?? 0), icon: Receipt },
+        { label: 'Busiest start window', value: peak.covers ? clock(peak.at) : '—',
+          sub: peak.covers ? `${peak.covers} players off` : undefined,
+          tone: peak.covers > 12 ? 'warn' : undefined },
+        { label: 'Tees in play', value: `${new Set(live.map((b) => b.resourceId)).size}/${active.length}` },
       ]
     }
     case 'autoshop': {

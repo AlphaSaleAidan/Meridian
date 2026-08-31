@@ -544,6 +544,48 @@ export const NICHE_PACKS: NichePack[] = [
     counterTakingsCents: 418_000,
   },
   {
+    key: 'golf',
+    label: 'Golf course',
+    pitch: 'The 9:40 that nobody booked is gone at 9:41 — the agent fills the sheet while the pro shop rings.',
+    // "Tee time" is the industry's own noun and the phone agent must use it:
+    // nobody calls a course to "make an appointment".
+    bookingNoun: 'tee time',
+    customerNoun: 'player',
+    resourceKind: 'tee',
+    countTitle: 'How many starting tees do you send groups off?',
+    countLabel: 'Tees',
+    // A TEE TIME IS A BOOKING, banded like a restaurant table: the unit sold
+    // is the interval on the tee, the party is 1-4 players, and revenue is
+    // players x green fee — covers and spend wearing golf shoes. What golf
+    // adds is nothing the engine lacks; it is the vocabulary and the sheet.
+    booksAtAll: true,
+    defaultCount: 2,
+    defaultSeats: 4,
+    partyBanded: true,
+    services: [
+      // Duration is the TEE INTERVAL — how long the group owns the start,
+      // not how long the round takes. 15 minutes is the industry standard
+      // gap; the round itself happens out on the course, where no resource
+      // is contended.
+      { name: '18 holes (1–4 players)', duration: 15, buffer: 0, min: 1, max: 4 },
+      { name: '9 holes (1–4 players)', duration: 15, buffer: 0, min: 1, max: 4 },
+      { name: 'Lesson with the pro', duration: 60, buffer: 0, min: 1, max: 1, price: 9000 },
+    ],
+    days: [0, 1, 2, 3, 4, 5, 6],
+    opens: '07:00',
+    closes: '19:00',
+    // Everything stays on because a course is three businesses in one
+    // building: the tee sheet (bookings), the grille (menu, margins — Menu
+    // Matrix is exactly right here), the pro shop (retail inventory), plus a
+    // roster of starters, marshals and grille staff. Camera watches the
+    // pro-shop shelf and the grille queue at the turn.
+    modules: { taxExpenses: false, topActions: false },
+    pillarOrder: ['bookings', 'phone', '', 'inventory', 'schedule'],
+    avgCoverCents: 7200,
+    homeMetric: { label: 'Tee sheet filled today',
+                  help: 'Booked tee times against the daylight you have. An empty slot cannot be sold after its time passes.' },
+  },
+  {
     key: 'peptides',
     label: 'Peptide & wellness store',
     pitch: 'Every order \u2014 site or phone \u2014 lands in one queue, and the stock knows its own expiry.',
@@ -673,6 +715,7 @@ export const PACK_DECK_SLUGS: Record<string, string[]> = {
   autoshop: [],
   mobiledetailing: [],
   peptides: [],
+  golf: [],
 }
 
 /**
@@ -697,7 +740,7 @@ export interface SellableTrade {
   /** Pack key. Stored verbatim as organizations.business_type. */
   key: string
   label: string
-  group: 'Food and drink' | 'Appointments' | 'Vehicles' | 'Retail'
+  group: 'Food and drink' | 'Appointments' | 'Vehicles' | 'Retail' | 'Recreation'
   /** Deck slug per market. Some decks are market-neutral and share one. */
   deck: { ca: string; us: string }
 }
@@ -732,6 +775,11 @@ export const SELLABLE_TRADES: SellableTrade[] = [
   { key: 'autoshop', label: 'Auto Repair Shops', group: 'Vehicles',
     deck: { ca: 'autoshop', us: 'autoshop' } },
 
+  { key: 'golf', label: 'Golf Courses', group: 'Recreation',
+    // No deck exists in either catalogue yet — bare neutral slug, the
+    // autoshop precedent: a sellable product with a proposal gap to close.
+    deck: { ca: 'golf', us: 'golf' } },
+
   { key: 'smokeshop', label: 'Smoke & Vape Shops', group: 'Retail',
     deck: { ca: 'ca-smokeshop', us: 'us-smokeshop' } },
   { key: 'peptides', label: 'Peptide & Wellness Stores', group: 'Retail',
@@ -742,7 +790,7 @@ export const SELLABLE_TRADES: SellableTrade[] = [
 ]
 
 export const SELLABLE_GROUPS = [
-  'Food and drink', 'Appointments', 'Vehicles', 'Retail',
+  'Food and drink', 'Appointments', 'Vehicles', 'Recreation', 'Retail',
 ] as const
 
 /** The deck a rep should link for this trade in this market. */
@@ -768,6 +816,9 @@ const PACK_ALIASES: Record<string, string> = {
   nail_salon: 'nails',
   barber_shop: 'barbershop',
   peptide_shop: 'peptides',
+  golf_course: 'golf',
+  golf_club: 'golf',
+  country_club: 'golf',
 }
 
 export function packFor(key: string | null | undefined): NichePack {
