@@ -17,8 +17,8 @@
  * the party is its size. The lead's name labels the party; the remaining
  * seats render as open cells because that is exactly what they are.
  */
-import { useMemo } from 'react'
-import { Phone } from 'lucide-react'
+import { useEffect, useMemo, useRef } from 'react'
+import { Check, Phone } from 'lucide-react'
 import type { Booking, BusyBlock, Resource, Service } from '@/lib/bookings-api'
 import { localMinutes } from '@/components/BookingCalendar'
 
@@ -42,6 +42,15 @@ const STATUS_WORD: Record<string, string> = {
   completed: 'finished', cancelled: 'cancelled', no_show: 'no-show',
 }
 
+/** Checked in: the group has reached the counter. */
+const checkedIn = (b: Booking) => b.status === 'seated' || b.status === 'completed'
+
+/** Paid, by the two routes money actually arrives: online bookings prepay,
+ *  everyone else pays when they check in. A phone booking that has not
+ *  reached the counter is the one true "unpaid" on the sheet — exactly the
+ *  group the starter wants to spot before they walk to the 1st. */
+const isPaid = (b: Booking) => b.source !== 'phone' ? b.status !== 'offered' : checkedIn(b)
+
 function timeLabel(minutes: number): string {
   const h = Math.floor(minutes / 60) % 24
   const m = minutes % 60
@@ -59,7 +68,7 @@ interface Placed {
 }
 
 export default function TeeSheet({
-  bookings, resources, busy, timezone, openMinutes, services, onSelect,
+  bookings, resources, busy, timezone, openMinutes, services, day, onSelect,
 }: {
   bookings: Booking[]
   resources: Resource[]
@@ -67,6 +76,8 @@ export default function TeeSheet({
   timezone: string
   openMinutes: [number, number]
   services: Service[]
+  /** The sheet's date (YYYY-MM-DD, merchant-local). Drives the now line. */
+  day?: string
   onSelect?: (booking: Booking) => void
 }) {
   const tees = useMemo(
@@ -123,24 +134,60 @@ export default function TeeSheet({
 
   // The numbers an operator glances at before anything else: how full is the
   // sheet, and how many single seats are still sellable inside partial groups.
-  const { starts, players, openSeats } = useMemo(() => {
-    let filled = 0; let heads = 0; let seatGaps = 0
+  // A HELD time is counted apart — it is not players on the sheet yet, and
+  // the band above this sheet does not count it either. Two figures on one
+  // screen that disagree teach the operator to trust neither.
+  const { starts, players, openSeats, held } = useMemo(() => {
+    let filled = 0; let heads = 0; let seatGaps = 0; let pending = 0
     for (const col of placed.values()) {
       for (const p of col) {
+        if (p.booking.status === 'offered') { pending += 1; continue }
         filled += 1
         heads += p.booking.partySize
         if (p.seatTracked) seatGaps += Math.max(0, SEATS - p.booking.partySize)
       }
     }
-    return { starts: filled, players: heads, openSeats: seatGaps }
+    return { starts: filled, players: heads, openSeats: seatGaps, held: pending }
   }, [placed])
 
   const totalStarts = rows * Math.max(1, tees.length)
+  const agentBooked = useMemo(
+    () => bookings.filter((b) =>
+      b.status !== 'cancelled' && b.status !== 'offered' && b.source === 'phone').length,
+    [bookings],
+  )
+
+  // The now line, only when the sheet is showing today. "Now" is computed in
+  // the MERCHANT's timezone, the same clock every row is placed on.
+  const nowMin = useMemo(() => {
+    if (!day) return null
+    try {
+      const todayLocal = new Intl.DateTimeFormat('en-CA', {
+        timeZone: timezone || undefined, year: 'numeric', month: '2-digit', day: '2-digit',
+      }).format(new Date())
+      if (todayLocal !== day) return null
+      const m = localMinutes(new Date().toISOString(), timezone)
+      return m >= open && m <= close ? m : null
+    } catch {
+      return null
+    }
+  }, [day, timezone, open, close])
+  const nowTop = nowMin == null ? null : ((nowMin - open) / interval) * ROW_H
+
+  // Universal convention in every tool surveyed: the sheet opens centred on
+  // now, not on 7am — the operator's question is always "who is up next".
+  const scrollRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (nowTop != null && scrollRef.current) {
+      scrollRef.current.scrollTop = Math.max(0, nowTop - 180)
+    }
+  }, [nowTop])
 
   return (
     <div>
       {/* The glance line. "Open seats" is the golf-only number: seats still
-          sellable inside groups already on the sheet. */}
+          sellable inside groups already on the sheet. And the agent count is
+          the Meridian number — the sheet the phone filled by itself. */}
       <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[#A1A1A8]">
         <span>
           <span className="font-mono text-[#F5F5F7]">{starts}</span>
@@ -150,9 +197,19 @@ export default function TeeSheet({
         <span className={openSeats > 0 ? 'text-[#17C5B0]' : ''}>
           <span className="font-mono">{openSeats}</span> open seats in booked groups
         </span>
+        {agentBooked > 0 && (
+          <span className="text-[#1A8FD6]">
+            <span className="font-mono">{agentBooked}</span> booked by the phone agent
+          </span>
+        )}
+        {held > 0 && (
+          <span className="text-[#F5A524]" title="A held time is mid-checkout online or offered to the waitlist — locked so it cannot be double-sold.">
+            <span className="font-mono">{held}</span> held
+          </span>
+        )}
       </div>
 
-      <div className="max-h-[600px] overflow-y-auto rounded-lg border border-[#1F1F23]">
+      <div ref={scrollRef} className="max-h-[600px] overflow-y-auto rounded-lg border border-[#1F1F23]">
         <div
           className="grid"
           style={{ gridTemplateColumns: `56px repeat(${tees.length}, minmax(0, 1fr))` }}
@@ -170,9 +227,16 @@ export default function TeeSheet({
 
           {/* Time rail */}
           <div
-            className="grid"
+            className="relative grid"
             style={{ gridTemplateRows: `repeat(${rows}, ${ROW_H}px)` }}
           >
+            {nowTop != null && (
+              <div
+                className="pointer-events-none absolute right-0 z-20 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-[#E5484D]"
+                style={{ top: nowTop }}
+                aria-hidden="true"
+              />
+            )}
             {Array.from({ length: rows }, (_, i) => {
               const m = open + i * interval
               const onHour = m % 60 === 0
@@ -209,6 +273,14 @@ export default function TeeSheet({
                   gridTemplateColumns: 'minmax(0, 1fr)',
                 }}
               >
+                {/* The now line — the operator's place on the page. */}
+                {nowTop != null && (
+                  <div
+                    className="pointer-events-none absolute inset-x-0 z-20 h-px bg-[#E5484D]/60"
+                    style={{ top: nowTop }}
+                    aria-hidden="true"
+                  />
+                )}
                 {/* Row ruling + open rows */}
                 {Array.from({ length: rows }, (_, i) => {
                   const m = open + i * interval
@@ -279,6 +351,21 @@ export default function TeeSheet({
                         {b.partySize > 1 && (
                           <span className="shrink-0 opacity-70">×{b.partySize}</span>
                         )}
+                        {/* The counter glyphs, straight from the tools every
+                            operator already reads: ✓ checked in, $ green when
+                            paid and amber while the money is still walking
+                            up the path. */}
+                        {checkedIn(b) && (
+                          <Check className="h-2.5 w-2.5 shrink-0 text-[#17C5B0]" aria-label="Checked in" />
+                        )}
+                        <span
+                          className={`shrink-0 font-mono text-[10px] ${
+                            isPaid(b) ? 'text-[#17C5B0]' : 'text-[#F5A524]'
+                          }`}
+                          title={isPaid(b) ? 'Paid' : 'Pays at check-in'}
+                        >
+                          $
+                        </span>
                         {p.holes && (
                           <span className="ml-auto shrink-0 rounded-sm border border-current/30 px-1 font-mono text-[9px] leading-4 opacity-80">
                             {p.holes}
@@ -304,7 +391,7 @@ export default function TeeSheet({
         </div>
       </div>
 
-      {/* The key, kept to the two things that are not obvious. */}
+      {/* The key, kept to what is not obvious at first glance. */}
       <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-[#6B6B73]">
         <span className="flex items-center gap-1.5">
           <span className="inline-block h-2.5 w-4 rounded-sm border border-dashed border-[#17C5B0]/40 bg-[#17C5B0]/[0.05]" />
@@ -312,6 +399,15 @@ export default function TeeSheet({
         </span>
         <span className="flex items-center gap-1.5">
           <Phone className="h-2.5 w-2.5" /> booked by the phone agent
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="font-mono text-[#17C5B0]">$</span> paid
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="font-mono text-[#F5A524]">$</span> pays at check-in
+        </span>
+        <span className="flex items-center gap-1">
+          <Check className="h-2.5 w-2.5 text-[#17C5B0]" /> checked in
         </span>
       </div>
     </div>

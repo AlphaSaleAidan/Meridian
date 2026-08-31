@@ -305,7 +305,12 @@ function seedDay(dayKey: string) {
         ? Math.min(2 + Math.floor(rand() * 4), maxBand)
         : 1
       const r = rand()
-      const status = r > 0.88 ? 'completed' : r > 0.8 ? 'seated' : 'confirmed'
+      // A tee sheet keeps a couple of HELD times on it — a slot mid-checkout
+      // online, or an offer out to the waitlist. Operators look for that
+      // freeze cue: it is what proves the sheet is live inventory and not a
+      // copy. Rare, and tee-only — other trades' books never showed holds.
+      const status = r > 0.88 ? 'completed' : r > 0.8 ? 'seated'
+        : trade.resourceKind === 'tee' && r > 0.775 ? 'offered' : 'confirmed'
       // Weighted to the shorter services: every shop sells more haircuts than
       // ceramic coatings, and a day made of only the flagship job is a day
       // nobody recognises.

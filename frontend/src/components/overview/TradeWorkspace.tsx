@@ -482,6 +482,7 @@ export default function TradeWorkspace(data: WorkspaceData) {
                 timezone={timezone}
                 openMinutes={[open, close]}
                 services={services}
+                day={day}
               />
             ) : (
               <BookingCalendar
@@ -583,6 +584,7 @@ export default function TradeWorkspace(data: WorkspaceData) {
                 timezone={timezone}
                 openMinutes={[open, close]}
                 services={services}
+                day={day}
               />
             ) : (
               <BookingCalendar
