@@ -17,13 +17,28 @@
  * the party is its size. The lead's name labels the party; the remaining
  * seats render as open cells because that is exactly what they are.
  */
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Check, Phone } from 'lucide-react'
 import type { Booking, BusyBlock, Resource, Service } from '@/lib/bookings-api'
 import { localMinutes } from '@/components/BookingCalendar'
 
-const ROW_H = 34
 const SEATS = 4
+
+/** Below this width the sheet shows one tee at a time. Matches Tailwind sm. */
+const NARROW_QUERY = '(max-width: 639px)'
+
+function useIsNarrow(): boolean {
+  const [narrow, setNarrow] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia(NARROW_QUERY).matches,
+  )
+  useEffect(() => {
+    const mq = window.matchMedia(NARROW_QUERY)
+    const onChange = () => setNarrow(mq.matches)
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
+  return narrow
+}
 
 /** Same palette as the day grid, so a status reads the same on both. */
 const PARTY_BLOCK: Record<string, string> = {
@@ -85,6 +100,17 @@ export default function TeeSheet({
       .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name)),
     [resources],
   )
+
+  // On a phone the sheet shows ONE tee at a time — two columns in 350px
+  // crushed every name to a single letter, and a sheet you cannot read names
+  // off is not a sheet. The glance line still counts the whole course; only
+  // the view narrows. Rows also grow to a real touch target.
+  const isNarrow = useIsNarrow()
+  const [teeIdx, setTeeIdx] = useState(0)
+  const rowH = isNarrow ? 44 : 34
+  const displayTees = isNarrow && tees.length > 1
+    ? [tees[Math.min(teeIdx, tees.length - 1)]]
+    : tees
 
   /** The start interval is what the course actually sells its rounds at —
    *  the shortest party-banded service — never a hardcoded fifteen. */
@@ -172,7 +198,7 @@ export default function TeeSheet({
       return null
     }
   }, [day, timezone, open, close])
-  const nowTop = nowMin == null ? null : ((nowMin - open) / interval) * ROW_H
+  const nowTop = nowMin == null ? null : ((nowMin - open) / interval) * rowH
 
   // Universal convention in every tool surveyed: the sheet opens centred on
   // now, not on 7am — the operator's question is always "who is up next".
@@ -209,14 +235,34 @@ export default function TeeSheet({
         )}
       </div>
 
+      {/* One tee at a time on a phone: the starter picks which tee they are
+          standing on. Segmented, not a dropdown — it is a two-way choice. */}
+      {isNarrow && tees.length > 1 && (
+        <div className="mb-2 flex rounded-lg border border-[#1F1F23] bg-[#0E0E11] p-0.5">
+          {tees.map((t, i) => (
+            <button
+              key={t.id}
+              onClick={() => setTeeIdx(i)}
+              className={`flex-1 rounded-md px-2 py-1.5 text-xs font-medium transition-colors ${
+                i === Math.min(teeIdx, tees.length - 1)
+                  ? 'bg-[#1A8FD6]/15 text-[#8dcef2]'
+                  : 'text-[#A1A1A8]'
+              }`}
+            >
+              {t.name}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div ref={scrollRef} className="max-h-[600px] overflow-y-auto rounded-lg border border-[#1F1F23]">
         <div
           className="grid"
-          style={{ gridTemplateColumns: `56px repeat(${tees.length}, minmax(0, 1fr))` }}
+          style={{ gridTemplateColumns: `56px repeat(${displayTees.length}, minmax(0, 1fr))` }}
         >
           {/* Sticky tee header */}
           <div className="sticky top-0 z-20 border-b border-[#1F1F23] bg-[#0A0A0B]" />
-          {tees.map((t) => (
+          {displayTees.map((t) => (
             <div
               key={t.id}
               className="sticky top-0 z-20 border-b border-l border-[#1F1F23] bg-[#0A0A0B] px-3 py-2 text-xs font-semibold text-[#F5F5F7]"
@@ -228,7 +274,7 @@ export default function TeeSheet({
           {/* Time rail */}
           <div
             className="relative grid"
-            style={{ gridTemplateRows: `repeat(${rows}, ${ROW_H}px)` }}
+            style={{ gridTemplateRows: `repeat(${rows}, ${rowH}px)` }}
           >
             {nowTop != null && (
               <div
@@ -254,7 +300,7 @@ export default function TeeSheet({
           </div>
 
           {/* One column per starting tee */}
-          {tees.map((t) => {
+          {displayTees.map((t) => {
             const col = placed.get(t.id) ?? []
             const colBlocks = blocks
             const covered = new Set<number>()
@@ -269,7 +315,7 @@ export default function TeeSheet({
                 // that, a block and a party sharing a row auto-flow into
                 // implicit side-by-side columns and halve the sheet's width.
                 style={{
-                  gridTemplateRows: `repeat(${rows}, ${ROW_H}px)`,
+                  gridTemplateRows: `repeat(${rows}, ${rowH}px)`,
                   gridTemplateColumns: 'minmax(0, 1fr)',
                 }}
               >

@@ -358,7 +358,9 @@ export default function TradeWorkspace(data: WorkspaceData) {
   return (
     <div className="space-y-4">
       {/* ── The money line ────────────────────────────────────────── */}
-      <section className="rounded-xl border border-[#1F1F23] bg-gradient-to-br from-[#12171C] to-[#111113] p-6">
+      {/* Compact below sm: on a phone this band was a full screen before any
+          work appeared, and the work is what the owner opened the app for. */}
+      <section className="rounded-xl border border-[#1F1F23] bg-gradient-to-br from-[#12171C] to-[#111113] p-4 sm:p-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="text-[11px] uppercase tracking-[0.14em] text-[#6B6B73]">
@@ -366,7 +368,7 @@ export default function TradeWorkspace(data: WorkspaceData) {
                 ? 'taken so far' : 'booked so far'}
             </div>
             <div className="mt-2 flex flex-wrap items-end gap-x-4 gap-y-1">
-              <div className="font-mono text-[56px] font-semibold leading-none tracking-tight text-[#F5F5F7]">
+              <div className="font-mono text-4xl sm:text-[56px] font-semibold leading-none tracking-tight text-[#F5F5F7]">
                 {money(booked)}
               </div>
               {typeof changePct === 'number' && (
@@ -417,8 +419,10 @@ export default function TradeWorkspace(data: WorkspaceData) {
 
       </section>
 
-      {/* The portal's own money tiles, not a second set drawn beside them. */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      {/* The portal's own money tiles, not a second set drawn beside them.
+          Two-up on a phone: four stacked cards pushed the day's work three
+          screens down, and a tile is a glance, not a destination. */}
+      <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
         {tiles.map((t) => (
           <StatCard
             key={t.label}
