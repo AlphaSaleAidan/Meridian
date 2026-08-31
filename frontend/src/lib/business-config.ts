@@ -564,19 +564,26 @@ const GOLF_COURSE: BusinessProfile = {
     // Index 1 is the line the demo's shrink anomaly names, so it must be a
     // PHYSICAL product — counted stock cannot come up short on a green fee.
     { name: '18 Holes', sku: 'GRN-18', price: 6500, category: 'green fees', popularity: 0.95 },
-    { name: 'Dozen Balls', sku: 'PRO-BAL', price: 3400, category: 'pro shop', popularity: 0.65 },
+    { name: 'Dozen Balls', sku: 'PRO-BAL', price: 3400, category: 'pro shop', popularity: 0.35 },
     { name: 'Twilight Rate', sku: 'GRN-TWI', price: 4200, category: 'green fees', popularity: 0.60 },
     { name: 'Cart Rental', sku: 'CRT-001', price: 2200, category: 'rentals', popularity: 0.90 },
     { name: 'Range Bucket', sku: 'RNG-001', price: 1200, category: 'rentals', popularity: 0.75 },
     { name: 'Club Rental Set', sku: 'CLB-001', price: 4500, category: 'rentals', popularity: 0.20 },
     { name: '9 Holes', sku: 'GRN-09', price: 3800, category: 'green fees', popularity: 0.70 },
-    { name: 'Golf Glove', sku: 'PRO-GLV', price: 2400, category: 'pro shop', popularity: 0.55 },
-    { name: 'Logo Polo', sku: 'PRO-POL', price: 5800, category: 'pro shop', popularity: 0.35 },
+    // Pro-shop popularity kept low on purpose: price x popularity feeds the
+    // revenue split, and a shelf of $58 polos outweighing the grille is not
+    // a split any course operator would recognise.
+    { name: 'Golf Glove', sku: 'PRO-GLV', price: 2400, category: 'pro shop', popularity: 0.30 },
+    { name: 'Logo Polo', sku: 'PRO-POL', price: 5800, category: 'pro shop', popularity: 0.15 },
     { name: 'Logo Windbreaker', sku: 'PRO-WND', price: 8900, category: 'pro shop', popularity: 0.10 },
-    { name: 'Turn Dog & Chips', sku: 'GRL-DOG', price: 950, category: 'grille', popularity: 0.85 },
-    { name: 'Clubhouse Burger', sku: 'GRL-BRG', price: 1600, category: 'grille', popularity: 0.70 },
-    { name: 'Domestic Beer', sku: 'GRL-BER', price: 650, category: 'grille', popularity: 0.80 },
+    { name: 'Turn Dog & Chips', sku: 'GRL-DOG', price: 950, category: 'grille', popularity: 0.95 },
+    { name: 'Clubhouse Burger', sku: 'GRL-BRG', price: 1600, category: 'grille', popularity: 0.80 },
     { name: 'Iced Tea', sku: 'GRL-TEA', price: 400, category: 'grille', popularity: 0.60 },
+    // The bar is its own revenue centre, not a line inside the grille — the
+    // owner watches the two separately and the revenue split renders them so.
+    { name: 'Domestic Beer', sku: 'BAR-BER', price: 650, category: 'bar', popularity: 0.90 },
+    { name: 'Transfusion', sku: 'BAR-TRF', price: 1100, category: 'bar', popularity: 0.55 },
+    { name: 'Seltzer', sku: 'BAR-SLZ', price: 750, category: 'bar', popularity: 0.45 },
   ],
 }
 

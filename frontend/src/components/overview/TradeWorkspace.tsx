@@ -26,6 +26,7 @@ import { AlertTriangle, ChevronLeft, ChevronRight, Plus } from 'lucide-react'
 import type { Booking, BusyBlock, Resource, Service } from '@/lib/bookings-api'
 import type { NichePack } from '@/config/niches'
 import BookingCalendar from '@/components/BookingCalendar'
+import TeeSheet from '@/components/TeeSheet'
 import StatCard from '@/components/StatCard'
 import Top3ActionsPanel from '@/components/Top3ActionsPanel'
 import ForecastChart, { type ForecastPoint } from '@/components/ForecastChart'
@@ -76,6 +77,9 @@ export interface WorkspaceData {
   anomalies?: { title: string; detail: string; row?: string; tone?: 'warn' | 'note' }[]
   /** The fortnight of bookings behind the trend, for the peak-hours heatmap. */
   fortnight?: Booking[]
+  /** Where the money came from, for packs that declare revenueCenters —
+   *  computed by the host, rendered under the revenue chart. */
+  revenueMix?: { label: string; cents: number }[]
   /**
    * A counter trade's day, order by order. Today this is demo-orders'
    * deterministic feed; when the storefront connector exists, real web
@@ -165,7 +169,7 @@ function openWindow(pack: NichePack): [number, number] {
 }
 
 export default function TradeWorkspace(data: WorkspaceData) {
-  const { pack, bookings, resources, busy, timezone, day, onShiftDay, stops, origin, orders } = data
+  const { pack, bookings, resources, busy, timezone, day, onShiftDay, stops, origin, orders, revenueMix } = data
 
   /**
    * Only THIS day.
@@ -470,6 +474,15 @@ export default function TradeWorkspace(data: WorkspaceData) {
               <p className="py-10 text-center text-sm text-[#6B6B73]">
                 Nothing on the book for this day.
               </p>
+            ) : pack.resourceKind === 'tee' ? (
+              <TeeSheet
+                bookings={today}
+                resources={resources}
+                busy={busy}
+                timezone={timezone}
+                openMinutes={[open, close]}
+                services={services}
+              />
             ) : (
               <BookingCalendar
                 bookings={today}
@@ -562,6 +575,15 @@ export default function TradeWorkspace(data: WorkspaceData) {
               <p className="py-10 text-center text-sm text-[#6B6B73]">
                 Nothing on the book for this day.
               </p>
+            ) : pack.resourceKind === 'tee' ? (
+              <TeeSheet
+                bookings={today}
+                resources={resources}
+                busy={busy}
+                timezone={timezone}
+                openMinutes={[open, close]}
+                services={services}
+              />
             ) : (
               <BookingCalendar
                 bookings={today}
@@ -664,6 +686,49 @@ export default function TradeWorkspace(data: WorkspaceData) {
               gradientId="workspace-forecast"
             />
           </div>
+
+          {/* Where it came from — only for the trades that are several
+              businesses under one roof. One stacked bar and the rows behind
+              it; an owner reads a split, not a second chart. */}
+          {revenueMix && revenueMix.length > 0 && (() => {
+            const mixTotal = revenueMix.reduce((s, c) => s + c.cents, 0)
+            if (!mixTotal) return null
+            const COLORS = ['#1A8FD6', '#17C5B0', '#F5A524', '#8dcef2', '#A1A1A8']
+            return (
+              <div className="mt-6 border-t border-[#1F1F23] pt-4">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-[#6B6B73]">
+                  Where it comes from
+                </h3>
+                <div className="mt-3 flex h-2.5 w-full overflow-hidden rounded-full">
+                  {revenueMix.map((c, i) => (
+                    <div
+                      key={c.label}
+                      style={{ width: `${(c.cents / mixTotal) * 100}%`, background: COLORS[i % COLORS.length] }}
+                      title={`${c.label} · ${money(c.cents)}`}
+                    />
+                  ))}
+                </div>
+                <div className="mt-3 grid gap-x-6 gap-y-1.5 sm:grid-cols-2 lg:grid-cols-3">
+                  {revenueMix.map((c, i) => (
+                    <div key={c.label} className="flex items-center gap-2 text-xs">
+                      <span
+                        className="h-2 w-2 shrink-0 rounded-full"
+                        style={{ background: COLORS[i % COLORS.length] }}
+                      />
+                      <span className="text-[#D4D4D8]">{c.label}</span>
+                      <span className="ml-auto font-mono text-[#F5F5F7]">{money(c.cents)}</span>
+                      <span className="w-9 text-right font-mono text-[#6B6B73]">
+                        {Math.round((c.cents / mixTotal) * 100)}%
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-2 text-[10px] text-[#6B6B73]">
+                  Last 14 days, by revenue centre.
+                </p>
+              </div>
+            )
+          })()}
         </section>
       )}
 

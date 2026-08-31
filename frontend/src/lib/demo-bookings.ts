@@ -276,7 +276,11 @@ function seedDay(dayKey: string) {
   const lengths = trade.services.map((x: any) => x.duration + x.buffer)
   const shortest = Math.min(...lengths)
   // Snapped to the quarter hour. Nobody books a car in at 9:46.
-  const step = Math.max(30, Math.round(shortest / 2 / 15) * 15)
+  // A TEE walks at its own interval: groups go off every fifteen minutes and
+  // a sheet seeded at half-hour steps reads as a course nobody plays.
+  const step = trade.resourceKind === 'tee'
+    ? Math.max(15, shortest)
+    : Math.max(30, Math.round(shortest / 2 / 15) * 15)
   const slots: number[] = []
   for (let m = openH * 60 + openM; m + shortest <= closeH * 60; m += step) slots.push(m)
 
@@ -589,7 +593,10 @@ const BUSY: Record<string, [string, number, number][]> = {
   nails: [['Supplier visit', 13, 14]],
   detailing: [['Equipment service', 12, 13]],
   medspa: [['Clinical meeting', 12, 13]],
-  golf: [['Men\'s league block', 7, 9], ['Course maintenance — back nine', 12, 13]],
+  // Evening league and an afternoon maintenance window — the demo seeds its
+  // public play from opening forward, so blocks that sat on the busy morning
+  // drew ON TOP of booked groups. Real courses block these hours anyway.
+  golf: [['Men\'s league block', 17, 19], ['Course maintenance — back nine', 14, 15]],
   other: [],
 }
 

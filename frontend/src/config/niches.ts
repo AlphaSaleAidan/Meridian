@@ -162,6 +162,16 @@ export interface NichePack {
    * that hands the bag across the till has nothing to track after the till.
    */
   ships?: boolean
+
+  /**
+   * Revenue centres, for the trades that are several businesses under one
+   * roof. A golf course's owner does not think in one number — green fees,
+   * the grille, the bar and the pro shop are separate P&Ls in their head,
+   * and a revenue section that cannot say WHERE the money came from is a
+   * restaurant screen wearing a golf shirt. Each centre names the product
+   * categories (business profile vocabulary) that roll up into it.
+   */
+  revenueCenters?: { label: string; categories: string[] }[]
 }
 
 /**
@@ -584,6 +594,13 @@ export const NICHE_PACKS: NichePack[] = [
     avgCoverCents: 7200,
     homeMetric: { label: 'Tee sheet filled today',
                   help: 'Booked tee times against the daylight you have. An empty slot cannot be sold after its time passes.' },
+    revenueCenters: [
+      { label: 'Green fees', categories: ['green fees'] },
+      { label: 'Carts & range', categories: ['rentals'] },
+      { label: 'Grille', categories: ['grille'] },
+      { label: 'Bar', categories: ['bar'] },
+      { label: 'Pro shop', categories: ['pro shop'] },
+    ],
   },
   {
     key: 'peptides',
