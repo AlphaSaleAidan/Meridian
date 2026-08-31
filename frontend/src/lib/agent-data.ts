@@ -1614,6 +1614,9 @@ export const DAY_INTENSITY_BY_TYPE: Record<string, number[]> = {
   fast_food:   [0.80, 0.80, 0.85, 0.85, 1.00, 0.95, 0.85],
   auto_shop:   [1.00, 1.00, 1.00, 1.00, 0.90, 0.40, 0.00],
   smoke_shop:  [0.75, 0.75, 0.80, 0.85, 1.00, 1.00, 0.65],
+  // Weekend game: Saturday is the year's rhythm, Monday is the maintenance
+  // day every golfer knows to avoid.
+  golf_course: [0.70, 0.85, 0.90, 0.95, 1.15, 1.45, 1.35],
 }
 
 export function generateScheduleShifts(weekStartDate: Date): ScheduleShift[] {

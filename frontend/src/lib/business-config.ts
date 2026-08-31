@@ -552,9 +552,14 @@ const GOLF_COURSE: BusinessProfile = {
     60, 55, 50, 55, 60, 50,
     30, 10, 0, 0, 0, 0,
   ],
+  // CALIBRATED TO THE TEE SHEET, not invented: the demo book seeds ~48
+  // starts x ~3.2 players x $72 green fee ≈ $10K of booked play a weekday.
+  // The forecast, margins and insights all scale off these figures, and a
+  // dashed forecast at $5K under a solid $10K of actuals read as "your
+  // revenue is about to halve" — the two must describe the same course.
   revenue: {
-    weekdayMin: 350000, weekdayMax: 600000,
-    weekendMin: 700000, weekendMax: 1100000,
+    weekdayMin: 900000, weekdayMax: 1100000,
+    weekendMin: 1150000, weekendMax: 1450000,
     avgTicketMin: 5500, avgTicketMax: 11000,
   },
   staff: [
