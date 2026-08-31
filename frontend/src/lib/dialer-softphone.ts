@@ -92,18 +92,27 @@ export class TelnyxSoftphone implements Softphone {
   private call: any = null
   private ready: Promise<void>
   private answered = false
+  // The SDK only plays inbound audio through a media element handed to it via
+  // remoteElement — without one the far end hears the rep but the rep hears
+  // nothing.
+  private remoteAudio: HTMLAudioElement
 
   constructor(
     private listener: SoftphoneListener,
     loginToken: string,
     private callerNumber: string,
   ) {
+    this.remoteAudio = document.createElement('audio')
+    this.remoteAudio.autoplay = true
+    this.remoteAudio.style.display = 'none'
+    document.body.appendChild(this.remoteAudio)
     this.ready = this.connect(loginToken)
   }
 
   private async connect(loginToken: string): Promise<void> {
     const { TelnyxRTC } = await import('@telnyx/webrtc')
     this.client = new TelnyxRTC({ login_token: loginToken })
+    this.client.remoteElement = this.remoteAudio
     this.client.on('telnyx.notification', (notification: any) => {
       if (notification?.type !== 'callUpdate' || !notification.call) return
       this.call = notification.call
@@ -114,6 +123,9 @@ export class TelnyxSoftphone implements Softphone {
         this.listener({ type: 'ringing' })
       } else if (state === 'active') {
         this.answered = true
+        // dial() runs off a click, so this play() sits inside a user gesture
+        // chain; the catch covers a browser that still refuses autoplay.
+        this.remoteAudio.play().catch(() => {})
         this.listener({ type: 'answered' })
       } else if (state === 'hangup' || state === 'destroy') {
         const cause = this.answered ? 'remote_hangup' : 'no_answer'
@@ -134,6 +146,7 @@ export class TelnyxSoftphone implements Softphone {
     this.call = this.client.newCall({
       destinationNumber: destinationE164,
       callerNumber: this.callerNumber,
+      remoteElement: this.remoteAudio,
       audio: true,
       video: false,
     })
@@ -151,6 +164,8 @@ export class TelnyxSoftphone implements Softphone {
   destroy(): void {
     try { this.call?.hangup() } catch { /* already down */ }
     try { this.client?.disconnect() } catch { /* already down */ }
+    this.remoteAudio.srcObject = null
+    this.remoteAudio.remove()
     this.client = null
     this.call = null
   }
