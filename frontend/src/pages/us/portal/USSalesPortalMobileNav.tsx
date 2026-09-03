@@ -11,12 +11,14 @@ const PRIMARY_TABS = [
   { path: '/us/portal/dashboard', icon: LayoutDashboard, label: 'Home' },
   { path: '/us/portal/leads', icon: Target, label: 'Leads' },
   { path: '/us/portal/accounts', icon: Building2, label: 'Accounts' },
+  // Team on the bar, not buried in More: recruiting lives behind it, and a
+  // regional manager on a phone couldn't find his applicants (Enoch, 09-03).
+  { path: '/us/portal/team', icon: Users, label: 'Team' },
 ]
 
 const MORE_ITEMS = [
   { path: '/us/portal/auto-dialer', icon: PhoneCall, label: 'Auto Dialer' },
   { path: '/us/portal/training', icon: GraduationCap, label: 'Training' },
-  { path: '/us/portal/team', icon: Users, label: 'Team' },
   { path: '/us/portal/badge', icon: CreditCard, label: 'My Badge' },
   { path: '/us/portal/settings', icon: Settings, label: 'Settings' },
 ]
