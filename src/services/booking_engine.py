@@ -86,6 +86,12 @@ class MerchantBookingSetup:
     # 'native' = we own the calendar; 'provider' = the merchant's own system
     # does and we book into it (src/services/booking_provider_mode.py).
     mode: str = "native"
+    # DEPOSITS (migrations/085): copied from phone_agent_config at load so the
+    # agent can quote the amount and policy without another query on the
+    # assistant hot path (tests/test_vapi_hotpath_perf.py counts queries).
+    deposits_enabled: bool = False
+    deposit_policy: str = ""
+    deposit_hold_minutes: int = 60
 
 
 def resolve_timezone(tz_name: str | None) -> tuple[ZoneInfo, str]:
@@ -108,7 +114,10 @@ def resolve_timezone(tz_name: str | None) -> tuple[ZoneInfo, str]:
 
 async def load_setup(merchant_id: str, tz_name: str | None,
                      noun: str = "reservation",
-                     mode: str = "native") -> MerchantBookingSetup:
+                     mode: str = "native",
+                     deposits_enabled: bool = False,
+                     deposit_policy: str = "",
+                     deposit_hold_minutes: int = 60) -> MerchantBookingSetup:
     store = get_booking_store()
     tz, resolved = resolve_timezone(tz_name)
     resources = await store.list_resources(merchant_id)
@@ -120,6 +129,9 @@ async def load_setup(merchant_id: str, tz_name: str | None,
         resources=resources, services=services, hours=hours,
         pacing=pacing, noun=noun or "reservation",
         mode=(mode or "native"),
+        deposits_enabled=bool(deposits_enabled),
+        deposit_policy=(deposit_policy or "").strip(),
+        deposit_hold_minutes=int(deposit_hold_minutes or 60),
     )
 
 

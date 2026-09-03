@@ -483,6 +483,65 @@ async def create_website_checkout(
     )
 
 
+async def create_deposit_checkout(
+    booking: dict[str, Any],
+    merchant_config,
+    cents: int,
+    success_url: str = "",
+    cancel_url: str = "",
+) -> dict:
+    """Stripe-ONLY checkout for a booking deposit. Like create_website_checkout
+    it raises instead of degrading — there is no POS page a deposit could fall
+    back to, and a dead link texted to a caller is worse than no deposit.
+
+    One line item at the exact amount the booking recorded (the amount was
+    COPIED onto the booking at reserve time — src/services/booking_deposits.py),
+    a destination charge when the merchant is onboarded, and NO application
+    fee: the deposit is the merchant's money, held against the visit, and
+    comes off the bill on the day. The session carries kind=deposit +
+    booking_id — the Connect webhook flips deposit_status to 'held' on
+    checkout.session.completed. metadata deliberately does NOT carry
+    caller_phone: that key is what routes the webhook's phone-order receipt
+    SMS, and a deposit must never text an order receipt."""
+    if not (UNIFIED_PAYMENTS_ENABLED and _active_stripe_key()):
+        raise RuntimeError("stripe_not_configured")
+    if cents <= 0:
+        raise ValueError("deposit must be a positive amount")
+    merchant_id = str(booking.get("merchant_id") or "")
+    currency = await _merchant_currency(merchant_id)
+    business = (getattr(merchant_config, "business_name", "") or "").strip()
+    kwargs: dict[str, Any] = dict(
+        mode="payment",
+        line_items=[{"quantity": 1, "price_data": {
+            "currency": currency,
+            "unit_amount": int(cents),
+            "product_data": {
+                "name": f"Booking deposit — {business}" if business else "Booking deposit",
+            },
+        }}],
+        success_url=success_url or SUCCESS_URL,
+        cancel_url=cancel_url or CANCEL_URL,
+        client_reference_id=str(booking.get("id") or merchant_id),
+        metadata={
+            "kind": "deposit",
+            "booking_id": str(booking.get("id") or ""),
+            "merchant_id": merchant_id,
+        },
+    )
+    connect_account = _connect_destination(merchant_config)
+    if connect_account:
+        kwargs["payment_intent_data"] = {
+            "transfer_data": {"destination": connect_account},
+            "on_behalf_of": connect_account,
+        }
+    stripe = _stripe()
+    session = stripe.checkout.Session.create(api_key=_active_stripe_key(), **kwargs)
+    logger.info("Stripe deposit checkout %s (%s) for booking %s (%d¢ %s)",
+                session["id"], "connect" if connect_account else "platform",
+                booking.get("id"), cents, currency.upper())
+    return {"url": session["url"], "method": "stripe", "session_id": session["id"]}
+
+
 async def _merchant_currency(merchant_id: str) -> str:
     """Charge currency for a merchant, derived from its billing terms'
     source_market ('us' → usd, else cad). Fails open to 'cad' (the historical

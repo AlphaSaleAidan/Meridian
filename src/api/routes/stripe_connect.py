@@ -402,8 +402,29 @@ async def connect_webhook(request: Request):
         pos_order_id = meta.get("pos_order_id", "")
         caller_phone = meta.get("caller_phone", "")
         website_order_id = meta.get("website_order_id", "")
+        deposit_booking_id = meta.get("booking_id", "") if meta.get("kind") == "deposit" else ""
         txn = obj.get("payment_intent") or obj.get("id", "")
-        if website_order_id:
+        if deposit_booking_id:
+            # Booking deposit paid → the booking is genuinely confirmed. Only
+            # on the canonical single event (same double-fire reasoning as the
+            # phone-order gate below); mark_paid is a plain column write, so a
+            # webhook retry lands on the same values.
+            if etype == "checkout.session.completed":
+                try:
+                    from ...services.booking_deposits import get_deposit_service
+                    booking = await get_deposit_service().mark_paid(
+                        deposit_booking_id, payment_intent=str(txn))
+                    logger.info("Deposit paid → booking %s held", deposit_booking_id)
+                    phone = ((booking or {}).get("customer_phone") or "").strip()
+                    if phone:
+                        from src.sms.client import send_sms
+                        await send_sms(phone, (
+                            "Deposit received — your booking is confirmed. "
+                            "See you then!"))
+                except Exception as e:  # noqa: BLE001 — webhook must still 200
+                    logger.error("deposit mark_paid failed for %s: %s",
+                                 deposit_booking_id, e)
+        elif website_order_id:
             # Mobile/website order: payment is the gate — mark paid and release
             # the kitchen ticket (dispatched as PAID). Idempotent inside.
             try:
@@ -444,7 +465,7 @@ async def connect_webhook(request: Request):
         # payment_intent.succeeded can't double-send; the helper is also
         # idempotent on the order id so a webhook retry (or the streaming path
         # already having sent) never double-texts.
-        if etype == "checkout.session.completed" and caller_phone:
+        if etype == "checkout.session.completed" and caller_phone and not deposit_booking_id:
             try:
                 from merchant_config import get_merchant_config, _demo_config
                 from order_receipt import ReceiptClaim, send_order_receipt
@@ -490,7 +511,10 @@ async def connect_webhook(request: Request):
         # for the same order and would double-post under a different ref.
         # Phone orders only — website orders take their fee as a checkout line /
         # application fee, so a ledger credit would double-count that revenue.
-        if etype == "checkout.session.completed" and merchant_id and not website_order_id:
+        # (deposits excluded too — a deposit is the merchant's own money with
+        # no Meridian fee, so crediting our ledger would invent revenue)
+        if (etype == "checkout.session.completed" and merchant_id
+                and not website_order_id and not deposit_booking_id):
             fee_cents = await _merchant_service_fee_cents(merchant_id)
             if fee_cents > 0:
                 try:

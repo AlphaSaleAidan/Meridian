@@ -28,14 +28,45 @@ from src.services import booking_deposits as dep  # noqa: E402
 class StubStore:
     def __init__(self):
         self.updates: list[tuple[str, dict]] = []
+        self.cancelled: list[tuple[str, str]] = []
         self.rows: list[dict] = []
+        self.cfg_rows: list[dict] = []
 
     async def update_booking(self, booking_id, fields):
         self.updates.append((booking_id, fields))
         return {"id": booking_id, **fields}
 
+    async def cancel_booking(self, booking_id, reason=""):
+        self.cancelled.append((booking_id, reason))
+        return {"id": booking_id, "status": "cancelled"}
+
     async def _req(self, method, table, params=None, json=None, **kw):
+        if table == "phone_agent_config":
+            return self.cfg_rows
         return self.rows
+
+
+def _stub_module(monkeypatch, name: str, **attrs):
+    """Install a fake flat-import module (the phone rail is imported flat —
+    `from payment_links import ...` — so tests provide it via sys.modules)."""
+    import types
+    mod = types.ModuleType(name)
+    for key, value in attrs.items():
+        setattr(mod, key, value)
+    monkeypatch.setitem(sys.modules, name, mod)
+    return mod
+
+
+def _stub_checkout_rail(monkeypatch, url="https://checkout.stripe.com/c/pay/cs_test_1"):
+    async def fake_get_config(merchant_id):
+        return object()
+
+    async def fake_checkout(booking, cfg, cents, **kw):
+        return {"url": url, "method": "stripe", "session_id": "cs_test_1"}
+
+    _stub_module(monkeypatch, "merchant_config", get_merchant_config=fake_get_config)
+    _stub_module(monkeypatch, "payment_links", create_deposit_checkout=fake_checkout)
+    return url
 
 
 @pytest.fixture
@@ -90,7 +121,7 @@ def test_spoken_line_names_the_amount_and_the_policy():
 # ── asking ──────────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
-async def test_requesting_marks_the_booking_and_texts(svc, monkeypatch):
+async def test_requesting_marks_the_booking_and_texts_the_stripe_link(svc, monkeypatch):
     sent: list[tuple[str, str]] = []
 
     async def fake_send(phone, message):
@@ -99,19 +130,15 @@ async def test_requesting_marks_the_booking_and_texts(svc, monkeypatch):
 
     import src.sms.client as sms
     monkeypatch.setattr(sms, "send_sms", fake_send)
-
-    class Links:
-        async def record_send(self, *a, **kw):
-            return {"id": "row-1", "code": "abc1234"}
-
-    monkeypatch.setattr("src.services.booking_links.get_link_service", lambda: Links())
-    monkeypatch.setenv("API_PUBLIC_URL", "https://api.test")
+    url = _stub_checkout_rail(monkeypatch)
 
     out = await svc.request(_booking(), 5000)
     assert out["sent"] is True
+    assert out["url"] == url
     assert svc.store.updates[0][1]["deposit_status"] == "requested"
     assert svc.store.updates[0][1]["deposit_cents"] == 5000
     assert "$50" in sent[0][1]
+    assert url in sent[0][1]
 
 
 @pytest.mark.asyncio
@@ -123,12 +150,50 @@ async def test_zero_deposit_asks_for_nothing(svc):
 
 
 @pytest.mark.asyncio
-async def test_no_phone_leaves_it_requested_not_paid(svc):
-    """A booking we cannot chase must not quietly read as settled."""
+async def test_no_phone_requests_nothing(svc):
+    """With no way to deliver the link, nothing is requested — a 'requested'
+    row the customer never heard about would be cancelled by the sweep
+    through no fault of theirs."""
     out = await svc.request(_booking(customer_phone=""), 5000)
     assert out["sent"] is False
     assert out["reason"] == "no_phone"
+    assert svc.store.updates == []
+
+
+@pytest.mark.asyncio
+async def test_no_checkout_no_request_never_a_dead_link(svc, monkeypatch):
+    """Stripe down → the deposit is skipped entirely, the booking untouched.
+    The old /pay/deposit fallback texted a URL with no page behind it."""
+    async def fake_get_config(merchant_id):
+        return object()
+
+    async def broken_checkout(booking, cfg, cents, **kw):
+        raise RuntimeError("stripe_not_configured")
+
+    _stub_module(monkeypatch, "merchant_config", get_merchant_config=fake_get_config)
+    _stub_module(monkeypatch, "payment_links", create_deposit_checkout=broken_checkout)
+
+    out = await svc.request(_booking(), 5000)
+    assert out["sent"] is False
+    assert out["reason"] == "checkout_unavailable"
+    assert svc.store.updates == []
+
+
+@pytest.mark.asyncio
+async def test_unsendable_sms_waives_instead_of_arming_the_sweep(svc, monkeypatch):
+    """The link never reached them, so the sweep must not cancel their
+    booking over a deposit they were never asked for."""
+    async def fake_send(phone, message):
+        return {"sent": False, "reason": "carrier_rejected"}
+
+    import src.sms.client as sms
+    monkeypatch.setattr(sms, "send_sms", fake_send)
+    _stub_checkout_rail(monkeypatch)
+
+    out = await svc.request(_booking(), 5000)
+    assert out["sent"] is False
     assert svc.store.updates[0][1]["deposit_status"] == "requested"
+    assert svc.store.updates[1][1]["deposit_status"] == "waived"
 
 
 # ── taking and giving back ──────────────────────────────────────────────
@@ -164,9 +229,66 @@ async def test_releasing_nothing_is_not_an_error(svc):
 
 @pytest.mark.asyncio
 async def test_expired_requests_are_returned_not_acted_on(svc):
-    """The sweep reports; a human decides whether the slot goes back."""
+    """The query reports; the sweep decides whether the slot goes back."""
     svc.store.rows = [{"id": "bk-9", "deposit_status": "requested"}]
     rows = await svc.expired_requests(60)
     assert rows and rows[0]["id"] == "bk-9"
     # Nothing was cancelled, captured or written.
     assert svc.store.updates == []
+
+
+# ── the sweep ───────────────────────────────────────────────────────────
+
+def _stub_sweep_aftermath(monkeypatch, sms_log=None):
+    async def noop(*a, **kw):
+        return {}
+
+    async def fake_send(phone, message):
+        if sms_log is not None:
+            sms_log.append((phone, message))
+        return {"sent": True}
+
+    _stub_module(monkeypatch, "src.services.booking_sync", withdraw_booking=noop)
+    _stub_module(monkeypatch, "src.services.booking_waitlist", recover_slot=noop)
+    import src.sms.client as sms
+    monkeypatch.setattr(sms, "send_sms", fake_send)
+
+
+@pytest.mark.asyncio
+async def test_sweep_releases_only_past_the_merchants_own_window(svc, monkeypatch):
+    """One merchant holds 30 minutes, the other the 60-minute default. A row
+    40 minutes old is released for the first and kept for the second."""
+    now = datetime(2026, 9, 3, 12, 0, tzinfo=timezone.utc)
+    stale = (now - timedelta(minutes=40)).isoformat()
+    svc.store.rows = [
+        {"id": "bk-a", "merchant_id": "m-short", "deposit_status": "requested",
+         "deposit_requested_at": stale, "customer_phone": "+16045550100"},
+        {"id": "bk-b", "merchant_id": "m-long", "deposit_status": "requested",
+         "deposit_requested_at": stale, "customer_phone": "+16045550101"},
+    ]
+    svc.store.cfg_rows = [{"merchant_id": "m-short", "deposit_hold_minutes": 30}]
+    texts: list[tuple[str, str]] = []
+    _stub_sweep_aftermath(monkeypatch, texts)
+
+    out = await dep.run_deposit_sweep(now=now)
+    assert out == {"released": 1, "kept": 1}
+    assert svc.store.cancelled == [("bk-a", "deposit not paid in time")]
+    assert svc.store.updates[0][1]["deposit_status"] == "failed"
+    assert texts and texts[0][0] == "+16045550100"
+
+
+@pytest.mark.asyncio
+async def test_sweep_never_captures(svc, monkeypatch):
+    """Releasing a slot is not taking money — the sweep must never write
+    'captured'; that word is reserved for an explicit human no-show."""
+    now = datetime(2026, 9, 3, 12, 0, tzinfo=timezone.utc)
+    svc.store.rows = [
+        {"id": "bk-a", "merchant_id": "m1", "deposit_status": "requested",
+         "deposit_requested_at": (now - timedelta(hours=3)).isoformat(),
+         "customer_phone": ""},
+    ]
+    _stub_sweep_aftermath(monkeypatch)
+
+    await dep.run_deposit_sweep(now=now)
+    assert all(f.get("deposit_status") != "captured"
+               for _, f in svc.store.updates)

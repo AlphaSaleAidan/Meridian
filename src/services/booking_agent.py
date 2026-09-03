@@ -305,6 +305,16 @@ async def handle_book(args: dict, setup: be.MerchantBookingSetup,
                         "now, so I haven't booked anything. Could you try us "
                         "again in a few minutes?")
 
+    # The deposit amount is decided NOW, from the service the booking is made
+    # against, and copied onto the row — a merchant who raises their deposit on
+    # Monday has not changed what this caller agreed to. Provider mode never
+    # reaches here (the merchant's own system owns money and calendar alike).
+    deposit_cents = 0
+    if getattr(setup, "deposits_enabled", False):
+        from src.services import booking_deposits as deposits
+        deposit_cents = deposits.required_cents(
+            be.select_service(setup, party_size, args.get("service_id") or None))
+
     try:
         row = await be.reserve(
             setup, start_utc, party_size, name,
@@ -313,6 +323,7 @@ async def handle_book(args: dict, setup: be.MerchantBookingSetup,
             service_id=args.get("service_id") or None,
             source="phone",
             vapi_call_id=vapi_call_id,
+            extra={"deposit_cents": deposit_cents} if deposit_cents > 0 else None,
         )
     except be.BookingClosed:
         return "We're closed at that time. Would another time work?"
@@ -330,7 +341,17 @@ async def handle_book(args: dict, setup: be.MerchantBookingSetup,
     # the push is a convenience copy, so it is fire-and-forget by design.
     _spawn_push(setup.merchant_id, row)
 
-    return _confirmation(name, row, day, party_size, at)
+    say = _confirmation(name, row, day, party_size, at)
+    if deposit_cents > 0:
+        # Same hot-path rule as the push: the Stripe round trip and the SMS
+        # happen off the line. The agent quotes the amount now; the link lands
+        # a moment later. If the link can't be minted the deposit is waived,
+        # never the booking lost — so saying the sentence first is honest.
+        from src.services import booking_deposits as deposits
+        _spawn_deposit_request(row, deposit_cents)
+        say += " " + deposits.describe(
+            deposit_cents, getattr(setup, "deposit_policy", ""))
+    return say
 
 
 def _confirmation(name: str, row: dict, day: date_cls, party_size: int,
@@ -400,6 +421,29 @@ def _spawn_withdraw(merchant_id: str, row: dict) -> None:
             await withdraw_booking(merchant_id, row)
         except Exception as e:  # noqa: BLE001
             logger.warning("background booking withdraw failed: %s", e)
+
+    try:
+        asyncio.get_running_loop().create_task(_run())
+    except RuntimeError:
+        pass
+
+
+def _spawn_deposit_request(row: dict, cents: int) -> None:
+    """Mint the Stripe deposit checkout and text it, off the hot path.
+
+    Same fire-and-forget contract as _spawn_push: the booking is already
+    committed and the caller has been quoted the amount; a payment-rail
+    failure downgrades to a waived deposit inside the service, never to an
+    error the caller hears.
+    """
+    import asyncio
+
+    async def _run():
+        try:
+            from src.services.booking_deposits import get_deposit_service
+            await get_deposit_service().request(row, cents)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("background deposit request failed: %s", e)
 
     try:
         asyncio.get_running_loop().create_task(_run())

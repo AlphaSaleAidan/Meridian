@@ -134,6 +134,14 @@ class MerchantPhoneConfig:
     # which is theirs to opt into.
     waitlist_enabled: bool = False
     waitlist_offer_minutes: int = 15
+    # DEPOSITS (migrations/085). Off by default; when on, a bookable service
+    # with deposit_cents/percent set gets its deposit asked for by texted
+    # Stripe link at booking time. deposit_policy is the sentence the agent
+    # says with the amount; the hold window is how long an unpaid deposit may
+    # keep the slot before the sweep releases it.
+    deposits_enabled: bool = False
+    deposit_policy: str = ""
+    deposit_hold_minutes: int = 60
     # Agent personality (formality/upsell/humor/custom phrases/brand keywords)
     # set in Phone Orders settings; rendered into the live system prompt.
     personality: dict | None = None
@@ -409,6 +417,9 @@ async def get_merchant_config(merchant_id: str) -> Optional[MerchantPhoneConfig]
             booking_noun=(row.get("booking_noun") or "reservation").strip() or "reservation",
             waitlist_enabled=bool(row.get("waitlist_enabled")),
             waitlist_offer_minutes=int(row.get("waitlist_offer_minutes") or 15),
+            deposits_enabled=bool(row.get("deposits_enabled")),
+            deposit_policy=(row.get("deposit_policy") or "").strip(),
+            deposit_hold_minutes=int(row.get("deposit_hold_minutes") or 60),
             personality=row.get("personality") or None,
             # Default to pay_now if the column is missing/null (anti-scam default).
             payment_mode=_norm_payment_mode(row.get("payment_mode")),

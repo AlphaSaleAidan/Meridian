@@ -82,6 +82,34 @@ class DepositService:
         if cents <= 0:
             return {"sent": False, "url": "", "reason": "no_deposit_required"}
 
+        phone = (booking.get("customer_phone") or "").strip()
+        if not phone:
+            # Nothing to send the link to, so nothing is requested — asking
+            # for money with no way to pay it would only feed the sweep a
+            # booking it will cancel through no fault of the customer's.
+            return {"sent": False, "url": "", "reason": "no_phone"}
+
+        # A REAL payable link or no request at all. The checkout session is
+        # what /pay/deposit was always meant to become: if Stripe cannot mint
+        # one, the deposit is quietly waived rather than texting a dead page
+        # or holding the customer's slot hostage to our outage. The customer
+        # gets the Stripe URL directly (the same direct-link doctrine as
+        # phone-order pay links).
+        pay_url = ""
+        try:
+            from merchant_config import get_merchant_config
+            from payment_links import create_deposit_checkout
+
+            cfg = await get_merchant_config(str(booking.get("merchant_id") or ""))
+            if cfg:
+                checkout = await create_deposit_checkout(booking, cfg, cents)
+                pay_url = str(checkout.get("url") or "")
+        except Exception as e:  # noqa: BLE001 — a booking is never lost to a payment hiccup
+            logger.warning("deposit checkout not created for %s: %s",
+                           booking.get("id"), e)
+        if not pay_url:
+            return {"sent": False, "url": "", "reason": "checkout_unavailable"}
+
         now = datetime.now(timezone.utc).isoformat(timespec="seconds")
         try:
             await self._store.update_booking(str(booking["id"]), {
@@ -94,31 +122,6 @@ class DepositService:
                            booking.get("id"), e)
             return {"sent": False, "url": "", "reason": "store_failed"}
 
-        phone = (booking.get("customer_phone") or "").strip()
-        if not phone:
-            # Nothing to send to. The booking stays 'requested' rather than
-            # being quietly treated as paid.
-            return {"sent": False, "url": "", "reason": "no_phone"}
-
-        from src.services.booking_links import get_link_service, link_url_for
-
-        pay_url = ""
-        try:
-            service = get_link_service()
-            row = await service.record_send(
-                booking.get("merchant_id") or "",
-                _pay_target(booking),
-                to_phone=phone,
-                vapi_call_id=booking.get("vapi_call_id") or "",
-            )
-            if row:
-                pay_url = link_url_for(row["code"], request_base)
-        except Exception as e:  # noqa: BLE001
-            logger.warning("deposit link not recorded for %s: %s", booking.get("id"), e)
-
-        if not pay_url:
-            pay_url = _pay_target(booking)
-
         from src.sms.client import send_sms
 
         amount = f"${cents // 100}" if cents % 100 == 0 else f"${cents / 100:.2f}"
@@ -130,6 +133,20 @@ class DepositService:
         except Exception as e:  # noqa: BLE001
             logger.warning("deposit SMS crashed for %s: %s", booking.get("id"), e)
             result = {"sent": False, "reason": str(e)}
+
+        if not result.get("sent"):
+            # The link never reached them, so the sweep must not cancel the
+            # booking over an unpaid deposit they were never asked for. Waive
+            # it: the booking stands, the merchant collects in person.
+            try:
+                await self._store.update_booking(str(booking["id"]), {
+                    "deposit_status": "waived",
+                    "deposit_resolved_at":
+                        datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                })
+            except BookingStoreError:
+                logger.warning("could not waive unsendable deposit for %s",
+                               booking.get("id"))
 
         return {
             "sent": bool(result.get("sent")),
@@ -196,16 +213,90 @@ class DepositService:
         return rows or []
 
 
-def _pay_target(booking: dict) -> str:
-    """Where the deposit link points.
+async def run_deposit_sweep(*, now: datetime | None = None) -> dict:
+    """Release bookings whose deposit link was never paid inside the merchant's
+    hold window — the module's second property, enforced: an unpaid booking
+    holds the slot for deposit_hold_minutes and no longer.
 
-    Deliberately a function rather than a constant: this is the seam where a
-    real Stripe Checkout session URL goes once the payment side is wired, and
-    keeping it in one place stops a half-built payment flow leaking into three.
+    Releasing is NOT taking money (capture stays no-show-only); it returns the
+    slot to inventory, takes the ghost off the merchant's calendar, offers the
+    slot to the waitlist, and tells the customer — who was told at request time
+    the booking was held pending payment.
     """
-    import os
-    base = (os.environ.get("PUBLIC_PAY_BASE") or "https://api.meridian.tips").rstrip("/")
-    return f"{base}/pay/deposit/{booking.get('id')}"
+    now = now or datetime.now(timezone.utc)
+    svc = get_deposit_service()
+
+    # Widest net first (the schema's 5-minute floor); each row is then judged
+    # against its own merchant's window.
+    rows = await svc.expired_requests(5, now=now)
+    if not rows:
+        return {"released": 0, "kept": 0}
+
+    merchant_ids = sorted({str(r.get("merchant_id")) for r in rows if r.get("merchant_id")})
+    holds: dict[str, int] = {}
+    try:
+        cfg_rows = await svc._store._req(
+            "GET", "phone_agent_config",
+            params={
+                "merchant_id": f"in.({','.join(merchant_ids)})",
+                "select": "merchant_id,deposit_hold_minutes",
+            },
+        ) or []
+        holds = {str(c["merchant_id"]): int(c.get("deposit_hold_minutes") or 60)
+                 for c in cfg_rows}
+    except Exception as e:  # noqa: BLE001 — fall back to the 60-minute default
+        logger.warning("deposit sweep could not read hold windows: %s", e)
+
+    from src.services.booking_engine import _parse_ts
+
+    released = 0
+    kept = 0
+    for row in rows:
+        merchant_id = str(row.get("merchant_id") or "")
+        hold = holds.get(merchant_id, 60)
+        requested_at = _parse_ts(row.get("deposit_requested_at"))
+        if not requested_at or now - requested_at < timedelta(minutes=hold):
+            kept += 1
+            continue
+
+        try:
+            await svc._store.cancel_booking(
+                str(row["id"]), reason="deposit not paid in time")
+            await svc._store.update_booking(str(row["id"]), {
+                "deposit_status": "failed",
+                "deposit_resolved_at": now.isoformat(timespec="seconds"),
+            })
+        except Exception as e:  # noqa: BLE001 — skip, retry next sweep
+            logger.warning("deposit sweep could not release %s: %s", row.get("id"), e)
+            continue
+
+        # Same aftermath as any other cancellation: off their calendar, slot to
+        # the waitlist. Each best-effort — the release itself already stands.
+        try:
+            from src.services.booking_sync import withdraw_booking
+            await withdraw_booking(merchant_id, row)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("deposit sweep withdraw failed for %s: %s", row.get("id"), e)
+        try:
+            from src.services.booking_waitlist import recover_slot
+            await recover_slot(merchant_id, row)
+        except Exception as e:  # noqa: BLE001
+            logger.warning("deposit sweep recovery failed for %s: %s", row.get("id"), e)
+
+        phone = (row.get("customer_phone") or "").strip()
+        if phone:
+            try:
+                from src.sms.client import send_sms
+                await send_sms(phone, (
+                    "We didn't receive your deposit in time, so your booking "
+                    "was released. Call us back any time to rebook."))
+            except Exception as e:  # noqa: BLE001
+                logger.warning("deposit release SMS failed for %s: %s", row.get("id"), e)
+
+        released += 1
+
+    logger.info("deposit sweep: released=%d kept=%d", released, kept)
+    return {"released": released, "kept": kept}
 
 
 _service: DepositService | None = None
