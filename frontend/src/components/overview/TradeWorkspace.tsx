@@ -474,11 +474,13 @@ export default function TradeWorkspace(data: WorkspaceData) {
                 instead of the map of where its drivers actually are. */}
             {pack.travels && routeStops.length > 0 && origin ? (
               <RouteDay stops={routeStops} origin={origin} timezone={timezone}
-                        stopOverheadMin={pack.bookingNoun === 'delivery' ? 2 : undefined} />
+                        stopOverheadMin={pack.bookingNoun === 'delivery' ? 2 : undefined}
+                        paymentLinks={pack.paymentLinks} />
             ) : !pack.booksAtAll ? (
               orders && orders.length > 0 ? <OrdersDay orders={orders} /> : <PhoneVolume />
             ) : pack.travels && stops && origin ? (
-              <RouteDay stops={stops} origin={origin} timezone={timezone} />
+              <RouteDay stops={stops} origin={origin} timezone={timezone}
+                        paymentLinks={pack.paymentLinks} />
             ) : live.length === 0 ? (
               <p className="py-10 text-center text-sm text-[#6B6B73]">
                 Nothing on the book for this day.
@@ -576,11 +578,13 @@ export default function TradeWorkspace(data: WorkspaceData) {
                 instead of the map of where its drivers actually are. */}
             {pack.travels && routeStops.length > 0 && origin ? (
               <RouteDay stops={routeStops} origin={origin} timezone={timezone}
-                        stopOverheadMin={pack.bookingNoun === 'delivery' ? 2 : undefined} />
+                        stopOverheadMin={pack.bookingNoun === 'delivery' ? 2 : undefined}
+                        paymentLinks={pack.paymentLinks} />
             ) : !pack.booksAtAll ? (
               orders && orders.length > 0 ? <OrdersDay orders={orders} /> : <PhoneVolume />
             ) : pack.travels && stops && origin ? (
-              <RouteDay stops={stops} origin={origin} timezone={timezone} />
+              <RouteDay stops={stops} origin={origin} timezone={timezone}
+                        paymentLinks={pack.paymentLinks} />
             ) : live.length === 0 ? (
               <p className="py-10 text-center text-sm text-[#6B6B73]">
                 Nothing on the book for this day.

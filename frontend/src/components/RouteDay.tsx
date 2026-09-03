@@ -22,6 +22,7 @@ import { useState } from 'react'
 import { AlertTriangle, Car, Clock3, MapPin, Navigation } from 'lucide-react'
 import { bookingsApi, type Booking } from '@/lib/bookings-api'
 import RouteMap from '@/components/RouteMap'
+import SendPaymentLink from '@/components/SendPaymentLink'
 
 export interface Stop {
   booking: Booking
@@ -79,6 +80,7 @@ const LATE_OPTIONS = [15, 30, 45]
 
 export default function RouteDay({
   stops, origin, timezone, onSelect, stopOverheadMin = STOP_OVERHEAD_MIN,
+  paymentLinks = false,
 }: {
   stops: Stop[]
   origin: RouteOrigin
@@ -88,6 +90,9 @@ export default function RouteDay({
    *  over a box. Six versus two is the difference between a believable run
    *  and an hour of phantom driving. */
   stopOverheadMin?: number
+  /** Pack-driven (pack.paymentLinks): a per-stop "Send payment link" action
+   *  for trades that get paid in a driveway rather than at a till. */
+  paymentLinks?: boolean
 }) {
   /**
    * "Running late" per stop.
@@ -313,6 +318,8 @@ export default function RouteDay({
                     Arriving late — notify customer
                   </button>
                 )}
+
+                {paymentLinks && <SendPaymentLink bookingId={stop.booking.id} />}
               </div>
             </li>
           ))}

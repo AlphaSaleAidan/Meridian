@@ -151,6 +151,15 @@ export interface NichePack {
   travels?: boolean
 
   /**
+   * True for trades where the operator sends the customer the bill — a
+   * "Send payment link" action on each booking, riding the same rail phone
+   * orders settle through. A trade with a till does not need it; a trade
+   * standing in a driveway with wet hands does. Data, not a screen: turning
+   * it on for another trade is one line here.
+   */
+  paymentLinks?: boolean
+
+  /**
    * Where a COUNTER trade's orders come from, most common first. Drives the
    * channel chip on the day's order list — a smoke shop's orders walk in, an
    * online store's arrive through the site. Defaults to counter + phone.
@@ -214,6 +223,9 @@ export const NICHE_PACKS: NichePack[] = [
     pillarOrder: ['bookings', 'phone', '', 'inventory', 'schedule'],
     homeMetric: { label: 'Chair hours filled today',
                   help: 'Booked minutes against the hours your chairs are open.' },
+    // Card-on-file culture without the card machine contract: the cut ends,
+    // the client gets the bill by text while they check the mirror.
+    paymentLinks: true,
   },
   {
     key: 'nails',
@@ -249,6 +261,8 @@ export const NICHE_PACKS: NichePack[] = [
     pillarOrder: ['bookings', 'phone', '', 'inventory', 'schedule'],
     homeMetric: { label: 'Clients rebooked before they left',
                   help: 'The cheapest appointment you will ever sell is the next one.' },
+    // Wet nails cannot open a purse. Pay-by-text is the trade's native rail.
+    paymentLinks: true,
   },
   {
     key: 'detailing',
@@ -279,6 +293,9 @@ export const NICHE_PACKS: NichePack[] = [
     pillarOrder: ['bookings', 'phone', '', 'inventory'],
     homeMetric: { label: 'Bay hours sold today',
                   help: 'A bay standing empty is the only thing that costs you money.' },
+    // Big tickets, and the customer is rarely standing there when the job
+    // finishes — the bill goes to wherever they are.
+    paymentLinks: true,
   },
   {
     // Split from shop detailing on purpose. They look like one trade and are
@@ -314,6 +331,9 @@ export const NICHE_PACKS: NichePack[] = [
     homeMetric: { label: 'Stops on today\'s route',
                   help: 'Not how many you booked — how many you can actually reach.' },
     travels: true,
+    // The whole trade is paid in a driveway. "I'll Venmo you?" is the
+    // competitor this button removes.
+    paymentLinks: true,
   },
   {
     key: 'restaurant',
@@ -448,6 +468,9 @@ export const NICHE_PACKS: NichePack[] = [
     pillarOrder: ['bookings', 'phone', '', 'inventory', 'schedule'],
     homeMetric: { label: 'Consultations booked this week',
                   help: 'A consultation is the start of a treatment plan, not a single sale.' },
+    // The highest tickets of any trade here, already sold on a deposits
+    // culture — the balance goes by text the moment the treatment ends.
+    paymentLinks: true,
   },
   {
     key: 'coffeeshop',
@@ -518,6 +541,9 @@ export const NICHE_PACKS: NichePack[] = [
     // a tile underneath.
     homeMetric: { label: 'Vehicles through the bays today',
                   help: 'A repair shop is paid per vehicle, and a bay standing empty at 10am is a job that never arrives.' },
+    // "Your car is ready" and the bill travel in the same text — the customer
+    // pays before they drive over, and pickup is keys, not a queue.
+    paymentLinks: true,
   },
   {
     key: 'smokeshop',

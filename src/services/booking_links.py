@@ -271,6 +271,112 @@ def compose_running_late(business_name: str, minutes: int, booking_label: str = 
     )
 
 
+def compose_payment_link(business_name: str, label: str,
+                         amount_cents: int, url: str) -> str:
+    """The text a customer gets when the shop sends them the bill.
+
+    Says the three things that make someone tap a link from an unknown
+    number: who it is, what it is for, and how much. A bare URL is spam;
+    "$220 for your Full detail" is a receipt.
+    """
+    who = (business_name or "").strip()
+    lead = f"{who}: " if who else ""
+    what = f" for your {label}" if label else ""
+    amount = (f"${amount_cents // 100}" if amount_cents % 100 == 0
+              else f"${amount_cents / 100:.2f}")
+    return f"{lead}here is your payment link{what} — {amount}. Pay here: {url}"
+
+
+async def text_payment_link(
+    config,
+    booking: dict,
+    amount_cents: int,
+    *,
+    request_base: str = "",
+) -> dict:
+    """Create a checkout for a booking and text the customer the link.
+
+    RIDES THE PHONE-ORDER PAYMENT RAIL (services/phone_agent/payment_links)
+    via create_checkout — the MEDIATED entry point, not the per-POS one.
+    Meridian sits in the middle exactly as it does for phone orders: with
+    unified payments on, the customer pays a Stripe hosted checkout that
+    destination-charges the merchant's connected account and takes Meridian's
+    application fee in transit; a merchant not yet onboarded for Connect gets
+    a direct charge on the platform account so the link still works. Only
+    when unified payments are off does it degrade to the per-POS link the
+    phone rail would use too. A second checkout implementation for bookings
+    would be a second place for money bugs to live.
+
+    Returns {"sent": bool, "url": str, "reason": str} and NEVER raises. The
+    url is returned even when the SMS fails or there is no number on file —
+    the operator can copy it into any channel they like, which also keeps the
+    button useful while US 10DLC approval is pending.
+    """
+    merchant_id = getattr(config, "merchant_id", "") or ""
+    if amount_cents <= 0:
+        return {"sent": False, "url": "", "reason": "no_price"}
+
+    # Fee helpers live in services/phone_agent — same sys.path arrangement
+    # website.py and the phone routes use.
+    import sys
+    from pathlib import Path as _Path
+    _phone_agent_dir = str(
+        _Path(__file__).resolve().parents[2] / "services" / "phone_agent")
+    if _phone_agent_dir not in sys.path:
+        sys.path.insert(0, _phone_agent_dir)
+    from payment_links import create_checkout  # type: ignore[import]
+
+    label = (booking.get("service_name") or "").strip()
+    phone = (booking.get("customer_phone") or "").strip()
+    order = {
+        "merchant_id": merchant_id,
+        "customer_name": (booking.get("customer_name") or "").strip(),
+        "caller_phone": phone,
+        "order_type": "booking",
+        "items": [{
+            "name": label or "Booking",
+            "quantity": 1,
+            "unit_price": amount_cents / 100,
+        }],
+        "subtotal": amount_cents / 100,
+        "tax": 0,
+        "total": amount_cents / 100,
+    }
+
+    try:
+        # config carries the same fields the phone rail reads: stripe_account_id
+        # + stripe_charges_enabled route the destination charge, plan_tier /
+        # fee_allocation_mode / order_fee_cents drive the application fee, and
+        # the pos_* trio is only the degraded path when unified payments is off.
+        link = await create_checkout(order, config)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("booking payment link failed for %s: %s", merchant_id, e)
+        return {"sent": False, "url": "", "reason": "link_failed"}
+
+    url = (link or {}).get("url") or ""
+    if not url:
+        return {"sent": False, "url": "", "reason": "link_failed"}
+
+    if not phone:
+        return {"sent": False, "url": url, "reason": "no_phone"}
+
+    from src.sms.client import send_sms
+
+    business = getattr(config, "business_name", "") or ""
+    try:
+        result = await send_sms(
+            phone, compose_payment_link(business, label, amount_cents, url))
+    except Exception as e:  # noqa: BLE001
+        logger.warning("booking payment link SMS crashed for %s: %s", merchant_id, e)
+        result = {"sent": False, "reason": str(e)}
+
+    return {
+        "sent": bool(result.get("sent")),
+        "url": url,
+        "reason": str(result.get("reason") or ""),
+    }
+
+
 async def text_running_late(
     config,
     to_phone: str,
