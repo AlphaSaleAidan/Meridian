@@ -1,10 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import {
-  ArrowRight, Phone, PhoneOutgoing, Menu, X,
-  BarChart3, CalendarCheck, MessageSquareText,
-} from 'lucide-react'
+import { ArrowRight, Phone, PhoneOutgoing, Menu, X } from 'lucide-react'
 
 import SEO from '@/components/SEO'
 import MeridianLogo from '@/components/MeridianLogo'
@@ -77,23 +74,39 @@ export default function LandingV2() {
         )}
       </header>
 
-      {/* ─── Hero — the live call IS the luminous event ──────── */}
+      {/* ─── Hero — a real kitchen at rush, and the phone that answers it ── */}
       <section className="relative isolate">
-        {/* Lit terrain: layered radial light, never a void */}
-        <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
-          <div className="absolute left-1/2 top-[-20%] h-[720px] w-[1100px] -translate-x-1/2 rounded-full"
-               style={{ background: 'radial-gradient(closest-side, rgba(26,143,214,0.22), transparent 70%)' }} />
-          <div className="absolute right-[-10%] top-[35%] h-[520px] w-[520px] rounded-full"
-               style={{ background: 'radial-gradient(closest-side, rgba(23,197,176,0.10), transparent 70%)' }} />
+        {/* Photographic ground: the pass at dinner rush. The video loop drops
+            in over this still when ready; the still doubles as its poster. */}
+        <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+          <img
+            src="/landing2/hero-pass.webp"
+            alt=""
+            className="h-full w-full object-cover object-[70%_center]"
+          />
+          {/* Ambient loop over the still (which doubles as its poster). The
+              seam is a 0.3s tail-to-head crossfade, RMS-verified. Reduced
+              motion gets the still alone. */}
+          <video
+            className="absolute inset-0 h-full w-full object-cover object-[70%_center] motion-reduce:hidden"
+            autoPlay
+            muted
+            loop
+            playsInline
+            poster="/landing2/hero-pass.webp"
+          >
+            <source src="/landing2/hero-loop.webm" type="video/webm" />
+            <source src="/landing2/hero-loop.mp4" type="video/mp4" />
+          </video>
+          {/* scrims: readable text left, page ground below */}
           <div className="absolute inset-0"
-               style={{ background: 'linear-gradient(180deg, transparent 0%, transparent 55%, #05080F 100%)' }} />
-          {/* horizon line */}
-          <div className="absolute inset-x-0 top-[62%] h-px"
-               style={{ background: 'linear-gradient(90deg, transparent, rgba(26,143,214,0.35) 30%, rgba(23,197,176,0.35) 70%, transparent)' }} />
+               style={{ background: 'linear-gradient(90deg, rgba(5,8,15,0.92) 0%, rgba(5,8,15,0.72) 38%, rgba(5,8,15,0.25) 70%, rgba(5,8,15,0.45) 100%)' }} />
+          <div className="absolute inset-0"
+               style={{ background: 'linear-gradient(180deg, rgba(5,8,15,0.5) 0%, transparent 25%, transparent 55%, #05080F 96%)' }} />
         </div>
 
         <div className="mx-auto max-w-content px-6 pb-20 pt-32 md:pt-40">
-          <div className="mx-auto max-w-3xl text-center">
+          <div className="max-w-2xl">
             <p className="font-mono text-[11px] uppercase tracking-[0.3em] text-[#17C5B0]">
               Answers · Books · Calls back
             </p>
@@ -111,12 +124,12 @@ export default function LandingV2() {
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.7, delay: 0.08, ease: EASE }}
-              className="mx-auto mt-5 max-w-xl text-lg text-slate-400"
+              className="mt-5 max-w-xl text-lg text-slate-300"
             >
               {v.sub}
             </motion.p>
 
-            <div className="mt-9 flex flex-col items-center justify-center gap-4 sm:flex-row">
+            <div className="mt-9 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
               {v.demoNumberE164 ? (
                 <a
                   href={`tel:${v.demoNumberE164}`}
@@ -149,7 +162,7 @@ export default function LandingV2() {
           </div>
 
           {/* Vertical switcher */}
-          <div className="mt-14 flex flex-wrap justify-center gap-2" role="tablist" aria-label="Pick your trade">
+          <div className="mt-16 flex flex-wrap gap-2" role="tablist" aria-label="Pick your trade">
             {VERTICALS.map((opt: Vertical) => (
               <button
                 key={opt.key}
@@ -221,33 +234,58 @@ export default function LandingV2() {
           <div className="mt-12">
             <FlowDiagram vertical={v} />
           </div>
-          <div className="mt-12 grid gap-5 md:grid-cols-3">
-            {[
-              {
-                icon: MessageSquareText,
-                title: 'Answers like your best host',
-                body: 'Knows the menu, the hours, the 86 list, and your prices — because it reads your POS, not a script.',
-              },
-              {
-                icon: CalendarCheck,
-                title: 'Books straight into Square',
-                body: 'Real availability, real bookings, deposits by text. Your staff see it where they already look.',
-              },
-              {
-                icon: BarChart3,
-                title: 'Reads the register too',
-                body: 'The same subscription includes POS analytics — margins, forecasts, and what to fix this week.',
-              },
-            ].map((f) => (
-              <div
-                key={f.title}
-                className="group rounded-2xl border border-white/[0.07] bg-white/[0.03] p-6 transition-colors hover:border-[#1A8FD6]/40"
-              >
-                <f.icon className="h-5 w-5 shrink-0 text-[#1A8FD6]" />
-                <h3 className="mt-3 font-semibold text-white">{f.title}</h3>
-                <p className="mt-1.5 text-sm leading-relaxed text-slate-400">{f.body}</p>
+        </div>
+      </section>
+
+      {/* ─── The real product — actual screens, actual dollars ── */}
+      <section className="border-y border-white/[0.06] bg-[#070B14]">
+        <div className="mx-auto max-w-content px-6 py-24 md:py-28">
+          <div className="grid items-end gap-8 lg:grid-cols-[1.5fr,1fr]">
+            <div>
+              <span className="font-mono text-[11px] uppercase tracking-[0.3em] text-slate-500">
+                Not a mockup
+              </span>
+              <h2 className="mt-3 font-serif text-4xl tracking-tight md:text-5xl">
+                These are screenshots, not renders.
+              </h2>
+            </div>
+            <p className="text-slate-400 lg:pb-2">
+              The same subscription reads your register: today's take against a
+              normal day, what's still sellable tonight, and the three moves
+              worth real dollars this week — priced in your numbers, not ours.
+            </p>
+          </div>
+
+          <div className="mt-12 grid gap-6 lg:grid-cols-[1.6fr,1fr]">
+            {/* The owner's morning screen */}
+            <figure className="group relative overflow-hidden rounded-2xl border border-white/[0.09] bg-[#05080F] shadow-[0_24px_80px_rgba(0,0,0,0.5)]">
+              <div className="flex items-center gap-1.5 border-b border-white/[0.07] px-4 py-2.5">
+                <span className="h-2.5 w-2.5 rounded-full bg-white/10" />
+                <span className="h-2.5 w-2.5 rounded-full bg-white/10" />
+                <span className="h-2.5 w-2.5 rounded-full bg-white/10" />
+                <span className="ml-3 font-mono text-[10px] text-slate-500">app.meridian.tips — Today</span>
               </div>
-            ))}
+              <img src="/landing2/shot-dashboard.webp" alt="Meridian owner dashboard: booked revenue vs a normal day, covers, and three priced actions" loading="lazy"
+                   className="w-full transition-transform duration-500 group-hover:scale-[1.015]" />
+              <figcaption className="border-t border-white/[0.07] px-4 py-3 font-mono text-[11px] text-slate-500">
+                "$672 still sellable today — 7 more slots would fit." It tells you, you don't dig.
+              </figcaption>
+            </figure>
+
+            {/* The phone agent screen */}
+            <figure className="group relative overflow-hidden rounded-2xl border border-white/[0.09] bg-[#05080F] shadow-[0_24px_80px_rgba(0,0,0,0.5)]">
+              <div className="flex items-center gap-1.5 border-b border-white/[0.07] px-4 py-2.5">
+                <span className="h-2.5 w-2.5 rounded-full bg-white/10" />
+                <span className="h-2.5 w-2.5 rounded-full bg-white/10" />
+                <span className="h-2.5 w-2.5 rounded-full bg-white/10" />
+                <span className="ml-3 font-mono text-[10px] text-slate-500">Phone Agent</span>
+              </div>
+              <img src="/landing2/shot-phone.webp" alt="Meridian phone agent screen: live call indicator, agent personalities, call and order counts" loading="lazy"
+                   className="w-full object-cover object-top transition-transform duration-500 group-hover:scale-[1.015]" />
+              <figcaption className="border-t border-white/[0.07] px-4 py-3 font-mono text-[11px] text-slate-500">
+                Pick the voice that answers as yours — Vinny, Rosie, Jacques, Priya…
+              </figcaption>
+            </figure>
           </div>
         </div>
       </section>
