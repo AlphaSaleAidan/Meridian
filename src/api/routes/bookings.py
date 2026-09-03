@@ -72,7 +72,8 @@ async def _setup_for(merchant_id: str) -> be.MerchantBookingSetup:
     db = get_db()
     rows = await db.select(
         "phone_agent_config",
-        columns="business_timezone,booking_noun,booking_mode",
+        columns="business_timezone,booking_noun,booking_mode,"
+                "deposits_enabled,deposit_policy,deposit_hold_minutes",
         filters={"merchant_id": f"eq.{merchant_id}"},
         limit=1,
     )
@@ -82,6 +83,9 @@ async def _setup_for(merchant_id: str) -> be.MerchantBookingSetup:
         cfg.get("business_timezone") or "",
         noun=cfg.get("booking_noun") or "reservation",
         mode=cfg.get("booking_mode") or "native",
+        deposits_enabled=bool(cfg.get("deposits_enabled")),
+        deposit_policy=cfg.get("deposit_policy") or "",
+        deposit_hold_minutes=int(cfg.get("deposit_hold_minutes") or 60),
     )
 
 
@@ -491,6 +495,22 @@ async def update_booking(booking_id: str, body: BookingUpdate,
         # worth the most, and leaving it to the phone path meant a table freed
         # at the host stand quietly recovered nothing.
         _spawn_recovery(merchant_id, row)
+
+        # Deposit disposition follows the same tap. A no-show KEEPS the held
+        # deposit — the one case capture exists for, and always from this
+        # explicit human action, never a timer. A shop-side cancel marks it
+        # for return. Neither moves money by itself: 'captured' means "keep
+        # what was already paid", 'refunded' is the merchant-visible marker
+        # that a refund is owed in Stripe. Both are no-ops unless a deposit
+        # is actually held.
+        try:
+            from src.services.booking_deposits import get_deposit_service
+            if body.status == "no_show":
+                await get_deposit_service().capture(row, reason="no_show")
+            else:
+                await get_deposit_service().release(row, status="refunded")
+        except Exception as e:  # noqa: BLE001 — the status change already stands
+            logger.warning("deposit disposition failed for %s: %s", booking_id, e)
 
     return {"booking": row}
 

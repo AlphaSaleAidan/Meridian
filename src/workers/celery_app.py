@@ -119,6 +119,11 @@ celery_app.conf.update(
             "schedule": 900.0,  # every 15 min — see the task docstring
             "options": {"queue": "default"},
         },
+        "booking-deposit-sweep": {
+            "task": "src.workers.tasks.sweep_booking_deposits",
+            "schedule": 900.0,  # every 15 min — see the task docstring
+            "options": {"queue": "default"},
+        },
         "phone-vocab-mining": {
             "task": "src.workers.tasks.mine_phone_vocab",
             "schedule": crontab(hour=9, minute=30),  # 9:30 AM UTC daily

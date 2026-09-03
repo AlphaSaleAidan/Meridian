@@ -515,6 +515,28 @@ def send_booking_reminders():
     return run_async(_send())
 
 
+@shared_task(name="src.workers.tasks.sweep_booking_deposits", rate_limit="6/m")
+def sweep_booking_deposits():
+    """Release bookings whose deposit was requested but never paid.
+
+    Runs every 15 minutes; each booking is judged against its own merchant's
+    deposit_hold_minutes window (floor 5), so a coarse beat only delays a
+    release by minutes, never skips one.
+    """
+
+    async def _sweep():
+        from .. import config  # noqa: F401  (loads .env for a cold worker)
+        from ..db import init_db, close_db
+        await init_db()
+        try:
+            from ..services.booking_deposits import run_deposit_sweep
+            return await run_deposit_sweep()
+        finally:
+            await close_db()
+
+    return run_async(_sweep())
+
+
 @shared_task(name="src.workers.tasks.ingest_scraped_data")
 def ingest_scraped_data():
     """Ingest scraped articles into vector store for RAG."""

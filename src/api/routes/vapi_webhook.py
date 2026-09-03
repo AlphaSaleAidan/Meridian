@@ -1463,6 +1463,9 @@ async def _handle_booking_tool(name: str, args: dict, config,
         getattr(config, "business_timezone", "") or "",
         noun=(getattr(config, "booking_noun", "") or "reservation"),
         mode=(getattr(config, "booking_mode", "native") or "native"),
+        deposits_enabled=bool(getattr(config, "deposits_enabled", False)),
+        deposit_policy=(getattr(config, "deposit_policy", "") or ""),
+        deposit_hold_minutes=int(getattr(config, "deposit_hold_minutes", 60) or 60),
     )
 
     if name == "check_availability":
