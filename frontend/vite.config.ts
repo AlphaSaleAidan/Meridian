@@ -3,6 +3,9 @@ import react from '@vitejs/plugin-react'
 import path from 'path'
 
 export default defineConfig({
+  // Preview tunnels (cloudflared) present a random hostname; without this the
+  // preview server 403s them and the review link is dead on arrival.
+  preview: { allowedHosts: true },
   plugins: [react()],
   resolve: {
     alias: {

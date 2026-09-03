@@ -48,6 +48,7 @@ const ContentDashboardPage = lazyRetry(() => import('@/pages/ContentDashboardPag
 const ContentSettingsPage = lazyRetry(() => import('@/pages/ContentSettingsPage'))
 
 const LandingPage = lazyRetry(() => import('@/pages/LandingPage'))
+const LandingV2 = lazyRetry(() => import('@/pages/landing2/LandingV2'))
 const CanadaLayout = lazyRetry(() => import('@/components/CanadaLayout'))
 const MerchantLayout = lazyRetry(() => import('@/components/MerchantLayout'))
 const MerchantDemoLayout = lazyRetry(() => import('@/components/MerchantDemoLayout'))
@@ -250,8 +251,9 @@ export default function App() {
               {/* ══════════════════════════════════════════════
                   PUBLIC PAGES — no auth required
                   ══════════════════════════════════════════════ */}
-              <Route path="/" element={<LandingPage />} />
-              <Route path="/home" element={<LandingPage />} />
+              <Route path="/" element={<LandingV2 />} />
+              <Route path="/home" element={<LandingV2 />} />
+              <Route path="/classic" element={<LandingPage />} />
               <Route path="/landing" element={<Navigate to="/home" replace />} />
               {/* Zero-hardware camera connect (Path A): merchant opens this on a phone
                   they already own via a dashboard QR code. No app, no install. */}
