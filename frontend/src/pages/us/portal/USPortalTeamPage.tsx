@@ -382,8 +382,11 @@ export default function USPortalTeamPage() {
       <div>
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-bold text-white">{region && !admin ? region.name : admin ? 'Team Management' : 'Leaderboard'}</h1>
-          {/* Recruiting is deliberately not a nav tab — reachable from here (mirrors Canada). */}
-          {admin && (
+          {/* Recruiting is deliberately not a nav tab — reachable from here (mirrors Canada).
+              Region leads recruit for their region (the API already scopes them),
+              so the door shows for them too — admin-only gating left a regional
+              manager with no path to his own applicants (Enoch, 09-03). */}
+          {(admin || region) && (
             <Link to="/us/portal/recruiting" className="text-xs text-[#17C5B0] hover:underline">
               Recruiting pipeline →
             </Link>
