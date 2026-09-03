@@ -62,7 +62,7 @@ export default function ClineAIChatWidget() {
       {!open && (
         <button
           onClick={() => setOpen(true)}
-          className="fixed bottom-6 right-6 z-50 w-12 h-12 rounded-full bg-[#00d4aa] text-[#0a0f0d] shadow-lg shadow-[#00d4aa]/20 flex items-center justify-center hover:bg-[#00d4aa]/90 transition-all hover:scale-105"
+          className="fixed bottom-20 lg:bottom-6 right-6 z-50 w-12 h-12 rounded-full bg-[#00d4aa] text-[#0a0f0d] shadow-lg shadow-[#00d4aa]/20 flex items-center justify-center hover:bg-[#00d4aa]/90 transition-all hover:scale-105"
         >
           <MessageCircle size={22} />
         </button>
@@ -70,7 +70,7 @@ export default function ClineAIChatWidget() {
 
       {/* Chat panel */}
       {open && (
-        <div className="fixed bottom-6 right-3 sm:right-6 z-50 w-[calc(100vw-1.5rem)] max-w-[360px] max-h-[520px] bg-[#0f1512] border border-[#1a2420] rounded-xl shadow-2xl shadow-black/40 flex flex-col overflow-hidden">
+        <div className="fixed bottom-20 lg:bottom-6 right-3 sm:right-6 z-50 w-[calc(100vw-1.5rem)] max-w-[360px] max-h-[520px] bg-[#0f1512] border border-[#1a2420] rounded-xl shadow-2xl shadow-black/40 flex flex-col overflow-hidden">
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-[#1a2420]">
             <div className="flex items-center gap-2">
