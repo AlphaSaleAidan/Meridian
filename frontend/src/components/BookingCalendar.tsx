@@ -34,8 +34,10 @@ const STATUS_BLOCK: Record<string, string> = {
   no_show: 'border-[#E5484D]/30 bg-[#E5484D]/10 text-[#E5484D]',
 }
 
-/** Minutes since local midnight, in the MERCHANT's timezone. */
-function localMinutes(iso: string, timezone: string): number {
+/** Minutes since local midnight, in the MERCHANT's timezone. Exported for the
+ *  tee sheet, which positions from the same clock — two copies of a timezone
+ *  helper is how the two grids drift apart. */
+export function localMinutes(iso: string, timezone: string): number {
   try {
     const parts = new Intl.DateTimeFormat('en-GB', {
       timeZone: timezone || undefined, hour12: false,

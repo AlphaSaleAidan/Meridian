@@ -118,7 +118,9 @@ async def create_pos_order(
         if pos_system == "square":
             return await _create_square_order(order, access_token, location_id)
         elif pos_system == "clover":
-            return await create_clover_order(order, access_token, location_id)
+            return await create_clover_order(
+                order, access_token, location_id,
+                external_ref=_order_idempotency_key(order))
         elif pos_system in WEBHOOK_CAPABLE_SYSTEMS or pos_system in OAUTH_SYSTEMS:
             return await _create_generic_order(order, pos_system, access_token, location_id)
         else:

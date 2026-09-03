@@ -203,6 +203,43 @@ async def test_book_confirms_with_a_spelled_out_code(store):
 
 
 @pytest.mark.asyncio
+async def test_book_quotes_the_deposit_and_copies_it_onto_the_row(store, monkeypatch):
+    """Deposits on: the agent says the amount + policy in the SAME turn, the
+    amount is copied onto the booking row, and the link send is spawned off
+    the hot path (the wiring — not the service — is what has broken before)."""
+    spawned: list[tuple[str, int]] = []
+    monkeypatch.setattr(ba, "_spawn_deposit_request",
+                        lambda row, cents: spawned.append((row["id"], cents)))
+    setup = _setup()
+    setup.deposits_enabled = True
+    setup.deposit_policy = "Refundable up to 24 hours before"
+    setup.services[0]["deposit_cents"] = 2500
+
+    out = await ba.handle_book(
+        {"customer_name": "Dana Reid", "date": "2026-09-14", "time": "14:00"},
+        setup, caller_phone="+15551234567", now=NOW)
+    assert "You're all set, Dana" in out
+    assert "$25" in out
+    assert "Refundable up to 24 hours before." in out
+    assert store.bookings[-1]["deposit_cents"] == 2500
+    assert spawned == [("bk-1", 2500)]
+
+
+@pytest.mark.asyncio
+async def test_book_stays_silent_about_deposits_when_disabled(store):
+    """A service with a deposit amount but deposits_enabled off must not ask —
+    the merchant flag is the consent, not the leftover column value."""
+    setup = _setup()
+    setup.services[0]["deposit_cents"] = 2500
+
+    out = await ba.handle_book(
+        {"customer_name": "Dana Reid", "date": "2026-09-14", "time": "14:00"},
+        setup, caller_phone="+15551234567", now=NOW)
+    assert "deposit" not in out.lower()
+    assert "deposit_cents" not in store.bookings[-1] or not store.bookings[-1].get("deposit_cents")
+
+
+@pytest.mark.asyncio
 async def test_book_asks_for_a_name_rather_than_inventing_one(store):
     out = await ba.handle_book(
         {"date": "2026-09-14", "time": "14:00"}, _setup(), now=NOW)

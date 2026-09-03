@@ -411,12 +411,39 @@ async def _create_sub_session(row: dict):
             "quantity": 1,
         })
 
+    # Plan tier + rep attribution ride along in the checkout metadata so the
+    # activation webhook writes the REAL plan_tier (not the "standard" default)
+    # and books the rep setup-fee commission. The rep provisioning step
+    # (onboarding.provision-customer) already wrote both to the org's pending
+    # subscriptions row — pull them from there. Best-effort: a standalone link
+    # with no provisioning record simply omits them (webhook falls back).
+    plan_tier = ""
+    rep_id = ""
+    if org_id:
+        try:
+            srow = await get_db().select(
+                "subscriptions", "tier,metadata",
+                filters={"org_id": f"eq.{org_id}"}, limit=1)
+            if srow:
+                plan_tier = srow[0].get("tier") or ""
+                smeta = srow[0].get("metadata") or {}
+                if isinstance(smeta, str):
+                    import json as _json
+                    smeta = _json.loads(smeta or "{}")
+                rep_id = smeta.get("rep_id") or ""
+        except Exception as e:  # noqa: BLE001 — enrichment is best-effort
+            logger.warning("subscribe: plan/rep lookup failed for %s: %s", org_id, e)
+
+    _extra_meta = {"plan_tier": plan_tier, "rep_id": rep_id}
+
     subscription_data: dict = {
         "metadata": {
             "kind": "subscription",
             "org_id": org_id,
             "lead_id": lead_id,
             "business_name": business_name,
+            "setup_fee_cents": str(setup_fee_cents),
+            **_extra_meta,
         },
     }
     if first_month_free:
@@ -433,6 +460,8 @@ async def _create_sub_session(row: dict):
             "org_id": org_id,
             "lead_id": lead_id,
             "business_name": business_name,
+            "setup_fee_cents": str(setup_fee_cents),
+            **_extra_meta,
         },
         allow_promotion_codes=True,
         billing_address_collection="required",

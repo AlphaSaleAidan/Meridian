@@ -172,66 +172,71 @@ function ActionItem({
         done && 'opacity-80',
       )}
     >
-      <div className={clsx('p-5', done && 'bg-[#17C5B0]/[0.04]')}>
-        <div className="flex items-start gap-4">
+      {/* Compact on purpose (Aidan, 2026-08-31): three actions should read
+          like a list you act on, not three articles you scroll past. The
+          resting card is title + money; the description clamps to two lines
+          and opens with the card. */}
+      <div className={clsx('p-3.5', done && 'bg-[#17C5B0]/[0.04]')}>
+        <div className="flex items-start gap-3">
           {/* The number, not the icon, is the first thing read: three actions
               in priority order only work if the order is visible. */}
           <div className={clsx(
-            'w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0',
+            'w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0',
             done ? 'bg-[#17C5B0]/15 text-[#17C5B0]' : s.chip,
           )}>
             {done
-              ? <CheckCircle2 size={22} />
-              : <span className="font-mono text-2xl font-semibold leading-none">{index}</span>}
+              ? <CheckCircle2 size={16} />
+              : <span className="font-mono text-base font-semibold leading-none">{index}</span>}
           </div>
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1.5">
-              <span className={clsx('text-[11px] font-semibold px-2 py-0.5 rounded-full border uppercase tracking-wider inline-flex items-center gap-1.5', s.chip)}>
-                <CadenceIcon size={11} />
+            <div className="flex items-center gap-2 mb-1">
+              <span className={clsx('text-[10px] font-semibold px-1.5 py-px rounded-full border uppercase tracking-wider inline-flex items-center gap-1', s.chip)}>
+                <CadenceIcon size={10} />
                 {s.label}
               </span>
-              <span className="text-[11px] text-[#A1A1A8]/60 flex items-center gap-1">
-                <Clock size={11} /> {action.effort} effort
+              <span className="text-[10px] text-[#A1A1A8]/60 flex items-center gap-1">
+                <Clock size={10} /> {action.effort} effort
+              </span>
+              <span className="ml-auto flex items-center gap-1 text-[10px] text-[#A1A1A8]/70">
+                {action.confidence}%
+                {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
               </span>
             </div>
             <div className="flex items-start justify-between gap-3">
               <h3 className={clsx(
-                'text-base font-semibold leading-snug',
+                'text-sm font-semibold leading-snug',
                 done ? 'text-[#A1A1A8] line-through decoration-[#17C5B0]/40' : 'text-[#F5F5F7]',
               )}>{action.title}</h3>
-              <span className={clsx('text-lg font-bold font-mono flex-shrink-0 whitespace-nowrap', s.accent)}>
+              <span className={clsx('text-sm font-bold font-mono flex-shrink-0 whitespace-nowrap', s.accent)}>
                 +{formatCents(action.impactCents)}/mo
               </span>
             </div>
-            <p className="text-sm text-[#A1A1A8] mt-1.5 leading-relaxed">{action.description}</p>
+            <p className={clsx(
+              'text-xs text-[#A1A1A8] mt-1 leading-relaxed',
+              !expanded && 'line-clamp-2',
+            )}>{action.description}</p>
 
-            <div className="flex items-center gap-2 mt-4">
+            <div className="flex items-center gap-2 mt-2">
               {done ? (
-                <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#17C5B0]/10 text-[#17C5B0] text-xs font-semibold">
-                  <CheckCircle2 size={14} /> Done · captured {cadence === 'daily' ? 'today' : 'this week'}
+                <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#17C5B0]/10 text-[#17C5B0] text-xs font-semibold">
+                  <CheckCircle2 size={13} /> Done · captured {cadence === 'daily' ? 'today' : 'this week'}
                 </span>
               ) : (
                 <>
                   <button
                     onClick={(e) => { e.stopPropagation(); onComplete(action) }}
-                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-[#17C5B0] text-[#0A0A0B] text-[13px] font-semibold hover:bg-[#17C5B0]/90 transition-colors"
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#17C5B0] text-[#0A0A0B] text-xs font-semibold hover:bg-[#17C5B0]/90 transition-colors"
                   >
-                    <CheckCircle2 size={15} /> Mark done
+                    <CheckCircle2 size={13} /> Mark done
                   </button>
                   <button
                     onClick={(e) => { e.stopPropagation(); onReject(action) }}
-                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-[#1F1F23] text-[#A1A1A8] text-[13px] font-medium hover:bg-[#2A2A2F] hover:text-[#F5F5F7] transition-colors"
+                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#1F1F23] text-[#A1A1A8] text-xs font-medium hover:bg-[#2A2A2F] hover:text-[#F5F5F7] transition-colors"
                   >
-                    <X size={15} /> Reject
+                    <X size={13} /> Reject
                   </button>
                 </>
               )}
-              {/* Still here, still a control, but no longer the ONLY way in —
-                  it now reads as a label for what opening the card reveals. */}
-              <span className="ml-auto flex items-center gap-1 text-xs text-[#A1A1A8]/70">
-                {action.confidence}% confidence
-                {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-              </span>
             </div>
           </div>
         </div>

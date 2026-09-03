@@ -1,7 +1,7 @@
-import { useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { clsx } from 'clsx'
-import { MapPin } from 'lucide-react'
+import { ChevronRight, MapPin, MoreHorizontal } from 'lucide-react'
 import { MeridianEmblem, MeridianWordmark } from './MeridianLogo'
 import { useUnreadNotifications } from '@/hooks/useUnreadNotifications'
 import { merchantPillars, comingSoonPillars, orderPillars, MERCHANT_BASE_PATH, type Pillar } from '@/config/merchantPillars'
@@ -47,6 +47,25 @@ export default function MerchantLayout({ basePath = MERCHANT_BASE_PATH }: { base
   // Desktop-sidebar links need no close handler (the sidebar is static there);
   // the mobile drawer is gone.
   const noop = () => {}
+
+  // Whether the tab bar has more tabs off either edge, so we can show a fade +
+  // chevron telling the user it scrolls. A demo has more tabs than fit; without
+  // this cue the extra tabs look like they simply do not exist.
+  const tabScrollerRef = useRef<HTMLDivElement>(null)
+  const [tabOverflow, setTabOverflow] = useState({ left: false, right: false })
+  useEffect(() => {
+    const el = tabScrollerRef.current
+    if (!el) return
+    const update = () => setTabOverflow({
+      left: el.scrollLeft > 4,
+      right: el.scrollLeft + el.clientWidth < el.scrollWidth - 4,
+    })
+    update()
+    el.addEventListener('scroll', update, { passive: true })
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => { el.removeEventListener('scroll', update); ro.disconnect() }
+  }, [])
   const flags = useModuleFlags()
   const { org } = useAuth()
   // Same chrome serves both regions: /canada/* keeps its existing branding,
@@ -74,9 +93,13 @@ export default function MerchantLayout({ basePath = MERCHANT_BASE_PATH }: { base
    * those pages already says so in a banner at the top. Sorting by what a
    * trade uses is the only order that means anything to them.
    */
-  const roadmapPillars = isDemo ? comingSoonPillars : []
+  // Trade-scoped tabs: a pillar that names its trades shows only there, and
+  // one that excludes a trade never shows it.
+  const forThisTrade = (p: Pillar) =>
+    (!p.trades || p.trades.includes(pack.key)) && !p.excludeTrades?.includes(pack.key)
+  const roadmapPillars = isDemo ? comingSoonPillars.filter(forThisTrade) : []
   const visiblePillars = orderPillars(
-    merchantPillars.filter(p => !p.flag || flags[p.flag]),
+    merchantPillars.filter(p => (!p.flag || flags[p.flag]) && forThisTrade(p)),
     pack.pillarOrder,
   )
   /**
@@ -96,17 +119,17 @@ export default function MerchantLayout({ basePath = MERCHANT_BASE_PATH }: { base
   const secondaryPillars = visiblePillars.filter(p => p.secondary)
   const settingsPillar = visiblePillars.find(p => p.path === 'settings')
   /**
-   * ONE tab bar on mobile — the bottom bar, and nothing else.
+   * ONE tab bar on mobile — four tabs and a More sheet.
    *
-   * The old layout had two ways to pick the same category: a bottom tab bar
-   * AND a side drawer (first via a hamburger, then via a "More" tab). Either
-   * way, Today / Bookings / Phone / Inventory appeared in the bar AND again in
-   * the drawer — two tab bars for the same tabs.
+   * This has been through three shapes. First a bar AND a drawer that held
+   * the same tabs twice. Then one scrolling bar holding everything — which
+   * fixed the duplication but, at ten pillars, truncated every label and
+   * hid half the product behind a sideways scroll nobody performs.
    *
-   * Now every category lives in the bottom bar and only there. The bar holds
-   * the full list and scrolls horizontally when it does not fit, so no tab is
-   * ever hidden behind a second surface. The mobile drawer is gone; the
-   * `aside` stays purely as the desktop sidebar (lg:static).
+   * The rule that survives both failures: every tab lives in EXACTLY ONE
+   * place. The first four pillars — the trade's own order, so a golf course
+   * leads with its tee sheet and a cafe with its inventory — sit in the bar;
+   * everything else lives only inside More. No tab appears twice.
    */
   const mobileNavPillars = [
     // Today leads on mobile too — it is lifted out of moneyPillars above.
@@ -116,6 +139,16 @@ export default function MerchantLayout({ basePath = MERCHANT_BASE_PATH }: { base
     ...roadmapPillars,
     ...(settingsPillar ? [settingsPillar] : []),
   ]
+  const primaryNav = mobileNavPillars.slice(0, 4)
+  const overflowNav = mobileNavPillars.slice(4)
+  const [moreOpen, setMoreOpen] = useState(false)
+  const { pathname } = useLocation()
+  // Close the sheet whenever navigation lands, wherever it came from.
+  useEffect(() => { setMoreOpen(false) }, [pathname])
+  // The More tab lights up when the CURRENT page lives inside it, so the bar
+  // always shows where you are even when where-you-are is not a bar tab.
+  const overflowActive = overflowNav.some(p =>
+    p.path ? pathname.startsWith(`${basePath}/${p.path}`) : pathname === basePath)
 
   return (
     // h-dvh (not h-screen): the shell scrolls via <main>, never the document,
@@ -228,8 +261,31 @@ export default function MerchantLayout({ basePath = MERCHANT_BASE_PATH }: { base
         ref={bottomNavRef}
         className="fixed bottom-0 left-0 right-0 z-50 lg:hidden bg-[#0A0A0B]/95 backdrop-blur-lg border-t border-[#1F1F23]"
       >
-        <div className="flex items-stretch overflow-x-auto no-scrollbar snap-x pb-[max(env(safe-area-inset-bottom),4px)] [-webkit-overflow-scrolling:touch]">
-          {mobileNavPillars.map(p => {
+        {/* Left fade: appears once you have scrolled right, so it is clear the
+            row came from somewhere. */}
+        <div
+          aria-hidden
+          className={clsx(
+            'pointer-events-none absolute inset-y-0 left-0 w-8 bg-gradient-to-r from-[#0A0A0B] to-transparent transition-opacity duration-200',
+            tabOverflow.left ? 'opacity-100' : 'opacity-0',
+          )}
+        />
+        {/* Right fade + chevron: the cue that there are more tabs to the right.
+            Fades out when the row is scrolled to its end. */}
+        <div
+          aria-hidden
+          className={clsx(
+            'pointer-events-none absolute inset-y-0 right-0 flex items-center justify-end pr-1 w-10 bg-gradient-to-l from-[#0A0A0B] via-[#0A0A0B]/90 to-transparent transition-opacity duration-200',
+            tabOverflow.right ? 'opacity-100' : 'opacity-0',
+          )}
+        >
+          <ChevronRight size={18} className="text-[#1A8FD6]" strokeWidth={2.25} />
+        </div>
+        <div
+          ref={tabScrollerRef}
+          className="flex items-stretch overflow-x-auto no-scrollbar snap-x pb-[max(env(safe-area-inset-bottom),4px)] [-webkit-overflow-scrolling:touch]"
+        >
+          {primaryNav.map(p => {
             const Icon = p.icon
             const to = p.path ? `${basePath}/${p.path}` : basePath
             return (
@@ -237,9 +293,10 @@ export default function MerchantLayout({ basePath = MERCHANT_BASE_PATH }: { base
                 key={p.path || '_home'}
                 to={to}
                 end={!p.path}
+                onClick={() => setMoreOpen(false)}
                 className={({ isActive }) => clsx(
                   'flex flex-1 shrink-0 snap-start flex-col items-center justify-center gap-0.5 py-2 px-1 min-w-[68px] min-h-[54px] transition-colors',
-                  isActive ? 'text-[#1A8FD6]' : 'text-[#A1A1A8]/60',
+                  isActive && !moreOpen ? 'text-[#1A8FD6]' : 'text-[#A1A1A8]/60',
                 )}
               >
                 <Icon size={20} strokeWidth={1.8} />
@@ -247,8 +304,60 @@ export default function MerchantLayout({ basePath = MERCHANT_BASE_PATH }: { base
               </NavLink>
             )
           })}
+          {overflowNav.length > 0 && (
+            <button
+              onClick={() => setMoreOpen(v => !v)}
+              aria-expanded={moreOpen}
+              aria-label="More sections"
+              className={clsx(
+                'flex flex-1 shrink-0 snap-start flex-col items-center justify-center gap-0.5 py-2 px-1 min-w-[68px] min-h-[54px] transition-colors',
+                moreOpen || overflowActive ? 'text-[#1A8FD6]' : 'text-[#A1A1A8]/60',
+              )}
+            >
+              <MoreHorizontal size={20} strokeWidth={1.8} />
+              <span className="text-[10px] font-medium">More</span>
+            </button>
+          )}
         </div>
       </nav>
+
+      {/* The More sheet — holds ONLY the tabs the bar does not, and closes on
+          any pick. A backdrop, so a stray tap dismisses instead of acting. */}
+      {moreOpen && overflowNav.length > 0 && (
+        <>
+          <button
+            aria-label="Close menu"
+            onClick={() => setMoreOpen(false)}
+            className="fixed inset-0 z-40 bg-black/40 lg:hidden"
+          />
+          <div
+            className="fixed left-2 right-2 z-50 rounded-xl border border-[#1F1F23] bg-[#0E0E11]/98 p-2 backdrop-blur-lg lg:hidden"
+            style={{ bottom: 'calc(var(--bottom-nav-h, 64px) + 8px)' }}
+          >
+            <div className="grid grid-cols-3 gap-1">
+              {overflowNav.map(p => {
+                const Icon = p.icon
+                const to = p.path ? `${basePath}/${p.path}` : basePath
+                return (
+                  <NavLink
+                    key={p.path || '_home'}
+                    to={to}
+                    end={!p.path}
+                    onClick={() => setMoreOpen(false)}
+                    className={({ isActive }) => clsx(
+                      'flex min-h-[64px] flex-col items-center justify-center gap-1 rounded-lg py-2 px-1 transition-colors',
+                      isActive ? 'bg-[#1A8FD6]/10 text-[#1A8FD6]' : 'text-[#A1A1A8] hover:text-[#F5F5F7]',
+                    )}
+                  >
+                    <Icon size={20} strokeWidth={1.8} />
+                    <span className="text-[10px] font-medium truncate max-w-full">{p.label}</span>
+                  </NavLink>
+                )
+              })}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   )
 }

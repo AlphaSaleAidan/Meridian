@@ -200,8 +200,33 @@ function BillingCard({ orgId, apiUrl }: { orgId: string; apiUrl: string }) {
     current_period_end?: string; auto_renew?: boolean;
     card_brand?: string; card_last4?: string; billing_method?: string
   } | null>(null)
-  const [invoiceUrl, setInvoiceUrl] = useState<string | null>(null)
   const [billingError, setBillingError] = useState<string | null>(null)
+  const [portalBusy, setPortalBusy] = useState(false)
+
+  // Stripe Customer Portal — the merchant manages their own subscription
+  // (card on file, invoices, cancel). Billing moved to Stripe, so the old
+  // "Pay Invoice" Square link is gone.
+  const openBillingPortal = async () => {
+    setPortalBusy(true)
+    setBillingError(null)
+    try {
+      const headers = await getAuthHeaders()
+      const r = await fetch(`${apiUrl}/api/billing/portal/${orgId}`, {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ return_path: '/settings' }),
+      })
+      if (r.ok) {
+        const d = await r.json()
+        if (d.url) { window.location.href = d.url; return }
+      }
+      setBillingError('Billing management is not available yet.')
+    } catch {
+      setBillingError('Could not open billing management.')
+    } finally {
+      setPortalBusy(false)
+    }
+  }
   // Fee allocation mode: rep-set + READ-ONLY here. The owner can only file a
   // change request (POST /api/billing/fee-mode/change-request).
   const [feeMode, setFeeMode] = useState<{ fee_allocation_mode: string | null; label: string } | null>(null)
@@ -218,10 +243,6 @@ function BillingCard({ orgId, apiUrl }: { orgId: string; apiUrl: string }) {
       fetch(`${apiUrl}/api/billing/status/${orgId}`, { headers })
         .then(r => r.ok ? r.json() : null)
         .then(d => d && setBilling(d))
-        .catch(() => { setBillingError('Could not load billing info') })
-      fetch(`${apiUrl}/api/billing/invoice-url/${orgId}`, { headers })
-        .then(r => r.ok ? r.json() : null)
-        .then(d => d && setInvoiceUrl(d.invoice_url))
         .catch(() => { setBillingError('Could not load billing info') })
       fetch(`${apiUrl}/api/billing/fee-mode/${orgId}`, { headers })
         .then(r => r.ok ? r.json() : null)
@@ -262,16 +283,15 @@ function BillingCard({ orgId, apiUrl }: { orgId: string; apiUrl: string }) {
           <CreditCard size={14} className="text-[#7C5CFF]" />
           <h3 className="text-sm font-semibold text-[#F5F5F7]">Billing & Subscription</h3>
         </div>
-        {invoiceUrl && (
-          <a
-            href={invoiceUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="px-4 py-2 text-xs font-medium text-white bg-[#7C5CFF] rounded-lg hover:bg-[#6B4FE0] transition-all inline-flex items-center gap-2"
+        {billing && billing.status !== 'none' && (
+          <button
+            onClick={openBillingPortal}
+            disabled={portalBusy}
+            className="px-4 py-2 text-xs font-medium text-white bg-[#7C5CFF] rounded-lg hover:bg-[#6B4FE0] transition-all inline-flex items-center gap-2 disabled:opacity-50"
           >
             <ExternalLink size={12} />
-            Pay Invoice
-          </a>
+            {portalBusy ? 'Opening…' : 'Manage subscription'}
+          </button>
         )}
       </div>
       <div className="p-4 sm:p-5 space-y-2 text-xs">

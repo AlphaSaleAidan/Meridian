@@ -306,7 +306,37 @@ class BillingService:
                             f"(Square will keep billing until resolved)"
                         )
 
-            if not square_cancel_ok:
+            # Stripe merchants keep their subscription state on
+            # organizations.metadata, NOT in this (Square-era) subscriptions
+            # table — so the Square block above finds nothing and, without this,
+            # "cancel" would leave the live Stripe subscription auto-renewing and
+            # the merchant billed every month after they cancelled. Cancel it at
+            # period end: future charges stop, the current paid period is
+            # honoured, and Stripe fires customer.subscription.deleted at the end.
+            stripe_cancel_ok = True
+            try:
+                org_rows = await self.db.select(
+                    "organizations", "metadata",
+                    filters={"id": f"eq.{org_id}"}, limit=1)
+                ometa = (org_rows[0].get("metadata") if org_rows else {}) or {}
+                if isinstance(ometa, str):
+                    import json as _json
+                    ometa = _json.loads(ometa or "{}")
+                stripe_sub_id = ometa.get("stripe_subscription_id")
+                stripe_key = os.getenv("STRIPE_SECRET_KEY", "")
+                if stripe_sub_id and stripe_key:
+                    import stripe
+                    stripe.Subscription.modify(
+                        stripe_sub_id, cancel_at_period_end=True, api_key=stripe_key)
+                    logger.info("Stripe subscription %s set to cancel at period end (org %s)",
+                                stripe_sub_id, org_id)
+            except Exception:
+                stripe_cancel_ok = False
+                logger.exception(
+                    "Stripe subscription cancel FAILED for org %s — billing is "
+                    "still LIVE, marking cancel_pending for operator follow-up", org_id)
+
+            if not (square_cancel_ok and stripe_cancel_ok):
                 await self.db.update("subscriptions", {
                     "status": "cancel_pending",
                     "cancel_reason": reason,
@@ -330,11 +360,19 @@ class BillingService:
 
     async def process_renewals(self):
         """
-        Renewal processor for subscriptions NOT on Square auto-billing.
-        Runs daily via Celery beat. Handles:
-        - Active subscriptions past their period end → create renewal invoice
-        - Trialing subscriptions past trial_ends_at → convert to first paid invoice
+        DISABLED 2026-08-19 — billing is Stripe-only now.
+
+        This used to create SQUARE renewal invoices for every subscription past
+        its period end. Stripe subscriptions auto-renew natively (Stripe charges
+        the card on file each period), so there is nothing to renew here, and
+        minting a Square invoice would double-bill a Stripe merchant. The daily
+        Celery beat entry was removed; this guard makes the manual
+        /api/billing/process-renewals endpoint a safe no-op too.
         """
+        logger.info("process_renewals is a no-op — renewals are handled by Stripe")
+        return
+
+    async def _process_renewals_legacy_square(self):
         try:
             now = datetime.now(timezone.utc)
 

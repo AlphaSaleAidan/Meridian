@@ -14,12 +14,15 @@
  * Every call is a call the portal already makes, so the numbers are derived
  * from what is actually on the book rather than written into a mock.
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { api } from '@/lib/api'
 import { bookingsApi, type Booking, type BusyBlock, type Resource, type Service } from '@/lib/bookings-api'
 import type { NichePack } from '@/config/niches'
 import type { RouteOrigin } from '@/components/RouteDay'
 import TradeWorkspace from '@/components/overview/TradeWorkspace'
+import { demoOrdersFor } from '@/lib/demo-orders'
+import { getProducts } from '@/lib/business-config'
+import { getActiveBusinessType } from '@/lib/demo-context'
 import { formatCentsCompact as money } from '@/lib/format'
 
 /**
@@ -171,11 +174,38 @@ export default function TradeWorkspaceHost({
       lng: b.serviceLng as number,
     }))
 
+  // A counter trade's day, order by order. demo-orders is deterministic per
+  // day and trade — the storefront connector replaces this call, same shape.
+  const orders = useMemo(
+    () => (pack.booksAtAll ? undefined : demoOrdersFor(pack, day)),
+    [pack, day])
+
   const shiftDay = (delta: number) => {
     const d = new Date(`${day}T12:00:00`)
     d.setDate(d.getDate() + delta)
     setDay(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`)
   }
+
+  // Where the fortnight's money came from, for the trades that declare
+  // revenue centres. The split is derived from the trade's own catalogue
+  // (price x popularity per centre) and scaled to the booked fortnight — the
+  // same sample-data basis as the rest of the demo, one source, no literals.
+  const revenueMix = useMemo(() => {
+    if (!pack.revenueCenters?.length) return undefined
+    const total = history.reduce((s, d) => s + d.cents, 0)
+    if (!total) return undefined
+    const products = getProducts(getActiveBusinessType())
+    const weights = pack.revenueCenters.map((c) => ({
+      label: c.label,
+      w: products.filter((p) => c.categories.includes(p.category))
+        .reduce((s, p) => s + p.price * p.popularity, 0),
+    }))
+    const wsum = weights.reduce((s, x) => s + x.w, 0)
+    if (!wsum) return undefined
+    return weights
+      .map((x) => ({ label: x.label, cents: Math.round((total * x.w) / wsum) }))
+      .sort((a, b) => b.cents - a.cents)
+  }, [pack, history])
 
   return (
     <TradeWorkspace
@@ -194,6 +224,8 @@ export default function TradeWorkspaceHost({
       onShiftDay={shiftDay}
       stops={stops}
       origin={origin}
+      orders={orders}
+      revenueMix={revenueMix}
     />
   )
 }

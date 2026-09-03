@@ -69,7 +69,16 @@ async def list_providers():
 async def status(provider: str, org_id: str):
     """Connection status for a framework provider (same shape as the dedicated
     /api/square/status and /api/clover/status endpoints — the frontend's
-    post-OAuth poller reads `connected`)."""
+    post-OAuth poller reads `connected`).
+
+    Intentionally UNAUTHENTICATED, matching its /api/square/status and
+    /api/clover/status twins: the OAuth "Connect" poller (POSSelectorPanel /
+    the onboarding wizards) calls this with no session/auth header before a
+    connection exists, so requiring a JWT here 401s the poller and the connect
+    UI never confirms. Exposure is low (connection-state boolean +
+    external_merchant_id for an org_id the caller is already connecting) and is
+    NOT closed by guarding this one twin. See public_endpoint_baseline.yaml.
+    """
     cfg = get_provider(provider)
     if cfg is None:
         raise HTTPException(404, "Unknown POS provider")

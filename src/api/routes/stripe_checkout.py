@@ -192,9 +192,13 @@ async def _activate_from_checkout(db, data: dict) -> None:
     not acceptable and Stripe must retry."""
     session_id = data.get("id", "")
     metadata = data.get("metadata", {}) or {}
-    org_id = metadata.get("meridian_org_id")
-    plan = metadata.get("meridian_plan", "standard")
-    rep_id = metadata.get("meridian_rep_id")
+    # The live subscribe flow (pay_redirect._create_sub_session) writes org_id /
+    # lead_id / business_name / setup_fee_cents. Older sessions used a meridian_*
+    # prefix — accept either so no in-flight checkout is dropped.
+    org_id = metadata.get("org_id") or metadata.get("meridian_org_id")
+    plan = (metadata.get("plan") or metadata.get("plan_tier")
+            or metadata.get("meridian_plan") or "standard")
+    rep_id = metadata.get("rep_id") or metadata.get("meridian_rep_id")
     try:
         setup_fee = int(metadata.get("setup_fee_cents", "0") or 0)
     except (TypeError, ValueError):

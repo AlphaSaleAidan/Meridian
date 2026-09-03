@@ -44,7 +44,7 @@ _UUID_RE = re.compile(
 )
 _MERCHANT_ID_RE = re.compile(r"^[A-Za-z0-9_\-]{1,64}$")
 
-_RESOURCE_KINDS = ("table", "staff", "chair", "bay", "room")
+_RESOURCE_KINDS = ("table", "staff", "chair", "bay", "room", "tee")
 
 
 def _validate_uuid(value: str, label: str = "id") -> None:
@@ -72,7 +72,8 @@ async def _setup_for(merchant_id: str) -> be.MerchantBookingSetup:
     db = get_db()
     rows = await db.select(
         "phone_agent_config",
-        columns="business_timezone,booking_noun,booking_mode",
+        columns="business_timezone,booking_noun,booking_mode,"
+                "deposits_enabled,deposit_policy,deposit_hold_minutes",
         filters={"merchant_id": f"eq.{merchant_id}"},
         limit=1,
     )
@@ -82,6 +83,9 @@ async def _setup_for(merchant_id: str) -> be.MerchantBookingSetup:
         cfg.get("business_timezone") or "",
         noun=cfg.get("booking_noun") or "reservation",
         mode=cfg.get("booking_mode") or "native",
+        deposits_enabled=bool(cfg.get("deposits_enabled")),
+        deposit_policy=cfg.get("deposit_policy") or "",
+        deposit_hold_minutes=int(cfg.get("deposit_hold_minutes") or 60),
     )
 
 
@@ -492,6 +496,22 @@ async def update_booking(booking_id: str, body: BookingUpdate,
         # at the host stand quietly recovered nothing.
         _spawn_recovery(merchant_id, row)
 
+        # Deposit disposition follows the same tap. A no-show KEEPS the held
+        # deposit — the one case capture exists for, and always from this
+        # explicit human action, never a timer. A shop-side cancel marks it
+        # for return. Neither moves money by itself: 'captured' means "keep
+        # what was already paid", 'refunded' is the merchant-visible marker
+        # that a refund is owed in Stripe. Both are no-ops unless a deposit
+        # is actually held.
+        try:
+            from src.services.booking_deposits import get_deposit_service
+            if body.status == "no_show":
+                await get_deposit_service().capture(row, reason="no_show")
+            else:
+                await get_deposit_service().release(row, status="refunded")
+        except Exception as e:  # noqa: BLE001 — the status change already stands
+            logger.warning("deposit disposition failed for %s: %s", booking_id, e)
+
     return {"booking": row}
 
 
@@ -772,7 +792,7 @@ async def wizard_setup(req: WizardSetup, principal=Depends(require_service_auth)
     for r in req.resources:
         if r.name.strip().lower() in existing_resources:
             continue
-        if r.kind not in ("table", "staff", "chair", "bay", "room"):
+        if r.kind not in _RESOURCE_KINDS:
             raise HTTPException(400, f"unknown resource kind: {r.kind}")
         await store.create_resource({
             "merchant_id": req.merchant_id, "name": r.name.strip(),

@@ -17,6 +17,7 @@ the app level in the Clover developer dashboard, then a fresh merchant OAuth).
 """
 import logging
 import os
+import re
 
 import httpx
 
@@ -40,20 +41,30 @@ def clover_api_base() -> str:
 
 
 async def create_clover_order(
-    order: dict, access_token: str, merchant_id: str
+    order: dict, access_token: str, merchant_id: str, external_ref: str = ""
 ) -> dict:
     """Create an order in Clover (write), add its line items, then fire the
-    kitchen print event. See module docstring for permission prerequisites."""
+    kitchen print event. See module docstring for permission prerequisites.
+
+    external_ref: a STABLE per-order id. Set as Clover's externalReferenceId so a
+    retry (Vapi re-dispatch, or two workers) of the SAME order does not create a
+    second ticket (double-cooked food). Clover rejects the field unless it is
+    <=12 chars AND purely alphanumeric, so it is stripped + truncated."""
     base = clover_api_base()
     headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
+
+    _body = {
+        "state": "open",
+        "note": f"Phone order for {order.get('customer_name', '')} via Meridian AI",
+    }
+    ref_alnum = re.sub(r"[^A-Za-z0-9]", "", str(external_ref or ""))[:12]
+    if ref_alnum:
+        _body["externalReferenceId"] = ref_alnum
 
     async with httpx.AsyncClient(timeout=15) as client:
         res = await client.post(
             f"{base}/v3/merchants/{merchant_id}/orders",
-            json={
-                "state": "open",
-                "note": f"Phone order for {order.get('customer_name', '')} via Meridian AI",
-            },
+            json=_body,
             headers=headers,
         )
         if res.status_code not in (200, 201):

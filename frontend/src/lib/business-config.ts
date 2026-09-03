@@ -25,6 +25,10 @@ export interface StaffDef {
 export interface BusinessProfile {
   businessName: string
   businessNameCA: string
+  /** Categories that are sold TIME or hired assets, not stock — a green fee
+   *  cannot be low on units and a cart fleet has no reorder point. The
+   *  inventory table skips these; revenue surfaces still count them. */
+  nonStockCategories?: string[]
   products: ProductDef[]
   revenue: RevenueConfig
   hourlyPattern: number[]
@@ -252,6 +256,53 @@ const SMOKE_SHOP: BusinessProfile = {
     { name: 'Cigarillo Pack', sku: 'CIG-004', price: 899, category: 'cigars', popularity: 0.70 },
     { name: 'Vape Coils', sku: 'VAP-004', price: 1499, category: 'vapes', popularity: 0.60 },
     { name: 'Grinder', sku: 'ACC-004', price: 1999, category: 'accessories', popularity: 0.50 },
+  ],
+}
+
+// Retail with a clock on it: the expensive stock is cold-stored with lot
+// numbers and expiry dates, and the business is the monthly reorder call.
+const PEPTIDE_SHOP: BusinessProfile = {
+  businessName: 'Apex Peptide Supply',
+  businessNameCA: 'Northern Peptide Co.',
+  industryLabel: 'Online Peptide & Wellness Store',
+  // Online orders peak in the evening, after work — the pattern a walk-in
+  // shop never sees. The site takes orders around the clock; the bench ships
+  // them 9-5.
+  peakLabel: '7:00–10:00 PM',
+  topBundlePair: ['BPC-157 5mg', 'Bacteriostatic Water 30ml'],
+  deadStockItems: ['Epitalon 10mg', 'Collagen Peptide Powder', 'Creatine Gummies', 'Vial Travel Case'],
+  hourlyPattern: [
+    5, 5, 0, 0, 0, 5,
+    10, 20, 25, 30, 35, 40,
+    45, 40, 35, 30, 35, 45,
+    60, 80, 90, 70, 35, 15,
+  ],
+  revenue: {
+    weekdayMin: 90000, weekdayMax: 180000,
+    weekendMin: 70000, weekendMax: 140000,
+    avgTicketMin: 6000, avgTicketMax: 12000,
+  },
+  // An online store's whole roster: nobody stands at a register.
+  staff: [
+    { name: 'Marcus D.', role: 'Owner / Operator' },
+    { name: 'Elena V.', role: 'Fulfillment Lead' },
+    { name: 'Tyler S.', role: 'Customer Support' },
+    { name: 'Priya N.', role: 'Inventory & Receiving' },
+  ],
+  products: [
+    { name: 'BPC-157 5mg', sku: 'PEP-001', price: 5499, category: 'peptides', popularity: 0.90 },
+    { name: 'TB-500 5mg', sku: 'PEP-002', price: 6499, category: 'peptides', popularity: 0.75 },
+    { name: 'GHK-Cu 50mg', sku: 'PEP-003', price: 4999, category: 'peptides', popularity: 0.60 },
+    { name: 'Epitalon 10mg', sku: 'PEP-004', price: 5999, category: 'peptides', popularity: 0.35 },
+    { name: 'NAD+ 500mg', sku: 'PEP-005', price: 8999, category: 'peptides', popularity: 0.55 },
+    { name: 'Glutathione 600mg', sku: 'PEP-006', price: 4499, category: 'peptides', popularity: 0.50 },
+    { name: 'Bacteriostatic Water 30ml', sku: 'SUP-001', price: 1499, category: 'supplies', popularity: 0.85 },
+    { name: 'Insulin Syringe 10-Pack', sku: 'SUP-002', price: 899, category: 'supplies', popularity: 0.70 },
+    { name: 'Alcohol Prep Pads 100ct', sku: 'SUP-003', price: 599, category: 'supplies', popularity: 0.65 },
+    { name: 'Vial Travel Case', sku: 'SUP-004', price: 2499, category: 'supplies', popularity: 0.30 },
+    { name: 'Collagen Peptide Powder', sku: 'WEL-001', price: 3499, category: 'wellness', popularity: 0.45 },
+    { name: 'Creatine Gummies', sku: 'WEL-002', price: 2999, category: 'wellness', popularity: 0.40 },
+    { name: 'Electrolyte Sticks 20ct', sku: 'WEL-003', price: 1999, category: 'wellness', popularity: 0.55 },
   ],
 }
 
@@ -485,18 +536,81 @@ const PIZZERIA: BusinessProfile = {
   ],
 }
 
+const GOLF_COURSE: BusinessProfile = {
+  businessName: 'Fairway Pines Golf Club',
+  businessNameCA: 'Cedar Creek Golf Club',
+  industryLabel: 'Golf Course',
+  nonStockCategories: ['green fees', 'rentals'],
+  peakLabel: '7:00–11:00 AM',
+  topBundlePair: ['18 Holes', 'Cart Rental'],
+  deadStockItems: ['Logo Windbreaker', 'Golf Umbrella', 'Bucket Hat'],
+  // A course's day is front-loaded harder than any trade here: the morning
+  // tee sheet decides the whole day, with a smaller wave after work for nine.
+  hourlyPattern: [
+    0, 0, 0, 0, 0, 10,
+    45, 90, 100, 95, 85, 70,
+    60, 55, 50, 55, 60, 50,
+    30, 10, 0, 0, 0, 0,
+  ],
+  // CALIBRATED TO THE TEE SHEET, not invented: the demo book seeds ~48
+  // starts x ~3.2 players x $72 green fee ≈ $10K of booked play a weekday.
+  // The forecast, margins and insights all scale off these figures, and a
+  // dashed forecast at $5K under a solid $10K of actuals read as "your
+  // revenue is about to halve" — the two must describe the same course.
+  revenue: {
+    weekdayMin: 900000, weekdayMax: 1100000,
+    weekendMin: 1150000, weekendMax: 1450000,
+    avgTicketMin: 5500, avgTicketMax: 11000,
+  },
+  staff: [
+    { name: 'Walt P.', role: 'Head Professional' },
+    { name: 'Dana R.', role: 'Pro Shop Lead' },
+    { name: 'Gus M.', role: 'Starter' },
+    { name: 'Lena K.', role: 'Grille Lead' },
+    { name: 'Ray T.', role: 'Marshal' },
+    { name: 'Sofia B.', role: 'Grille Cook' },
+  ],
+  products: [
+    // Index 1 is the line the demo's shrink anomaly names, so it must be a
+    // PHYSICAL product — counted stock cannot come up short on a green fee.
+    { name: '18 Holes', sku: 'GRN-18', price: 6500, category: 'green fees', popularity: 0.95 },
+    { name: 'Dozen Balls', sku: 'PRO-BAL', price: 3400, category: 'pro shop', popularity: 0.35 },
+    { name: 'Twilight Rate', sku: 'GRN-TWI', price: 4200, category: 'green fees', popularity: 0.60 },
+    { name: 'Cart Rental', sku: 'CRT-001', price: 2200, category: 'rentals', popularity: 0.90 },
+    { name: 'Range Bucket', sku: 'RNG-001', price: 1200, category: 'rentals', popularity: 0.75 },
+    { name: 'Club Rental Set', sku: 'CLB-001', price: 4500, category: 'rentals', popularity: 0.20 },
+    { name: '9 Holes', sku: 'GRN-09', price: 3800, category: 'green fees', popularity: 0.70 },
+    // Pro-shop popularity kept low on purpose: price x popularity feeds the
+    // revenue split, and a shelf of $58 polos outweighing the grille is not
+    // a split any course operator would recognise.
+    { name: 'Golf Glove', sku: 'PRO-GLV', price: 2400, category: 'pro shop', popularity: 0.30 },
+    { name: 'Logo Polo', sku: 'PRO-POL', price: 5800, category: 'pro shop', popularity: 0.15 },
+    { name: 'Logo Windbreaker', sku: 'PRO-WND', price: 8900, category: 'pro shop', popularity: 0.10 },
+    { name: 'Turn Dog & Chips', sku: 'GRL-DOG', price: 950, category: 'grille', popularity: 0.95 },
+    { name: 'Clubhouse Burger', sku: 'GRL-BRG', price: 1600, category: 'grille', popularity: 0.80 },
+    { name: 'Iced Tea', sku: 'GRL-TEA', price: 400, category: 'grille', popularity: 0.60 },
+    // The bar is its own revenue centre, not a line inside the grille — the
+    // owner watches the two separately and the revenue split renders them so.
+    { name: 'Domestic Beer', sku: 'BAR-BER', price: 650, category: 'bar', popularity: 0.90 },
+    { name: 'Transfusion', sku: 'BAR-TRF', price: 1100, category: 'bar', popularity: 0.55 },
+    { name: 'Seltzer', sku: 'BAR-SLZ', price: 750, category: 'bar', popularity: 0.45 },
+  ],
+}
+
 const PROFILES: Record<BusinessType, BusinessProfile> = {
   coffee_shop: COFFEE_SHOP,
   restaurant: RESTAURANT,
   fast_food: FAST_FOOD,
   auto_shop: AUTO_SHOP,
   smoke_shop: SMOKE_SHOP,
+  peptide_shop: PEPTIDE_SHOP,
   barbershop: BARBERSHOP,
   nails: NAIL_STUDIO,
   medspa: MED_SPA,
   detailing: DETAILING,
   mobile_detailing: MOBILE_DETAILING,
   pizzeria: PIZZERIA,
+  golf_course: GOLF_COURSE,
 }
 
 export function getBusinessProfile(type: BusinessType): BusinessProfile {

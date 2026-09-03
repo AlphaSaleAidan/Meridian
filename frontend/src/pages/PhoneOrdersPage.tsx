@@ -11,7 +11,7 @@ import {
 import DashboardTiltCard from '@/components/DashboardTiltCard'
 import { useOrgId, useIsDemo } from '@/hooks/useOrg'
 import { useAuth } from '@/lib/auth'
-import { useModuleFlags } from '@/config/moduleFlags'
+import { useModuleFlags, useTradePack } from '@/config/moduleFlags'
 import {
   getPhoneDemoData, getPhoneStats, VOICE_OPTIONS,
   type PhoneCallEntry, type PhoneBizConfig, type CallStatus, type PaymentStatus,
@@ -659,6 +659,7 @@ export default function PhoneOrdersPage() {
   const isDemo = useIsDemo()
   const { org } = useAuth()
   const flags = useModuleFlags()
+  const pack = useTradePack()
   const navigate = useNavigate()
   const { pathname } = useLocation()
   const [tab, setTab] = useState<Tab>('overview')
@@ -723,7 +724,10 @@ export default function PhoneOrdersPage() {
         </div>
       )}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div><h1 className="text-2xl font-bold text-[#F5F5F7]">Phone Orders</h1><p className="text-sm text-[#A1A1A8] mt-1">AI-powered phone ordering for your business</p></div>
+        {/* The page speaks the trade's own noun: a course's phone books tee
+            times and a salon's books appointments — "phone ordering" on a
+            booking trade reads as someone else's product. */}
+        <div><h1 className="text-2xl font-bold text-[#F5F5F7]">{pack.booksAtAll ? 'Phone Agent' : 'Phone Orders'}</h1><p className="text-sm text-[#A1A1A8] mt-1">{pack.booksAtAll ? `The AI agent that answers and books ${pack.bookingNoun}s for your business` : 'AI-powered phone ordering for your business'}</p></div>
         <div className="flex items-center gap-2">
           <button onClick={inPillar ? goToSetup : () => setShowConnect(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-[#1A8FD6] text-white text-xs font-medium rounded-lg hover:bg-[#1A8FD6]/90 transition-colors"><Phone size={14} /> Connect Phone</button>
           {(isDemo || phoneConfig?.active) && (

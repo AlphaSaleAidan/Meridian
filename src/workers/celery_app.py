@@ -88,11 +88,12 @@ celery_app.conf.update(
             "schedule": crontab(hour=5, minute=0),  # 5 AM UTC daily
             "options": {"queue": "bulk"},
         },
-        "billing-renewals": {
-            "task": "src.workers.tasks.process_billing_renewals",
-            "schedule": crontab(hour=6, minute=0),  # 6 AM UTC daily
-            "options": {"queue": "critical"},
-        },
+        # billing-renewals REMOVED 2026-08-19: it created SQUARE renewal invoices
+        # for every subscription past its period. Billing is Stripe-only now, and
+        # Stripe subscriptions auto-renew natively (Stripe bills the card on file
+        # each period and fires invoice.paid) — there is nothing for a renewal
+        # cron to do. process_renewals() is also guarded to a no-op so a manual
+        # trigger can't mint Square invoices either.
         "square-token-refresh": {
             "task": "src.workers.tasks.refresh_square_tokens",
             "schedule": crontab(hour=7, minute=0),  # 7 AM UTC daily
@@ -115,6 +116,11 @@ celery_app.conf.update(
         },
         "booking-reminders": {
             "task": "src.workers.tasks.send_booking_reminders",
+            "schedule": 900.0,  # every 15 min — see the task docstring
+            "options": {"queue": "default"},
+        },
+        "booking-deposit-sweep": {
+            "task": "src.workers.tasks.sweep_booking_deposits",
             "schedule": 900.0,  # every 15 min — see the task docstring
             "options": {"queue": "default"},
         },

@@ -158,6 +158,29 @@ export interface NichePack {
    * it on for another trade is one line here.
    */
   paymentLinks?: boolean
+
+  /**
+   * Where a COUNTER trade's orders come from, most common first. Drives the
+   * channel chip on the day's order list — a smoke shop's orders walk in, an
+   * online store's arrive through the site. Defaults to counter + phone.
+   */
+  orderChannels?: Array<'web' | 'phone' | 'counter'>
+  /**
+   * True when an order leaves in a box rather than over the counter, which is
+   * what gives it a lifecycle worth showing: paid, packed, shipped. A trade
+   * that hands the bag across the till has nothing to track after the till.
+   */
+  ships?: boolean
+
+  /**
+   * Revenue centres, for the trades that are several businesses under one
+   * roof. A golf course's owner does not think in one number — green fees,
+   * the grille, the bar and the pro shop are separate P&Ls in their head,
+   * and a revenue section that cannot say WHERE the money came from is a
+   * restaurant screen wearing a golf shirt. Each centre names the product
+   * categories (business profile vocabulary) that roll up into it.
+   */
+  revenueCenters?: { label: string; categories: string[] }[]
 }
 
 /**
@@ -556,6 +579,109 @@ export const NICHE_PACKS: NichePack[] = [
     ],
     counterTakingsCents: 418_000,
   },
+  {
+    key: 'golf',
+    label: 'Golf course',
+    pitch: 'The 9:40 that nobody booked is gone at 9:41 — the agent fills the sheet while the pro shop rings.',
+    // "Tee time" is the industry's own noun and the phone agent must use it:
+    // nobody calls a course to "make an appointment".
+    bookingNoun: 'tee time',
+    customerNoun: 'player',
+    resourceKind: 'tee',
+    countTitle: 'How many starting tees do you send groups off?',
+    countLabel: 'Tees',
+    // A TEE TIME IS A BOOKING, banded like a restaurant table: the unit sold
+    // is the interval on the tee, the party is 1-4 players, and revenue is
+    // players x green fee — covers and spend wearing golf shoes. What golf
+    // adds is nothing the engine lacks; it is the vocabulary and the sheet.
+    booksAtAll: true,
+    defaultCount: 2,
+    defaultSeats: 4,
+    partyBanded: true,
+    services: [
+      // Duration is the TEE INTERVAL — how long the group owns the start,
+      // not how long the round takes. 15 minutes is the industry standard
+      // gap; the round itself happens out on the course, where no resource
+      // is contended.
+      { name: '18 holes (1–4 players)', duration: 15, buffer: 0, min: 1, max: 4 },
+      { name: '9 holes (1–4 players)', duration: 15, buffer: 0, min: 1, max: 4 },
+      { name: 'Lesson with the pro', duration: 60, buffer: 0, min: 1, max: 1, price: 9000 },
+    ],
+    days: [0, 1, 2, 3, 4, 5, 6],
+    opens: '07:00',
+    closes: '19:00',
+    // Everything stays on because a course is three businesses in one
+    // building: the tee sheet (bookings), the grille (menu, margins — Menu
+    // Matrix is exactly right here), the pro shop (retail inventory), plus a
+    // roster of starters, marshals and grille staff. Camera watches the
+    // pro-shop shelf and the grille queue at the turn. Top Actions stays ON
+    // (Aidan, 2026-08-31): the actions are written for the course — filling
+    // the afternoon sheet, selling empty seats — not generic retail advice.
+    modules: { taxExpenses: false },
+    pillarOrder: ['bookings', 'phone', '', 'inventory', 'schedule'],
+    avgCoverCents: 7200,
+    homeMetric: { label: 'Tee sheet filled today',
+                  help: 'Booked tee times against the daylight you have. An empty slot cannot be sold after its time passes.' },
+    revenueCenters: [
+      { label: 'Green fees', categories: ['green fees'] },
+      { label: 'Carts & range', categories: ['rentals'] },
+      { label: 'Grille', categories: ['grille'] },
+      { label: 'Bar', categories: ['bar'] },
+      { label: 'Pro shop', categories: ['pro shop'] },
+    ],
+  },
+  {
+    key: 'peptides',
+    label: 'Peptide & wellness store',
+    pitch: 'Every order \u2014 site or phone \u2014 lands in one queue, and the stock knows its own expiry.',
+    bookingNoun: 'order',
+    customerNoun: 'customer',
+    resourceKind: 'table',
+    countTitle: '',
+    countLabel: '',
+    // An ONLINE store, not a walk-in counter \u2014 that is the whole shape of
+    // this pack. Revenue arrives through the website; the phone is the
+    // reorder call and stock questions, never dosing advice: the agent takes
+    // the order and reads what is on the label, full stop. (A peptide CLINIC
+    // books consultations and is the med spa pack wearing a different sign.)
+    //
+    // MISSING CAPABILITY, logged here the way routing is on the mobile packs:
+    // connecting the merchant's own storefront (Shopify/Woo order ingest) the
+    // way Square connects a till. Until that exists the web-order figures
+    // below are the demo's claim, not a live feed \u2014 the pack is sellable, the
+    // connector is the build.
+    booksAtAll: false,
+    defaultCount: 0,
+    defaultSeats: 0,
+    partyBanded: false,
+    services: [],
+    days: [1, 2, 3, 4, 5],
+    opens: '09:00',
+    closes: '17:00',
+    // Cut everything that assumes a floor and a roster. No shop floor means
+    // no camera; a two-person packing bench does not need shift scheduling \u2014
+    // the tools that manage a TEAM in a ROOM are exactly the ones that tell
+    // an online merchant this product was not built for them. What is left is
+    // the online store's console: stock with lot numbers and expiry dates,
+    // the phone line, the day's orders \u2014 and Top Actions, which is
+    // channel-agnostic: a stockout warning reads the same whether the till
+    // is a counter or a checkout page.
+    modules: { bookings: false, camera: false, schedule: false,
+               taxExpenses: false },
+    orderChannels: ['web', 'phone'],
+    ships: true,
+    hiddenViews: ['inventory/menu'],
+    pillarOrder: ['', 'inventory', 'phone'],
+    homeMetric: { label: 'Orders to ship today',
+                  help: 'Web and phone orders together \u2014 the number that empties the packing bench.' },
+    counterStats: [
+      { label: 'Web orders', value: '38', sub: 'through the site today' },
+      { label: 'Phone reorders', value: '9', sub: 'taken by the agent' },
+      { label: 'Awaiting shipment', value: '12', sub: 'oldest 26h', tone: 'warn' },
+      { label: 'Repeat customers', value: '64%', sub: 'ordered before', tone: 'good' },
+    ],
+    counterTakingsCents: 441_800,
+  },
 ]
 
 /** The pack a merchant with nothing chosen falls back to. Generic on purpose:
@@ -633,6 +759,8 @@ export const PACK_DECK_SLUGS: Record<string, string[]> = {
   restaurant: [],
   autoshop: [],
   mobiledetailing: [],
+  peptides: [],
+  golf: [],
 }
 
 /**
@@ -657,7 +785,7 @@ export interface SellableTrade {
   /** Pack key. Stored verbatim as organizations.business_type. */
   key: string
   label: string
-  group: 'Food and drink' | 'Appointments' | 'Vehicles' | 'Retail'
+  group: 'Food and drink' | 'Appointments' | 'Vehicles' | 'Retail' | 'Recreation'
   /** Deck slug per market. Some decks are market-neutral and share one. */
   deck: { ca: string; us: string }
 }
@@ -692,12 +820,22 @@ export const SELLABLE_TRADES: SellableTrade[] = [
   { key: 'autoshop', label: 'Auto Repair Shops', group: 'Vehicles',
     deck: { ca: 'autoshop', us: 'autoshop' } },
 
+  { key: 'golf', label: 'Golf Courses', group: 'Recreation',
+    // No deck exists in either catalogue yet — bare neutral slug, the
+    // autoshop precedent: a sellable product with a proposal gap to close.
+    deck: { ca: 'golf', us: 'golf' } },
+
   { key: 'smokeshop', label: 'Smoke & Vape Shops', group: 'Retail',
     deck: { ca: 'ca-smokeshop', us: 'us-smokeshop' } },
+  { key: 'peptides', label: 'Peptide & Wellness Stores', group: 'Retail',
+    // No deck exists in either catalogue yet — bare neutral slug, the
+    // autoshop precedent: a sellable product with a proposal gap to close,
+    // not a mapping to invent.
+    deck: { ca: 'peptides', us: 'peptides' } },
 ]
 
 export const SELLABLE_GROUPS = [
-  'Food and drink', 'Appointments', 'Vehicles', 'Retail',
+  'Food and drink', 'Appointments', 'Vehicles', 'Recreation', 'Retail',
 ] as const
 
 /** The deck a rep should link for this trade in this market. */
@@ -722,6 +860,10 @@ const PACK_ALIASES: Record<string, string> = {
   med_spa: 'medspa',
   nail_salon: 'nails',
   barber_shop: 'barbershop',
+  peptide_shop: 'peptides',
+  golf_course: 'golf',
+  golf_club: 'golf',
+  country_club: 'golf',
 }
 
 export function packFor(key: string | null | undefined): NichePack {

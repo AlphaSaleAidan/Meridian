@@ -106,7 +106,8 @@ def _lead_fields(p: PhoneLeadIn, rep_id: str, source: str) -> dict:
 # ── Queue (the dialer's calling list) ─────────────────────────────────────────
 
 @router.get("/queue")
-async def get_queue(user: dict = Depends(require_jwt)):
+async def get_queue(market: str | None = Query(default=None),
+                    user: dict = Depends(require_jwt)):
     """Recapture-due phone leads for this rep, each annotated with the dial-time
     compliance gate (DNC + calling window) and its enrichment so the UI can show
     'has Square POS', attempts, last outcome before the rep hits Dial."""
@@ -133,6 +134,11 @@ async def get_queue(user: dict = Depends(require_jwt)):
             "window_label": check.window_label,
             "country": check.country,
         })
+    # Market fence (additive): the US portal sends market=us — keep its queue
+    # to US numbers so the shared Canada pool never bleeds into a US rep's
+    # list. Canada callers keep the pre-existing unfiltered behavior.
+    if market == "us":
+        out = [ld for ld in out if ld.get("country") == "US"]
     return {"leads": out, "callbacks": [], "dev_store": False}
 
 
@@ -194,13 +200,17 @@ async def patch_phone_lead(lead_id: str, body: PhoneLeadPatch, user: dict = Depe
 
 @router.post("/phone-leads/{lead_id}/promote")
 async def promote_phone_lead(lead_id: str, user: dict = Depends(require_jwt)):
-    """One click: create a canada_leads pipeline record from this phone lead,
-    link them, mark the phone lead converted. The ONLY write into canada_leads."""
+    """One click: create a pipeline record from this phone lead, link them,
+    mark the phone lead converted. US numbers land in us_leads, everything
+    else in canada_leads (the ONLY writes into either pipeline table)."""
     scope = await _scope(user)
     lead = await store.get(lead_id)
     if not lead or (lead.get("rep_id") not in (None, scope.rep_id) and not scope.is_admin):
         raise HTTPException(404, "Lead not found")
-    new_lead = await store.promote_to_pipeline(lead, scope.rep_id)
+    country = compliance.check_calling_window(
+        normalize_e164(lead.get("phone_e164") or "") or "").country
+    table = "us_leads" if country == "US" else "canada_leads"
+    new_lead = await store.promote_to_pipeline(lead, scope.rep_id, table=table)
     return {"pipeline_lead": new_lead, "already_converted": bool(new_lead.get("already"))}
 
 
