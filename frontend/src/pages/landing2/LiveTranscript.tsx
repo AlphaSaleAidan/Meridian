@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { motion, useInView, useReducedMotion } from 'framer-motion'
 import { Phone } from 'lucide-react'
 
+import { BorderBeam } from '@/components/ui/BorderBeam'
 import type { TranscriptLine, VerticalArtifact } from './verticals'
 
 const EASE = [0.16, 1, 0.3, 1] as const
@@ -45,8 +46,8 @@ export default function LiveTranscript({
   return (
     <div ref={rootRef} className="grid gap-4 lg:grid-cols-[1.15fr,1fr] items-start">
       {/* The call */}
-      <div className="rounded-2xl border border-[#E8E6E0] bg-white shadow-[0_1px_2px_rgba(11,17,32,0.05)]">
-        <div className="flex items-center gap-2.5 border-b border-[#E8E6E0] px-5 py-3">
+      <div className="rounded-2xl border border-white/[0.07] bg-white/[0.03]">
+        <div className="flex items-center gap-2.5 border-b border-white/[0.07] px-5 py-3">
           <span className="relative flex h-2.5 w-2.5">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#17C5B0] opacity-60" />
             <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-[#17C5B0]" />
@@ -68,8 +69,8 @@ export default function LiveTranscript({
               <div
                 className={
                   line.speaker === 'agent'
-                    ? 'max-w-[85%] rounded-2xl rounded-br-md bg-[#0B1120] px-4 py-2.5 text-[15px] leading-snug text-white'
-                    : 'max-w-[85%] rounded-2xl rounded-bl-md bg-[#F1EFE9] px-4 py-2.5 text-[15px] leading-snug text-slate-800'
+                    ? 'max-w-[85%] rounded-2xl rounded-br-md border border-[#1A8FD6]/30 bg-[#1A8FD6]/15 px-4 py-2.5 text-[15px] leading-snug text-white'
+                    : 'max-w-[85%] rounded-2xl rounded-bl-md bg-white/[0.06] px-4 py-2.5 text-[15px] leading-snug text-slate-200'
                 }
               >
                 {line.speaker === 'agent' && (
@@ -85,8 +86,8 @@ export default function LiveTranscript({
       </div>
 
       {/* The artifact it produced */}
-      <div className="rounded-2xl border border-[#E8E6E0] bg-[#FDFCFA] shadow-[0_1px_2px_rgba(11,17,32,0.05)]">
-        <div className="border-b border-[#E8E6E0] px-5 py-3">
+      <div className="rounded-2xl border border-white/[0.07] bg-[#070B14]">
+        <div className="border-b border-white/[0.07] px-5 py-3">
           <span className="font-mono text-xs tracking-wide text-slate-500">{artifact.panel}</span>
         </div>
         <div className="px-5 py-5">
@@ -95,18 +96,21 @@ export default function LiveTranscript({
             initial={reduced ? false : { opacity: 0, scale: 0.97, y: 8 }}
             animate={done ? { opacity: 1, scale: 1, y: 0 } : { opacity: 0.25, scale: 0.97, y: 8 }}
             transition={{ duration: 0.5, ease: EASE }}
-            className="rounded-xl border border-[#17C5B0]/40 bg-white p-4"
+            className="relative overflow-hidden rounded-xl border border-[#17C5B0]/40 bg-white/[0.03] p-4"
           >
             <div className="flex items-baseline justify-between gap-3">
-              <span className="font-semibold text-slate-900">{artifact.headline}</span>
+              <span className="font-semibold text-white">{artifact.headline}</span>
               {artifact.amount && (
-                <span className="font-mono text-sm text-slate-900">{artifact.amount}</span>
+                <span className="font-mono text-sm text-white">{artifact.amount}</span>
               )}
             </div>
-            <p className="mt-1 text-sm text-slate-500">{artifact.detail}</p>
+            <p className="mt-1 text-sm text-slate-400">{artifact.detail}</p>
             <p className="mt-3 font-mono text-[11px] uppercase tracking-widest text-[#17C5B0]">
               {done ? 'Landed while the caller was still on the line' : 'Waiting for the call…'}
             </p>
+            {done && (
+              <BorderBeam size={140} duration={8} colorFrom="#17C5B0" colorTo="#1A8FD6" />
+            )}
           </motion.div>
         </div>
       </div>

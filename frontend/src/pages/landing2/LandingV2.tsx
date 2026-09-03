@@ -8,19 +8,24 @@ import {
 
 import SEO from '@/components/SEO'
 import MeridianLogo from '@/components/MeridianLogo'
+import GrainOverlay from '@/components/landing/GrainOverlay'
 import ScheduleQuote from '@/components/landing/ScheduleQuote'
+import CountUp from '@/components/landing/CountUp'
+import { Marquee } from '@/components/ui/Marquee'
 import LiveTranscript from './LiveTranscript'
 import CostMath from './CostMath'
+import FlowDiagram from './FlowDiagram'
 import { VERTICALS, type Vertical } from './verticals'
 
 const EASE = [0.16, 1, 0.3, 1] as const
 
 /**
- * Landing v2 — light ground, evidence-led. The register merchants already
- * trust (Square whitespace, Toast warmth), not the dark "AI vendor" look.
- * One signature: the live call and the artifact it creates. One accent.
- * Everything on this page is checkable: real transcripts of real behavior,
- * real demo lines, real economics. No fabricated logos or testimonials.
+ * Landing v3 register — product theater on a lit dark terrain. Never a void:
+ * every surface is grounded with layered radial light in the real brand
+ * blues; ONE luminous event per screen (hero: the live call; outbound: the
+ * dialing pulse; pricing: the Meridian row). Mechanics are drawn as
+ * instruments, not written as prose. All numbers honest, all transcripts
+ * real product behavior. No fabricated logos/testimonials.
  */
 export default function LandingV2() {
   const [verticalKey, setVerticalKey] = useState(VERTICALS[0].key)
@@ -28,43 +33,40 @@ export default function LandingV2() {
   const v = VERTICALS.find((x) => x.key === verticalKey) ?? VERTICALS[0]
 
   return (
-    <div className="min-h-screen bg-[#FAFAF7] text-slate-900 overflow-x-clip">
+    <div className="min-h-screen overflow-x-clip bg-[#05080F] text-[#F5F5F7]">
       <SEO
         title="Meridian — The phone agent that answers, books, and calls back"
         description="Meridian answers every call 24/7, takes orders and bookings straight into your POS, and dials your waitlist when a slot opens. From US$250/mo, $0.104/min true cost."
         path="/"
       />
+      <GrainOverlay />
 
       {/* ─── Nav ─────────────────────────────────────────────── */}
-      <header className="fixed inset-x-0 top-0 z-50 border-b border-[#E8E6E0]/80 bg-[#FAFAF7]/85 backdrop-blur-md">
+      <header className="fixed inset-x-0 top-0 z-50 border-b border-white/[0.06] bg-[#05080F]/75 backdrop-blur-[20px]">
         <div className="mx-auto flex h-14 max-w-content items-center justify-between px-6">
           <Link to="/" aria-label="Meridian home">
             <MeridianLogo size={28} showWordmark showTagline={false} />
           </Link>
-          <nav className="hidden items-center gap-7 text-sm text-slate-600 md:flex">
-            <a href="#how" className="hover:text-slate-900">How it works</a>
-            <a href="#outbound" className="hover:text-slate-900">Outbound</a>
-            <a href="#pricing" className="hover:text-slate-900">Pricing</a>
-            <Link to="/careers" className="hover:text-slate-900">Become a rep</Link>
-            <Link to="/login" className="hover:text-slate-900">Sign in</Link>
+          <nav className="hidden items-center gap-7 text-sm text-slate-400 md:flex">
+            <a href="#how" className="transition-colors hover:text-white">How it works</a>
+            <a href="#outbound" className="transition-colors hover:text-white">Outbound</a>
+            <a href="#pricing" className="transition-colors hover:text-white">Pricing</a>
+            <Link to="/careers" className="transition-colors hover:text-white">Become a rep</Link>
+            <Link to="/login" className="transition-colors hover:text-white">Sign in</Link>
             <a
               href={`tel:${v.demoNumberE164 || VERTICALS[0].demoNumberE164}`}
-              className="inline-flex items-center gap-2 rounded-full bg-[#1A8FD6] px-4 py-1.5 font-medium text-white transition-colors hover:bg-[#1574B8]"
+              className="inline-flex items-center gap-2 rounded-full bg-[#1A8FD6] px-4 py-1.5 font-medium text-white shadow-[0_0_24px_rgba(26,143,214,0.45)] transition-all hover:bg-[#2da0e2] hover:shadow-[0_0_36px_rgba(26,143,214,0.6)]"
             >
               <Phone className="h-3.5 w-3.5 shrink-0" /> Call the agent
             </a>
           </nav>
-          <button
-            className="md:hidden"
-            aria-label="Menu"
-            onClick={() => setMenuOpen((o) => !o)}
-          >
+          <button className="md:hidden" aria-label="Menu" onClick={() => setMenuOpen((o) => !o)}>
             {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
         </div>
         {menuOpen && (
-          <nav className="border-t border-[#E8E6E0] bg-[#FAFAF7] px-6 py-4 md:hidden">
-            <div className="flex flex-col gap-3 text-sm">
+          <nav className="border-t border-white/[0.06] bg-[#05080F] px-6 py-4 md:hidden">
+            <div className="flex flex-col gap-3 text-sm text-slate-300">
               <a href="#how" onClick={() => setMenuOpen(false)}>How it works</a>
               <a href="#outbound" onClick={() => setMenuOpen(false)}>Outbound</a>
               <a href="#pricing" onClick={() => setMenuOpen(false)}>Pricing</a>
@@ -75,193 +77,290 @@ export default function LandingV2() {
         )}
       </header>
 
-      {/* ─── Hero ────────────────────────────────────────────── */}
-      <section className="mx-auto max-w-content px-6 pb-16 pt-28 md:pb-24 md:pt-36">
-        <div className="max-w-3xl">
-          <motion.h1
-            key={v.key + '-h'}
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, ease: EASE }}
-            className="font-serif text-5xl leading-[1.05] tracking-tight md:text-7xl"
-          >
-            {v.headline}
-          </motion.h1>
-          <motion.p
-            key={v.key + '-s'}
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.08, ease: EASE }}
-            className="mt-5 max-w-xl text-lg text-slate-600"
-          >
-            {v.sub}
-          </motion.p>
-
-          <div className="mt-8 flex flex-wrap items-center gap-4">
-            {v.demoNumberE164 ? (
-              <a
-                href={`tel:${v.demoNumberE164}`}
-                className="group inline-flex items-center gap-3 rounded-full bg-[#0B1120] py-3 pl-5 pr-6 text-white transition-transform hover:scale-[1.02]"
-              >
-                <span className="relative flex h-2.5 w-2.5 shrink-0">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#17C5B0] opacity-60" />
-                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-[#17C5B0]" />
-                </span>
-                <span className="text-sm text-slate-300">{v.demoLabel}</span>
-                <span className="font-mono font-semibold tracking-wide">{v.demoNumber}</span>
-              </a>
-            ) : (
-              <a
-                href="#demo"
-                className="inline-flex items-center gap-2 rounded-full bg-[#0B1120] px-6 py-3 font-medium text-white transition-transform hover:scale-[1.02]"
-              >
-                {v.demoLabel} <ArrowRight className="h-4 w-4 shrink-0" />
-              </a>
-            )}
-            <a
-              href="#demo"
-              className="inline-flex items-center gap-2 rounded-full border border-[#E8E6E0] bg-white px-5 py-3 text-sm font-medium text-slate-700 hover:border-slate-300"
-            >
-              Book a 15-minute demo
-            </a>
-          </div>
-          <p className="mt-3 text-xs text-slate-400">
-            That's a real line answered by the actual agent — not a recording.
-          </p>
+      {/* ─── Hero — the live call IS the luminous event ──────── */}
+      <section className="relative isolate">
+        {/* Lit terrain: layered radial light, never a void */}
+        <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
+          <div className="absolute left-1/2 top-[-20%] h-[720px] w-[1100px] -translate-x-1/2 rounded-full"
+               style={{ background: 'radial-gradient(closest-side, rgba(26,143,214,0.22), transparent 70%)' }} />
+          <div className="absolute right-[-10%] top-[35%] h-[520px] w-[520px] rounded-full"
+               style={{ background: 'radial-gradient(closest-side, rgba(23,197,176,0.10), transparent 70%)' }} />
+          <div className="absolute inset-0"
+               style={{ background: 'linear-gradient(180deg, transparent 0%, transparent 55%, #05080F 100%)' }} />
+          {/* horizon line */}
+          <div className="absolute inset-x-0 top-[62%] h-px"
+               style={{ background: 'linear-gradient(90deg, transparent, rgba(26,143,214,0.35) 30%, rgba(23,197,176,0.35) 70%, transparent)' }} />
         </div>
 
-        {/* Vertical switcher — swaps the whole page's evidence in place */}
-        <div className="mt-14 flex flex-wrap gap-2" role="tablist" aria-label="Pick your trade">
-          {VERTICALS.map((opt: Vertical) => (
-            <button
-              key={opt.key}
-              role="tab"
-              aria-selected={opt.key === verticalKey}
-              onClick={() => setVerticalKey(opt.key)}
-              className={
-                opt.key === verticalKey
-                  ? 'rounded-full bg-[#0B1120] px-4 py-2 text-sm font-medium text-white'
-                  : 'rounded-full border border-[#E8E6E0] bg-white px-4 py-2 text-sm text-slate-600 hover:border-slate-300'
-              }
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
-
-        <div className="mt-6">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={v.key}
-              initial={{ opacity: 0, y: 14 }}
+        <div className="mx-auto max-w-content px-6 pb-20 pt-32 md:pt-40">
+          <div className="mx-auto max-w-3xl text-center">
+            <p className="font-mono text-[11px] uppercase tracking-[0.3em] text-[#17C5B0]">
+              Answers · Books · Calls back
+            </p>
+            <motion.h1
+              key={v.key + '-h'}
+              initial={{ opacity: 0, y: 18 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.35, ease: EASE }}
+              transition={{ duration: 0.7, ease: EASE }}
+              className="mt-4 font-serif text-5xl leading-[1.02] tracking-tight md:text-7xl"
             >
-              <LiveTranscript lines={v.transcript} artifact={v.artifact} restartKey={v.key} />
-            </motion.div>
-          </AnimatePresence>
+              {v.headline}
+            </motion.h1>
+            <motion.p
+              key={v.key + '-s'}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.7, delay: 0.08, ease: EASE }}
+              className="mx-auto mt-5 max-w-xl text-lg text-slate-400"
+            >
+              {v.sub}
+            </motion.p>
+
+            <div className="mt-9 flex flex-col items-center justify-center gap-4 sm:flex-row">
+              {v.demoNumberE164 ? (
+                <a
+                  href={`tel:${v.demoNumberE164}`}
+                  className="group inline-flex w-full max-w-md items-center justify-center gap-3 rounded-full border border-[#1A8FD6]/40 bg-[#1A8FD6]/10 py-3.5 pl-5 pr-7 shadow-[0_0_48px_rgba(26,143,214,0.25)] backdrop-blur transition-all hover:border-[#1A8FD6]/70 hover:shadow-[0_0_64px_rgba(26,143,214,0.4)] sm:w-auto"
+                >
+                  <span className="relative flex h-2.5 w-2.5 shrink-0">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#17C5B0] opacity-70" />
+                    <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-[#17C5B0]" />
+                  </span>
+                  <span className="whitespace-nowrap font-mono text-lg font-semibold tracking-wider md:text-xl">{v.demoNumber}</span>
+                </a>
+              ) : (
+                <a
+                  href="#quote"
+                  className="inline-flex items-center gap-2 rounded-full bg-[#1A8FD6] px-7 py-3.5 font-medium text-white shadow-[0_0_36px_rgba(26,143,214,0.4)] transition-all hover:bg-[#2da0e2]"
+                >
+                  {v.demoLabel} <ArrowRight className="h-4 w-4 shrink-0" />
+                </a>
+              )}
+              <a
+                href="#quote"
+                className="inline-flex items-center gap-2 rounded-full border border-white/15 px-5 py-3 text-sm font-medium text-slate-300 transition-colors hover:border-white/30 hover:text-white"
+              >
+                Book a 15-minute demo
+              </a>
+            </div>
+            <p className="mt-3 font-mono text-[11px] uppercase tracking-widest text-slate-500">
+              {v.demoNumberE164 ? `${v.demoLabel} — a real line, not a recording` : 'Live demo lines: restaurants & golf'}
+            </p>
+          </div>
+
+          {/* Vertical switcher */}
+          <div className="mt-14 flex flex-wrap justify-center gap-2" role="tablist" aria-label="Pick your trade">
+            {VERTICALS.map((opt: Vertical) => (
+              <button
+                key={opt.key}
+                role="tab"
+                aria-selected={opt.key === verticalKey}
+                onClick={() => setVerticalKey(opt.key)}
+                className={
+                  opt.key === verticalKey
+                    ? 'rounded-full border border-[#17C5B0]/50 bg-[#17C5B0]/10 px-4 py-2 text-sm font-medium text-[#17C5B0] shadow-[0_0_20px_rgba(23,197,176,0.25)]'
+                    : 'rounded-full border border-white/10 px-4 py-2 text-sm text-slate-400 transition-colors hover:border-white/25 hover:text-white'
+                }
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="mt-8">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={v.key}
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.35, ease: EASE }}
+              >
+                <LiveTranscript lines={v.transcript} artifact={v.artifact} restartKey={v.key} />
+              </motion.div>
+            </AnimatePresence>
+          </div>
         </div>
       </section>
 
-      {/* ─── The problem, once, sharply ──────────────────────── */}
-      <section className="border-y border-[#E8E6E0] bg-white">
-        <div className="mx-auto max-w-content px-6 py-10">
-          <p className="mx-auto max-w-2xl text-center text-lg text-slate-600">
-            Around <span className="font-semibold text-slate-900">a third of calls go unanswered at peak</span>.
-            Those callers don't call back — they call the next place.
-            Every other section of this page is about what happens when they get an answer.
-          </p>
-        </div>
-      </section>
-
-      {/* ─── How it works: call → artifact ───────────────────── */}
-      <section id="how" className="mx-auto max-w-content px-6 py-20 md:py-28">
-        <h2 className="font-serif text-4xl tracking-tight md:text-5xl">
-          The call becomes a <span className="text-[#1A8FD6]">row in your system</span>, not a voicemail.
-        </h2>
-        <p className="mt-4 max-w-2xl text-slate-600">
-          No app to check, no message pad. Orders land in your POS as paid tickets.
-          Bookings land in Square Appointments under the customer's name.
-          You watched it happen in the demo above — that's the whole product.
-        </p>
-        <div className="mt-10 grid gap-5 md:grid-cols-3">
+      {/* ─── Problem strip — honest numbers with motion ──────── */}
+      <section className="border-y border-white/[0.06] bg-[#070B14]">
+        <div className="mx-auto grid max-w-content gap-8 px-6 py-12 text-center sm:grid-cols-3">
           {[
-            {
-              icon: MessageSquareText,
-              title: 'Answers like your best host',
-              body: 'Knows the menu, the hours, the 86 list, and your prices — because it reads your POS, not a script.',
-            },
-            {
-              icon: CalendarCheck,
-              title: 'Books straight into Square',
-              body: 'Real availability, real bookings, deposits by text. Your staff see it where they already look.',
-            },
-            {
-              icon: BarChart3,
-              title: 'Reads the register too',
-              body: 'The same subscription includes POS analytics — margins, forecasts, and what to fix this week.',
-            },
-          ].map((f) => (
-            <div key={f.title} className="rounded-2xl border border-[#E8E6E0] bg-white p-6">
-              <f.icon className="h-5 w-5 shrink-0 text-[#1A8FD6]" />
-              <h3 className="mt-3 font-semibold">{f.title}</h3>
-              <p className="mt-1.5 text-sm leading-relaxed text-slate-600">{f.body}</p>
+            { n: 30, suffix: '%', label: 'of calls go unanswered at peak — industry, not us' },
+            { n: 0, prefix: '$', label: 'recovered by a voicemail box, ever' },
+            { n: 1, suffix: ' ring', label: 'before Meridian picks up, every time' },
+          ].map((s) => (
+            <div key={s.label}>
+              <div className="font-serif text-5xl text-white">
+                <CountUp end={s.n} prefix={s.prefix ?? ''} suffix={s.suffix ?? ''} />
+              </div>
+              <div className="mx-auto mt-2 max-w-[240px] font-mono text-[11px] uppercase tracking-wider text-slate-500">
+                {s.label}
+              </div>
             </div>
           ))}
         </div>
       </section>
 
-      {/* ─── Outbound: the ownable claim ─────────────────────── */}
-      <section id="outbound" className="border-y border-[#E8E6E0] bg-[#0B1120] text-white">
-        <div className="mx-auto max-w-content px-6 py-20 md:py-28">
-          <span className="font-mono text-xs uppercase tracking-widest text-[#17C5B0]">
+      {/* ─── How it works — drawn as an instrument ───────────── */}
+      <section id="how" className="relative isolate">
+        <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
+          <div className="absolute left-[-15%] top-[10%] h-[560px] w-[560px] rounded-full"
+               style={{ background: 'radial-gradient(closest-side, rgba(26,143,214,0.12), transparent 70%)' }} />
+        </div>
+        <div className="mx-auto max-w-content px-6 py-24 md:py-28">
+          <h2 className="max-w-3xl font-serif text-4xl tracking-tight md:text-5xl">
+            The call becomes a row in your system, not a voicemail.
+          </h2>
+          <p className="mt-4 max-w-2xl text-slate-400">
+            Watch the path: every call travels the same wire and ends as a paid
+            ticket in your POS or a booking in Square — while the caller is
+            still on the line.
+          </p>
+          <div className="mt-12">
+            <FlowDiagram vertical={v} />
+          </div>
+          <div className="mt-12 grid gap-5 md:grid-cols-3">
+            {[
+              {
+                icon: MessageSquareText,
+                title: 'Answers like your best host',
+                body: 'Knows the menu, the hours, the 86 list, and your prices — because it reads your POS, not a script.',
+              },
+              {
+                icon: CalendarCheck,
+                title: 'Books straight into Square',
+                body: 'Real availability, real bookings, deposits by text. Your staff see it where they already look.',
+              },
+              {
+                icon: BarChart3,
+                title: 'Reads the register too',
+                body: 'The same subscription includes POS analytics — margins, forecasts, and what to fix this week.',
+              },
+            ].map((f) => (
+              <div
+                key={f.title}
+                className="group rounded-2xl border border-white/[0.07] bg-white/[0.03] p-6 transition-colors hover:border-[#1A8FD6]/40"
+              >
+                <f.icon className="h-5 w-5 shrink-0 text-[#1A8FD6]" />
+                <h3 className="mt-3 font-semibold text-white">{f.title}</h3>
+                <p className="mt-1.5 text-sm leading-relaxed text-slate-400">{f.body}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ─── Outbound — the dialing pulse is the event ───────── */}
+      <section id="outbound" className="relative isolate overflow-hidden border-y border-white/[0.06] bg-[#041A32]/40">
+        <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
+          <div className="absolute right-[8%] top-1/2 h-[640px] w-[640px] -translate-y-1/2 rounded-full"
+               style={{ background: 'radial-gradient(closest-side, rgba(23,197,176,0.14), transparent 70%)' }} />
+        </div>
+        <div className="mx-auto max-w-content px-6 py-24 md:py-28">
+          <span className="font-mono text-[11px] uppercase tracking-[0.3em] text-[#17C5B0]">
             No one else does this
           </span>
           <h2 className="mt-3 max-w-2xl font-serif text-4xl tracking-tight md:text-5xl">
             It doesn't just answer your phone. It picks it up and dials.
           </h2>
-          <div className="mt-10 grid gap-5 md:grid-cols-2">
-            <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-6">
-              <PhoneOutgoing className="h-5 w-5 shrink-0 text-[#17C5B0]" />
-              <h3 className="mt-3 font-semibold">A table opens, the waitlist rings</h3>
-              <p className="mt-1.5 text-sm leading-relaxed text-slate-400">
-                A 7:30 cancellation at 7:05 is worth nothing on a clipboard. Meridian
-                calls the waitlist in order — biggest spender first — and the slot is
-                resold before your host notices it opened.
-              </p>
+          <div className="mt-12 grid items-center gap-10 lg:grid-cols-[1fr,1.1fr]">
+            {/* The pulse instrument */}
+            <div className="relative mx-auto aspect-square w-full max-w-[380px]">
+              {[0, 1, 2].map((ring) => (
+                <span
+                  key={ring}
+                  className="absolute inset-0 m-auto rounded-full border border-[#17C5B0]/30 motion-safe:animate-ping"
+                  style={{
+                    width: `${46 + ring * 27}%`,
+                    height: `${46 + ring * 27}%`,
+                    animationDuration: '3.2s',
+                    animationDelay: `${ring * 1.05}s`,
+                  }}
+                />
+              ))}
+              <div className="absolute inset-0 m-auto flex h-[42%] w-[42%] items-center justify-center rounded-full border border-[#17C5B0]/50 bg-[#041A32] shadow-[0_0_60px_rgba(23,197,176,0.35)]">
+                <PhoneOutgoing className="h-10 w-10 shrink-0 text-[#17C5B0]" />
+              </div>
+              {/* waitlist targets */}
+              {[
+                { top: '4%', left: '52%', label: 'J. Park · $840 lifetime' },
+                { top: '58%', left: '2%', label: 'M. Osei · party of 4' },
+                { top: '78%', left: '64%', label: 'T. Alvarez · regular' },
+              ].map((t) => (
+                <div key={t.label} className="absolute -translate-x-1/2 rounded-full border border-white/10 bg-[#05080F]/90 px-3 py-1 font-mono text-[10px] text-slate-400"
+                     style={{ top: t.top, left: t.left }}>
+                  {t.label}
+                </div>
+              ))}
             </div>
-            <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-6">
-              <Phone className="h-5 w-5 shrink-0 text-[#17C5B0]" />
-              <h3 className="mt-3 font-semibold">Every answering AI is inbound-only</h3>
-              <p className="mt-1.5 text-sm leading-relaxed text-slate-400">
-                Slang, Popmenu, SoundHound — they all wait for the phone to ring.
-                An agent that places calls is a different machine, and it's the one
-                that turns cancellations back into revenue.
-              </p>
+            <div className="space-y-6">
+              <div className="rounded-2xl border border-white/[0.07] bg-white/[0.03] p-6">
+                <h3 className="font-semibold text-white">A table opens, the waitlist rings</h3>
+                <p className="mt-1.5 text-sm leading-relaxed text-slate-400">
+                  A 7:30 cancellation at 7:05 is worth nothing on a clipboard.
+                  Meridian calls the waitlist in order — biggest spender first,
+                  no-shows last — and the slot is resold before your host
+                  notices it opened.
+                </p>
+              </div>
+              <div className="rounded-2xl border border-white/[0.07] bg-white/[0.03] p-6">
+                <h3 className="font-semibold text-white">Every other answering AI is inbound-only</h3>
+                <p className="mt-1.5 text-sm leading-relaxed text-slate-400">
+                  Slang, Popmenu, SoundHound — they all wait for the phone to
+                  ring. An agent that places calls is a different machine, and
+                  it's the one that turns cancellations back into revenue.
+                </p>
+              </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* ─── Cost math ───────────────────────────────────────── */}
-      <section id="pricing" className="mx-auto max-w-content px-6 py-20 md:py-28">
-        <h2 className="font-serif text-4xl tracking-tight md:text-5xl">
-          The price, next to everyone else's.
-        </h2>
-        <p className="mt-4 max-w-2xl text-slate-600">
-          Nobody in this category prints their pricing next to their competitors'.
-          We can, because the economics work: our measured cost is{' '}
-          <span className="font-mono text-slate-900">$0.104 a minute</span>, so we
-          don't need overage fees or a sales call to tell you a number.
-        </p>
-        <div className="mt-10">
-          <CostMath />
+      {/* ─── Cost math — the Meridian row glows ──────────────── */}
+      <section id="pricing" className="relative isolate">
+        <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
+          <div className="absolute left-1/2 top-[20%] h-[520px] w-[900px] -translate-x-1/2 rounded-full"
+               style={{ background: 'radial-gradient(closest-side, rgba(26,143,214,0.10), transparent 70%)' }} />
+        </div>
+        <div className="mx-auto max-w-content px-6 py-24 md:py-28">
+          <h2 className="font-serif text-4xl tracking-tight md:text-5xl">
+            The price, next to everyone else's.
+          </h2>
+          <p className="mt-4 max-w-2xl text-slate-400">
+            Nobody in this category prints their pricing beside their
+            competitors'. We can, because the economics work: our measured cost
+            is <span className="font-mono text-white">$0.104 a minute</span>, so
+            we don't need overage fees or a sales call to tell you a number.
+          </p>
+          <div className="mt-12">
+            <CostMath />
+          </div>
         </div>
       </section>
 
-      {/* ─── Friction killers ────────────────────────────────── */}
-      <section className="border-y border-[#E8E6E0] bg-white">
+      {/* ─── Integrations marquee ───────────────────────────── */}
+      <section className="pb-16 md:pb-20">
+        <div className="mx-auto max-w-content px-6">
+          <p className="text-center font-mono text-[11px] uppercase tracking-[0.3em] text-slate-500">
+            Plays well with the till you already own
+          </p>
+          <Marquee
+            pauseOnHover
+            className="mt-7 [--duration:40s] [mask-image:linear-gradient(to_right,transparent,#000_10%,#000_90%,transparent)]"
+          >
+            {['Square', 'Toast', 'Clover', 'Lightspeed', 'Stripe', 'OpenTable-ready', 'Telnyx', 'Vapi'].map((name) => (
+              <span key={name} className="rounded-full border border-white/10 px-5 py-2 font-mono text-sm text-slate-400">
+                {name}
+              </span>
+            ))}
+          </Marquee>
+        </div>
+      </section>
+
+      {/* ─── Friction strip ──────────────────────────────────── */}
+      <section className="border-y border-white/[0.06] bg-[#070B14]">
         <div className="mx-auto grid max-w-content gap-6 px-6 py-10 text-center sm:grid-cols-3">
           {[
             ['Live in under an hour', 'connect your POS, pick a voice, forward the line'],
@@ -269,7 +368,7 @@ export default function LandingV2() {
             ['Your number stays yours', 'we answer it; you can take it back any time'],
           ].map(([t, s]) => (
             <div key={t}>
-              <div className="font-semibold text-slate-900">{t}</div>
+              <div className="font-semibold text-white">{t}</div>
               <div className="mt-1 text-sm text-slate-500">{s}</div>
             </div>
           ))}
@@ -277,48 +376,49 @@ export default function LandingV2() {
       </section>
 
       {/* ─── Final CTA ───────────────────────────────────────── */}
-      <section className="mx-auto max-w-content px-6 py-20 text-center md:py-28">
-        <h2 className="mx-auto max-w-2xl font-serif text-4xl tracking-tight md:text-5xl">
-          Don't take a demo. Make a call.
-        </h2>
-        <p className="mx-auto mt-4 max-w-xl text-slate-600">
-          The agent is on a real line right now. Order something. Try to trip it up.
-          Then imagine it answering your phone tonight at 6:45.
-        </p>
-        <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
-          <a
-            href={`tel:${VERTICALS[0].demoNumberE164}`}
-            className="inline-flex items-center gap-3 rounded-full bg-[#1A8FD6] py-3 pl-5 pr-6 font-medium text-white transition-colors hover:bg-[#1574B8]"
-          >
-            <Phone className="h-4 w-4 shrink-0" />
-            <span className="font-mono tracking-wide">{VERTICALS[0].demoNumber}</span>
-          </a>
-          <a
-            href="#demo"
-            className="inline-flex items-center gap-2 rounded-full border border-[#E8E6E0] bg-white px-5 py-3 text-sm font-medium text-slate-700 hover:border-slate-300"
-          >
-            Book a 15-minute demo <ArrowRight className="h-4 w-4 shrink-0" />
-          </a>
+      <section className="relative isolate">
+        <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
+          <div className="absolute left-1/2 top-1/2 h-[480px] w-[820px] -translate-x-1/2 -translate-y-1/2 rounded-full"
+               style={{ background: 'radial-gradient(closest-side, rgba(26,143,214,0.16), transparent 70%)' }} />
+        </div>
+        <div className="mx-auto max-w-content px-6 py-24 text-center md:py-32">
+          <h2 className="mx-auto max-w-2xl font-serif text-4xl tracking-tight md:text-6xl">
+            Don't take a demo. Make a call.
+          </h2>
+          <p className="mx-auto mt-4 max-w-xl text-slate-400">
+            The agent is on a real line right now. Order something. Try to trip
+            it up. Then imagine it answering your phone tonight at 6:45.
+          </p>
+          <div className="mt-9 flex flex-wrap items-center justify-center gap-4">
+            <a
+              href={`tel:${VERTICALS[0].demoNumberE164}`}
+              className="inline-flex items-center gap-3 rounded-full bg-[#1A8FD6] py-3.5 pl-6 pr-7 font-medium text-white shadow-[0_0_48px_rgba(26,143,214,0.45)] transition-all hover:bg-[#2da0e2]"
+            >
+              <Phone className="h-4 w-4 shrink-0" />
+              <span className="font-mono tracking-wide">{VERTICALS[0].demoNumber}</span>
+            </a>
+            <a
+              href="#quote"
+              className="inline-flex items-center gap-2 rounded-full border border-white/15 px-5 py-3 text-sm font-medium text-slate-300 transition-colors hover:border-white/30 hover:text-white"
+            >
+              Book a 15-minute demo <ArrowRight className="h-4 w-4 shrink-0" />
+            </a>
+          </div>
         </div>
       </section>
 
       {/* ─── Book a demo (quote form → /api/quote-request) ───── */}
-      {/* ScheduleQuote is the shared dark-page component (old landing +
-          Canada use it) — hosting it on ink keeps its light-on-dark text
-          legible without forking it. Restyle for light ground later. */}
-      <section id="demo" className="border-t border-[#E8E6E0] bg-[#0B1120]">
-        <ScheduleQuote accent="#1A8FD6" accentSecondary="#17C5B0" source="us-landing-v2" />
-      </section>
+      <ScheduleQuote accent="#1A8FD6" accentSecondary="#17C5B0" source="us-landing-v2" />
 
       {/* ─── Footer ──────────────────────────────────────────── */}
-      <footer className="border-t border-[#E8E6E0] bg-[#FAFAF7]">
+      <footer className="border-t border-white/[0.06]">
         <div className="mx-auto flex max-w-content flex-wrap items-center justify-between gap-4 px-6 py-8 text-sm text-slate-500">
           <MeridianLogo size={22} showWordmark showTagline={false} />
           <nav className="flex flex-wrap gap-5">
-            <Link to="/careers" className="hover:text-slate-900">Careers</Link>
-            <a href="/privacy" className="hover:text-slate-900">Privacy</a>
-            <a href="/terms" className="hover:text-slate-900">Terms</a>
-            <Link to="/canada" className="hover:text-slate-900">Canada</Link>
+            <Link to="/careers" className="transition-colors hover:text-white">Careers</Link>
+            <a href="/privacy" className="transition-colors hover:text-white">Privacy</a>
+            <a href="/terms" className="transition-colors hover:text-white">Terms</a>
+            <Link to="/canada" className="transition-colors hover:text-white">Canada</Link>
           </nav>
         </div>
       </footer>

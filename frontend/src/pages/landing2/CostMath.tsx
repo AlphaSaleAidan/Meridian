@@ -23,10 +23,10 @@ export default function CostMath() {
 
   return (
     <div className="grid gap-8 lg:grid-cols-[1.2fr,1fr] lg:items-start">
-      <div className="overflow-x-auto rounded-2xl border border-[#E8E6E0] bg-white">
+      <div className="overflow-x-auto rounded-2xl border border-white/[0.07] bg-white/[0.03]">
         <table className="w-full min-w-[560px] text-left text-sm">
           <thead>
-            <tr className="border-b border-[#E8E6E0] font-mono text-xs uppercase tracking-wider text-slate-500">
+            <tr className="border-b border-white/[0.07] font-mono text-xs uppercase tracking-wider text-slate-500">
               <th className="px-5 py-3.5 font-medium">Service</th>
               <th className="px-5 py-3.5 font-medium">Price</th>
               <th className="px-5 py-3.5 font-medium">Per minute</th>
@@ -39,26 +39,26 @@ export default function CostMath() {
                 key={row.who}
                 className={
                   row.who === 'Meridian'
-                    ? 'border-b border-[#E8E6E0] bg-[#1A8FD6]/[0.06]'
-                    : 'border-b border-[#E8E6E0] last:border-0'
+                    ? 'border-b border-white/[0.07] bg-[#1A8FD6]/10 shadow-[inset_0_0_30px_rgba(26,143,214,0.12)]'
+                    : 'border-b border-white/[0.07] last:border-0'
                 }
               >
-                <td className="px-5 py-4 font-semibold text-slate-900">{row.who}</td>
-                <td className="px-5 py-4 font-mono text-slate-800">{row.price}</td>
-                <td className="px-5 py-4 font-mono text-slate-800">{row.perMin}</td>
+                <td className="px-5 py-4 font-semibold text-white">{row.who}</td>
+                <td className="px-5 py-4 font-mono text-slate-200">{row.price}</td>
+                <td className="px-5 py-4 font-mono text-slate-200">{row.perMin}</td>
                 <td className="px-5 py-4 text-slate-500">{row.note}</td>
               </tr>
             ))}
           </tbody>
         </table>
-        <p className="border-t border-[#E8E6E0] px-5 py-3 text-xs text-slate-400">
+        <p className="border-t border-white/[0.07] px-5 py-3 text-xs text-slate-500">
           Competitor pricing as publicly listed, Sept 2026. Our $0.104/min is measured
           cost of a live call through the whole stack — ask us to show the math.
         </p>
       </div>
 
-      <div className="rounded-2xl border border-[#E8E6E0] bg-[#FDFCFA] p-6">
-        <h3 className="font-serif text-2xl text-slate-900">What do missed calls cost you?</h3>
+      <div className="rounded-2xl border border-white/[0.07] bg-white/[0.03] p-6">
+        <h3 className="font-serif text-2xl text-white">What do missed calls cost you?</h3>
         <div className="mt-5 space-y-5">
           {[
             { label: 'Calls per day', value: callsPerDay, set: setCallsPerDay, min: 5, max: 150, fmt: (v: number) => `${v}` },
@@ -66,9 +66,9 @@ export default function CostMath() {
             { label: 'Average order', value: avgOrder, set: setAvgOrder, min: 10, max: 150, fmt: (v: number) => `$${v}` },
           ].map((s) => (
             <label key={s.label} className="block">
-              <span className="flex items-baseline justify-between text-sm text-slate-600">
+              <span className="flex items-baseline justify-between text-sm text-slate-400">
                 {s.label}
-                <span className="font-mono text-slate-900">{s.fmt(s.value)}</span>
+                <span className="font-mono text-white">{s.fmt(s.value)}</span>
               </span>
               <input
                 type="range"
@@ -81,11 +81,11 @@ export default function CostMath() {
             </label>
           ))}
         </div>
-        <div className="mt-6 rounded-xl bg-[#0B1120] px-5 py-4 text-white">
+        <div className="mt-6 rounded-xl border border-[#1A8FD6]/40 bg-[#041A32]/60 px-5 py-4 shadow-[0_0_40px_rgba(26,143,214,0.2)]">
           <span className="font-mono text-xs uppercase tracking-widest text-slate-400">
             Walking out the door, monthly
           </span>
-          <div className="mt-1 font-serif text-4xl">${monthly.toLocaleString()}</div>
+          <div className="mt-1 font-serif text-4xl text-white">${monthly.toLocaleString()}</div>
           <p className="mt-1 text-xs text-slate-400">
             assuming half of missed calls were orders — the conservative case
           </p>
