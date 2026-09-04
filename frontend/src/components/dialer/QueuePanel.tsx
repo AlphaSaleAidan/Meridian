@@ -48,7 +48,9 @@ function Row({ entry, active, done }: { entry: QueueLead; active: boolean; done:
             <CreditCard size={10} />{posLabel(entry.pos_system)}
           </span>
           {entry.est_monthly_value > 0 && <span>· {fmtCents(entry.est_monthly_value)}</span>}
-          {entry.city && <span>· {entry.city}</span>}
+          {(entry.city || entry.province) && (
+            <span>· {[entry.city, entry.province].filter(Boolean).join(', ')}</span>
+          )}
         </p>
       </div>
       {entry.local_time && (
