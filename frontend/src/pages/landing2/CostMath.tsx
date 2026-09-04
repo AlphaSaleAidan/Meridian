@@ -52,8 +52,7 @@ export default function CostMath() {
           </tbody>
         </table>
         <p className="border-t border-[#EAE5DC] px-5 py-3 text-xs text-[#9BA0A8]">
-          Competitor pricing as publicly listed, Sept 2026. Our $0.104/min is measured
-          cost of a live call through the whole stack — ask us to show the math.
+          Competitor pricing as publicly listed, Sept 2026.
         </p>
       </div>
 

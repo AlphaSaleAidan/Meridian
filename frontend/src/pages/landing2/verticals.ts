@@ -115,7 +115,7 @@ export const VERTICALS: Vertical[] = [
 
 /** Cost table — every number here is real and checkable. */
 export const COST_ROWS = [
-  { who: 'Meridian', price: 'from US$250/mo', perMin: '$0.104/min true cost', note: 'phone agent + POS analytics, month to month' },
+  { who: 'Meridian', price: 'from US$250/mo', perMin: 'flat monthly', note: 'phone agent + POS analytics + cameras, month to month' },
   { who: 'Slang.ai', price: '$399–599/mo', perMin: 'unlimited minutes', note: 'answering + reservations only' },
   { who: 'Popmenu AI', price: '~$349/mo', perMin: '—', note: 'part of marketing bundle' },
   { who: 'Loman.ai', price: '$399/mo', perMin: '+ $0.50/min', note: 'per-minute overage' },
