@@ -11,7 +11,7 @@
 //   * Answered calls REQUIRE a manual disposition before the wrap-up
 //     countdown starts; countdown end auto-dials the next entry.
 //   * Pause halts auto-advance (mid-countdown included); Stop ends the session.
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   dialerApi,
@@ -58,6 +58,10 @@ export function useDialerSession(market: DialerMarket) {
   const [softphoneMode, setSoftphoneMode] = useState<'sim' | 'webrtc' | null>(null)
   const [log, setLog] = useState<CompletedCall[]>([])
   const [error, setError] = useState<string | null>(null)
+  // Region scoping: which states/provinces to work. Empty = everything. The
+  // selection narrows BOTH the visible queue and the session's dial list.
+  const [selectedRegions, setSelectedRegions] = useState<string[]>([])
+  const selectedRegionsRef = useRef<string[]>([])
 
   const softphoneRef = useRef<Softphone | null>(null)
   const workingQueue = useRef<QueueEntry[]>([])
@@ -96,6 +100,42 @@ export function useDialerSession(market: DialerMarket) {
   const invalidateQueue = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ['dialer', 'queue', market] })
   }, [queryClient, market])
+
+  // ── Region scoping ─────────────────────────────────────────────────────────
+
+  const toggleRegion = useCallback((region: string) => {
+    setSelectedRegions(prev => {
+      const next = prev.includes(region) ? prev.filter(r => r !== region) : [...prev, region]
+      selectedRegionsRef.current = next
+      return next
+    })
+  }, [])
+
+  const clearRegions = useCallback(() => {
+    selectedRegionsRef.current = []
+    setSelectedRegions([])
+  }, [])
+
+  const filterByRegions = useCallback((queue: DialerQueue, regions: string[]): DialerQueue => {
+    if (regions.length === 0) return queue
+    // Callbacks carry no province — they were promised to someone, always keep them.
+    return { ...queue, leads: queue.leads.filter(l => regions.includes(l.province || '—')) }
+  }, [])
+
+  // Every region in the full queue with its lead count, biggest first.
+  const regionCounts = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const l of queueQuery.data?.leads ?? []) {
+      const r = l.province || '—'
+      counts.set(r, (counts.get(r) ?? 0) + 1)
+    }
+    return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+  }, [queueQuery.data])
+
+  const scopedQueue = useMemo(
+    () => (queueQuery.data ? filterByRegions(queueQuery.data, selectedRegions) : null),
+    [queueQuery.data, selectedRegions, filterByRegions],
+  )
 
   // ── Advance / wrap-up ──────────────────────────────────────────────────────
 
@@ -246,7 +286,9 @@ export function useDialerSession(market: DialerMarket) {
       // Recapture ordering is server-side now (next_action_at); the queue is
       // already the ready-to-dial list. Callbacks stay concatenated (empty from
       // the phone-lead queue, but harmless if a source ever supplies them).
-      const entries: QueueEntry[] = [...queue.callbacks, ...queue.leads]
+      // The rep's region selection scopes what this session dials.
+      const scoped = filterByRegions(queue, selectedRegionsRef.current)
+      const entries: QueueEntry[] = [...scoped.callbacks, ...scoped.leads]
       workingQueue.current = entries
       pointer.current = 0
       setLog([])
@@ -261,7 +303,7 @@ export function useDialerSession(market: DialerMarket) {
       setError(err instanceof Error ? err.message : 'Could not start the session')
       setPhaseSafe('idle')
     }
-  }, [market, onSoftphoneEvent, queueQuery.data])
+  }, [market, onSoftphoneEvent, queueQuery.data, filterByRegions])
 
   const togglePause = useCallback(() => {
     const next = !pausedRef.current
@@ -303,6 +345,10 @@ export function useDialerSession(market: DialerMarket) {
 
   const setMuted = useCallback((muted: boolean) => {
     softphoneRef.current?.setMuted(muted)
+  }, [])
+
+  const sendDtmf = useCallback((digit: string) => {
+    softphoneRef.current?.sendDtmf(digit)
   }, [])
 
   const submitDisposition = useCallback(async (
@@ -349,11 +395,13 @@ export function useDialerSession(market: DialerMarket) {
   return {
     phase, paused, session, currentEntry, currentCall, needsDisposition,
     callSeconds, wrapRemaining, notes, setNotes, softphoneMode, log, error,
-    queue: queueQuery.data ?? null,
+    queue: scopedQueue,
+    fullQueue: queueQuery.data ?? null,
+    regionCounts, selectedRegions, toggleRegion, clearRegions,
     queueLoading: queueQuery.isLoading,
     queueError: queueQuery.error,
     remaining: Math.max(0, remaining),
-    start, stop, togglePause, hangup, setMuted, submitDisposition, dialNow,
+    start, stop, togglePause, hangup, setMuted, sendDtmf, submitDisposition, dialNow,
     bookAndAdvance, sendToPipeline,
     skip: hangup, // during dialing/ringing a hangup IS the skip
   }

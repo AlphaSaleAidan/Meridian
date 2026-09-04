@@ -138,7 +138,15 @@ export function AutoDialerScreen({ market }: { market: DialerMarket }) {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-1">
-          <QueuePanel queue={d.queue} currentEntry={d.currentEntry} dialedIds={dialedIds} />
+          <QueuePanel
+            queue={d.queue}
+            currentEntry={d.currentEntry}
+            dialedIds={dialedIds}
+            regionCounts={d.regionCounts}
+            selectedRegions={d.selectedRegions}
+            onToggleRegion={d.toggleRegion}
+            onClearRegions={d.clearRegions}
+          />
         </div>
 
         <div className="lg:col-span-2 space-y-4">
@@ -149,7 +157,7 @@ export function AutoDialerScreen({ market }: { market: DialerMarket }) {
             notesEnabled={d.phase === 'connected'}
             onSendToPipeline={d.sendToPipeline}
           />
-          <CallControls phase={d.phase} onHangup={d.hangup} onMute={d.setMuted} />
+          <CallControls phase={d.phase} onHangup={d.hangup} onMute={d.setMuted} onDtmf={d.sendDtmf} />
           {d.log.length > 0 && <RecentActivity log={d.log} />}
         </div>
       </div>
