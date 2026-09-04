@@ -258,6 +258,8 @@ export const dialerApi = {
       '/api/dialer/phone-leads/import', { method: 'POST', body: { source, leads } }),
   listLeads: (status?: string) =>
     req<{ leads: PhoneLead[] }>('/api/dialer/phone-leads', { params: { status } }),
+  warmLeads: () =>
+    req<{ leads: PhoneLead[] }>('/api/dialer/phone-leads/warm'),
   updateLead: (id: string, body: Partial<PhoneLeadInput> & { status?: string }) =>
     req<{ lead: PhoneLead }>(`/api/dialer/phone-leads/${id}`, { method: 'PATCH', body }),
   promoteLead: (id: string) =>

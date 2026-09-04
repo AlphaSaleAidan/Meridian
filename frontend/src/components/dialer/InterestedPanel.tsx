@@ -33,7 +33,11 @@ export function InterestedPanel() {
   const [booking, setBooking] = useState<PhoneLead | null>(null)
   const [promotedIds, setPromotedIds] = useState<Set<string>>(new Set())
 
-  const load = () => dialerApi.listLeads()
+  // Server-side warm query — no recency cap, so a bulk import can never push
+  // an old interested lead out of this list. isWarm stays as a client-side
+  // guard for API versions that still serve the generic list.
+  const load = () => dialerApi.warmLeads()
+    .catch(() => dialerApi.listLeads())
     .then(r => setLeads(r.leads.filter(isWarm)))
     .catch(e => setError(e instanceof Error ? e.message : 'Failed to load interested leads'))
   useEffect(() => { load() }, [])
