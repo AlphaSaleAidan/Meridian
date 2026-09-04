@@ -7,7 +7,7 @@
  *
  * Every transcript here is the product's actual behavior — no capability is
  * scripted that the agent cannot do (order → POS, booking → Square
- * Appointments, waitlist outbound dialing).
+ * Appointments, waitlist text offers).
  */
 
 export interface TranscriptLine {
@@ -50,7 +50,7 @@ export const VERTICALS: Vertical[] = [
     label: 'Restaurants',
     seat: 'table',
     headline: 'Answer every call. Fill every table.',
-    sub: 'Meridian answers 24/7, takes orders and reservations straight into your POS, and dials your waitlist the moment a table opens.',
+    sub: 'Meridian answers 24/7, takes orders and reservations straight into your POS, and texts your waitlist the moment a table opens.',
     transcript: [
       { speaker: 'caller', text: 'Hey, can I get a large pepperoni and a Caesar salad for pickup?' },
       { speaker: 'agent', text: 'Absolutely — one large pepperoni, one Caesar. That’s $31.40. I’ll text you a payment link and it’ll be ready in 20 minutes.' },
@@ -72,7 +72,7 @@ export const VERTICALS: Vertical[] = [
     label: 'Barbershops & salons',
     seat: 'chair',
     headline: 'Your chair is never empty because nobody answered.',
-    sub: 'Meridian books appointments straight into Square Appointments, texts deposits and reminders, and calls your waitlist when a slot frees up.',
+    sub: 'Meridian books appointments straight into Square Appointments, texts deposits and reminders, and texts your waitlist when a slot frees up.',
     transcript: [
       { speaker: 'caller', text: 'Can I get a fade with Marcus on Saturday?' },
       { speaker: 'agent', text: 'Marcus has 11:30 or 2:00 on Saturday — which works?' },

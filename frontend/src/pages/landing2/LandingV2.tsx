@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowRight, Phone, PhoneOutgoing, Menu, X, Check, Minus, Cctv } from 'lucide-react'
+import { ArrowRight, Phone, MessageSquareText, Menu, X, Check, Minus, Cctv } from 'lucide-react'
 
 import SEO from '@/components/SEO'
 import MeridianLogo from '@/components/MeridianLogo'
@@ -30,7 +30,7 @@ export default function LandingV2() {
     <div className="min-h-screen overflow-x-clip bg-[#FBF8F3] font-sans text-[#171A20]">
       <SEO
         title="Meridian — The phone agent that answers, books, and calls back"
-        description="Meridian answers every call 24/7, takes orders and bookings straight into your POS, and dials your waitlist when a slot opens. Cameras, bookings, and POS analytics in one subscription from US$250/mo."
+        description="Meridian answers every call 24/7, takes orders and bookings straight into your POS, and texts your waitlist the moment a slot opens. Cameras, bookings, and POS analytics in one subscription from US$250/mo."
         path="/"
       />
 
@@ -72,7 +72,16 @@ export default function LandingV2() {
       </header>
 
       {/* ─── Hero — copy left, the product in a real hand right ── */}
-      <section className="mx-auto grid max-w-6xl items-center gap-10 px-6 pb-10 pt-32 md:pt-36 lg:grid-cols-[1.1fr,1fr] lg:gap-6">
+      <section className="relative isolate overflow-hidden">
+        <div aria-hidden className="pointer-events-none absolute inset-0 -z-10">
+          <div className="absolute right-[-12%] top-[-8%] h-[560px] w-[560px] rounded-full"
+               style={{ background: 'radial-gradient(closest-side, rgba(26,143,214,0.14), transparent 70%)' }} />
+          <div className="absolute left-[-10%] top-[45%] h-[420px] w-[420px] rounded-full"
+               style={{ background: 'radial-gradient(closest-side, rgba(23,197,176,0.10), transparent 70%)' }} />
+          <div className="absolute bottom-[-30%] left-[35%] h-[480px] w-[480px] rounded-full"
+               style={{ background: 'radial-gradient(closest-side, rgba(240,180,41,0.08), transparent 70%)' }} />
+        </div>
+      <div className="mx-auto grid max-w-6xl items-center gap-10 px-6 pb-10 pt-32 md:pt-36 lg:grid-cols-[1.1fr,1fr] lg:gap-6">
         <div>
           <p className="text-[13px] font-bold uppercase tracking-wide text-[#1A8FD6]">
             AI phone agent for {v.label.toLowerCase()}
@@ -178,6 +187,7 @@ export default function LandingV2() {
             </span>
           ))}
         </div>
+      </div>
       </section>
 
       {/* ─── Metrics strip ───────────────────────────────────── */}
@@ -197,7 +207,7 @@ export default function LandingV2() {
       </section>
 
       {/* ─── Listen: the live transcript ─────────────────────── */}
-      <section id="how" className="mx-auto max-w-6xl px-6 py-14">
+      <section id="how" className="relative bg-gradient-to-b from-[#EFF6FC] to-transparent"><div className="mx-auto max-w-6xl px-6 py-14">
         <div className="max-w-2xl">
           <p className="text-[13px] font-bold uppercase tracking-wide text-[#1A8FD6]">Hear it work</p>
           <h2 className="mt-3 text-4xl font-extrabold tracking-tight md:text-5xl">
@@ -221,7 +231,7 @@ export default function LandingV2() {
             </motion.div>
           </AnimatePresence>
         </div>
-      </section>
+      </div></section>
 
       {/* ─── Real screenshots ────────────────────────────────── */}
       <section className="mx-auto max-w-6xl px-6 py-14">
@@ -268,8 +278,51 @@ export default function LandingV2() {
         </div>
       </section>
 
-      {/* ─── Camera Intelligence — it watches the room, too ──── */}
+      {/* ─── The trades — QP-style photo bento ───────────────── */}
       <section className="mx-auto max-w-6xl px-6 py-14">
+        <div className="max-w-2xl">
+          <p className="text-[13px] font-bold uppercase tracking-wide text-[#1A8FD6]">Every trade</p>
+          <h2 className="mt-3 text-4xl font-extrabold tracking-tight md:text-5xl">
+            One brain. Every trade's phone.
+          </h2>
+          <p className="mt-4 text-lg text-[#5B6069]">
+            Meridian is set up differently for each one — the vocabulary, the
+            booking noun, the screens. Pick yours and the demo opens the way
+            your portal would.
+          </p>
+        </div>
+        <div className="mt-10 grid auto-rows-[190px] gap-4 md:grid-cols-6">
+          {[
+            { img: '/landing2/hero-pass.webp', label: 'Restaurants', line: 'Orders land in the POS while the caller is still on the line.', span: 'md:col-span-3 md:row-span-2', big: true },
+            { img: '/landing2/niche-golf.webp', label: 'Golf courses', line: 'Foursomes on the tee sheet, carts included.', span: 'md:col-span-3' },
+            { img: '/landing2/niche-barber.webp', label: 'Barbershops & salons', line: 'Chairs booked into Square, deposits texted.', span: 'md:col-span-2' },
+            { img: '/landing2/niche-smoke.webp', label: 'Smoke shops', line: '', span: 'md:col-span-1' },
+            { img: '/landing2/niche-detail.webp', label: 'Auto detailing', line: 'Bays scheduled, payment links per job.', span: 'md:col-span-2' },
+            { img: '/landing2/niche-medspa.webp', label: 'Med spas', line: 'Consults booked, reminders sent.', span: 'md:col-span-2' },
+            { img: '/landing2/niche-coffee.webp', label: 'Coffee shops', line: 'The morning rush, answered.', span: 'md:col-span-2' },
+          ].map((t) => (
+            <div
+              key={t.label}
+              className={`group relative overflow-hidden rounded-[22px] border border-[#EAE5DC] shadow-[0_8px_30px_rgba(23,26,32,0.08)] ${t.span}`}
+            >
+              <img
+                src={t.img}
+                alt={`${t.label} — a Meridian trade`}
+                loading="lazy"
+                className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 motion-safe:group-hover:scale-[1.04]"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent" />
+              <div className={`absolute bottom-0 p-5 text-white ${t.big ? 'md:p-6' : ''}`}>
+                <div className={`font-extrabold tracking-tight ${t.big ? 'text-3xl' : 'text-xl'}`}>{t.label}</div>
+                {t.line && <p className="mt-1 max-w-sm text-sm text-white/75">{t.line}</p>}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ─── Camera Intelligence — it watches the room, too ──── */}
+      <section className="bg-gradient-to-b from-transparent via-[#E9F7F4] to-transparent"><div className="mx-auto max-w-6xl px-6 py-14">
         <div className="grid items-center gap-10 lg:grid-cols-[1fr,1.35fr]">
           <div>
             <p className="inline-flex items-center gap-2 text-[13px] font-bold uppercase tracking-wide text-[#1A8FD6]">
@@ -312,7 +365,7 @@ export default function LandingV2() {
             <BorderBeam size={160} duration={9} colorFrom="#1A8FD6" colorTo="#17C5B0" />
           </PopCard>
         </div>
-      </section>
+      </div></section>
 
       {/* ─── Feature comparison — where Meridian stands alone ── */}
       <section className="mx-auto max-w-6xl px-6 py-14">
@@ -338,7 +391,7 @@ export default function LandingV2() {
                 ['Answers every call, 24/7', true, true, true, true],
                 ['Takes orders straight into your POS', true, false, false, false],
                 ['Books into Square Appointments', true, false, false, false],
-                ['Calls your waitlist back — outbound', true, false, false, false],
+                ['Works your waitlist automatically when a slot opens', true, false, false, false],
                 ['Camera intelligence on your floor', true, false, false, false],
                 ['POS analytics in the same subscription', true, false, false, false],
                 ['Price printed on the website', true, false, false, false],
@@ -374,7 +427,7 @@ export default function LandingV2() {
               />
             ))}
             <div className="absolute inset-0 m-auto flex h-[42%] w-[42%] items-center justify-center rounded-full bg-[#1A8FD6] shadow-[0_16px_40px_rgba(26,143,214,0.35)]">
-              <PhoneOutgoing className="h-9 w-9 shrink-0 text-white" />
+              <MessageSquareText className="h-9 w-9 shrink-0 text-white" />
             </div>
           </div>
           <div>
@@ -382,20 +435,21 @@ export default function LandingV2() {
               No one else does this
             </p>
             <h2 className="mt-3 text-4xl font-extrabold tracking-tight md:text-5xl">
-              It doesn't just answer. It picks up the phone and dials.
+              It doesn't just answer. It texts your waitlist the second a table opens.
             </h2>
             <p className="mt-4 text-lg leading-relaxed text-[#5B6069]">
               A 7:30 cancellation at 7:05 is worth nothing on a clipboard.
-              Meridian calls your waitlist in order — biggest spender first —
-              and the slot is resold before your host notices it opened.
-              Slang, Popmenu, SoundHound: all inbound-only.
+              Meridian offers the freed slot to your waitlist by text, in
+              order — biggest spender first, no-shows last — and it's resold
+              before your host notices it opened. Slang, Popmenu, SoundHound:
+              they only answer.
             </p>
           </div>
         </div>
       </section>
 
       {/* ─── Pricing + ROI ───────────────────────────────────── */}
-      <section id="pricing" className="mx-auto max-w-6xl px-6 py-14">
+      <section id="pricing" className="bg-gradient-to-b from-[#FDF4E7] to-transparent"><div className="mx-auto max-w-6xl px-6 py-14">
         <div className="max-w-2xl">
           <p className="text-[13px] font-bold uppercase tracking-wide text-[#1A8FD6]">Priced in the open</p>
           <h2 className="mt-3 text-4xl font-extrabold tracking-tight md:text-5xl">
@@ -409,7 +463,7 @@ export default function LandingV2() {
         <div className="mt-10">
           <CostMath />
         </div>
-      </section>
+      </div></section>
 
       {/* ─── Friction killers ────────────────────────────────── */}
       <section className="mx-auto max-w-6xl px-6 py-10">
