@@ -182,6 +182,14 @@ async def list_phone_leads(status: str | None = None, user: dict = Depends(requi
     return {"leads": await store.list_for_rep(scope.rep_id, status=status)}
 
 
+@router.get("/phone-leads/warm")
+async def list_warm_phone_leads(user: dict = Depends(require_jwt)):
+    """The rep's Interested list — warm dispositions and booked meetings, with
+    no recency cap, so old warm leads survive later bulk imports."""
+    scope = await _scope(user)
+    return {"leads": await store.warm_for_rep(scope.rep_id)}
+
+
 @router.patch("/phone-leads/{lead_id}")
 async def patch_phone_lead(lead_id: str, body: PhoneLeadPatch, user: dict = Depends(require_jwt)):
     scope = await _scope(user)

@@ -81,6 +81,23 @@ async def queue_for_rep(rep_id: str, limit: int = 200) -> list[dict]:
     return await _req("GET", "canada_phone_leads", params=params)
 
 
+async def warm_for_rep(rep_id: str, limit: int = 500) -> list[dict]:
+    """Every lead this rep marked warm — Interested / Callback / Meeting booked
+    dispositions plus booked status — regardless of age. The generic list is
+    capped to the newest rows, so a big import must never push an old warm lead
+    out of the rep's Interested view (it did: 2026-09-04 golf import hid the
+    August restaurant leads)."""
+    params = {
+        "select": _LEAD_COLS,
+        "rep_id": f"eq.{rep_id}",
+        "or": "(last_disposition.in.(interested,callback,meeting_booked),status.eq.booked)",
+        "converted_lead_id": "is.null",
+        "order": "updated_at.desc",
+        "limit": str(limit),
+    }
+    return await _req("GET", "canada_phone_leads", params=params)
+
+
 async def list_for_rep(rep_id: str, status: str | None = None, limit: int = 500) -> list[dict]:
     params = {"select": _LEAD_COLS, "or": f"(rep_id.eq.{rep_id},rep_id.is.null)",
               "order": "created_at.desc", "limit": str(limit)}
