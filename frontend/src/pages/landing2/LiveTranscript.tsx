@@ -46,16 +46,16 @@ export default function LiveTranscript({
   return (
     <div ref={rootRef} className="grid gap-4 lg:grid-cols-[1.15fr,1fr] items-start">
       {/* The call */}
-      <div className="rounded-2xl border border-white/[0.07] bg-white/[0.03]">
-        <div className="flex items-center gap-2.5 border-b border-white/[0.07] px-5 py-3">
+      <div className="rounded-2xl border border-[#EAE5DC] bg-white shadow-[0_8px_30px_rgba(23,26,32,0.06)]">
+        <div className="flex items-center gap-2.5 border-b border-[#EAE5DC] px-5 py-3">
           <span className="relative flex h-2.5 w-2.5">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#17C5B0] opacity-60" />
             <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-[#17C5B0]" />
           </span>
-          <span className="font-mono text-xs tracking-wide text-slate-500">
+          <span className="font-mono text-xs tracking-wide text-[#9BA0A8]">
             LIVE CALL · answered before the second ring
           </span>
-          <Phone className="ml-auto h-3.5 w-3.5 shrink-0 text-slate-400" />
+          <Phone className="ml-auto h-3.5 w-3.5 shrink-0 text-[#9BA0A8]" />
         </div>
         <div className="space-y-3 px-5 py-5 min-h-[260px]">
           {lines.slice(0, shown).map((line, i) => (
@@ -69,12 +69,12 @@ export default function LiveTranscript({
               <div
                 className={
                   line.speaker === 'agent'
-                    ? 'max-w-[85%] rounded-2xl rounded-br-md border border-[#1A8FD6]/30 bg-[#1A8FD6]/15 px-4 py-2.5 text-[15px] leading-snug text-white'
-                    : 'max-w-[85%] rounded-2xl rounded-bl-md bg-white/[0.06] px-4 py-2.5 text-[15px] leading-snug text-slate-200'
+                    ? 'max-w-[85%] rounded-2xl rounded-br-md bg-[#1A8FD6] px-4 py-2.5 text-[15px] leading-snug text-white'
+                    : 'max-w-[85%] rounded-2xl rounded-bl-md bg-[#F3F0E9] px-4 py-2.5 text-[15px] leading-snug text-[#171A20]'
                 }
               >
                 {line.speaker === 'agent' && (
-                  <span className="mb-0.5 block font-mono text-[10px] uppercase tracking-widest text-[#17C5B0]">
+                  <span className="mb-0.5 block font-mono text-[10px] uppercase tracking-widest text-white/75">
                     Meridian
                   </span>
                 )}
@@ -86,9 +86,9 @@ export default function LiveTranscript({
       </div>
 
       {/* The artifact it produced */}
-      <div className="rounded-2xl border border-white/[0.07] bg-[#070B14]">
-        <div className="border-b border-white/[0.07] px-5 py-3">
-          <span className="font-mono text-xs tracking-wide text-slate-500">{artifact.panel}</span>
+      <div className="rounded-2xl border border-[#EAE5DC] bg-[#FBF8F3] shadow-[0_8px_30px_rgba(23,26,32,0.06)]">
+        <div className="border-b border-[#EAE5DC] px-5 py-3">
+          <span className="font-mono text-xs tracking-wide text-[#9BA0A8]">{artifact.panel}</span>
         </div>
         <div className="px-5 py-5">
           <motion.div
@@ -96,16 +96,16 @@ export default function LiveTranscript({
             initial={reduced ? false : { opacity: 0, scale: 0.97, y: 8 }}
             animate={done ? { opacity: 1, scale: 1, y: 0 } : { opacity: 0.25, scale: 0.97, y: 8 }}
             transition={{ duration: 0.5, ease: EASE }}
-            className="relative overflow-hidden rounded-xl border border-[#17C5B0]/40 bg-white/[0.03] p-4"
+            className="relative overflow-hidden rounded-xl border border-[#17C5B0]/60 bg-white p-4"
           >
             <div className="flex items-baseline justify-between gap-3">
-              <span className="font-semibold text-white">{artifact.headline}</span>
+              <span className="font-semibold text-[#171A20]">{artifact.headline}</span>
               {artifact.amount && (
-                <span className="font-mono text-sm text-white">{artifact.amount}</span>
+                <span className="font-mono text-sm text-[#171A20]">{artifact.amount}</span>
               )}
             </div>
-            <p className="mt-1 text-sm text-slate-400">{artifact.detail}</p>
-            <p className="mt-3 font-mono text-[11px] uppercase tracking-widest text-[#17C5B0]">
+            <p className="mt-1 text-sm text-[#5B6069]">{artifact.detail}</p>
+            <p className="mt-3 font-mono text-[11px] uppercase tracking-widest text-[#0FA894]">
               {done ? 'Landed while the caller was still on the line' : 'Waiting for the call…'}
             </p>
             {done && (
