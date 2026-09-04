@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowRight, Phone, PhoneOutgoing, Menu, X } from 'lucide-react'
+import { ArrowRight, Phone, PhoneOutgoing, Menu, X, Check, Minus, Cctv } from 'lucide-react'
 
 import SEO from '@/components/SEO'
 import MeridianLogo from '@/components/MeridianLogo'
 import ScheduleQuote from '@/components/landing/ScheduleQuote'
+import { BorderBeam } from '@/components/ui/BorderBeam'
+import PopCard from './PopCard'
 import LiveTranscript from './LiveTranscript'
 import CostMath from './CostMath'
 import { VERTICALS, type Vertical } from './verticals'
@@ -28,7 +30,7 @@ export default function LandingV2() {
     <div className="min-h-screen overflow-x-clip bg-[#FBF8F3] font-sans text-[#171A20]">
       <SEO
         title="Meridian — The phone agent that answers, books, and calls back"
-        description="Meridian answers every call 24/7, takes orders and bookings straight into your POS, and dials your waitlist when a slot opens. From US$250/mo, $0.104/min true cost."
+        description="Meridian answers every call 24/7, takes orders and bookings straight into your POS, and dials your waitlist when a slot opens. Cameras, bookings, and POS analytics in one subscription from US$250/mo."
         path="/"
       />
 
@@ -165,7 +167,7 @@ export default function LandingV2() {
           {[
             { txt: '< 1 ring pickup', cls: 'left-[-4%] top-[16%]', delay: '0s' },
             { txt: '+$4,080/mo actions on screen', cls: 'right-[-6%] top-[38%]', delay: '1.1s' },
-            { txt: '$0.104/min true cost', cls: 'left-[-2%] bottom-[18%]', delay: '2.2s' },
+            { txt: 'Camera: spill spotted · dealt with', cls: 'left-[-4%] bottom-[18%]', delay: '2.2s' },
           ].map((c) => (
             <span
               key={c.txt}
@@ -180,18 +182,18 @@ export default function LandingV2() {
 
       {/* ─── Metrics strip ───────────────────────────────────── */}
       <section className="mx-auto max-w-6xl px-6 py-12">
-        <div className="grid gap-4 rounded-2xl border border-[#EAE5DC] bg-white p-8 shadow-[0_8px_30px_rgba(23,26,32,0.06)] sm:grid-cols-3">
+        <PopCard className="grid gap-4 p-8 sm:grid-cols-3">
           {[
             ['~30%', 'of calls go unanswered at peak — industry, not us'],
             ['1 ring', 'before Meridian picks up, every time'],
-            ['$0.104', 'measured cost per minute, whole stack'],
+            ['0 faces', 'cameras record what happened — never who'],
           ].map(([n, l]) => (
             <div key={l} className="text-center sm:text-left">
               <div className="text-4xl font-extrabold tracking-tight text-[#1A8FD6]">{n}</div>
               <div className="mt-1 text-sm leading-snug text-[#5B6069]">{l}</div>
             </div>
           ))}
-        </div>
+        </PopCard>
       </section>
 
       {/* ─── Listen: the live transcript ─────────────────────── */}
@@ -237,7 +239,7 @@ export default function LandingV2() {
           </p>
         </div>
         <div className="mt-10 grid gap-6 lg:grid-cols-[1.6fr,1fr]">
-          <figure className="overflow-hidden rounded-2xl border border-[#EAE5DC] bg-white shadow-[0_18px_50px_rgba(23,26,32,0.10)]">
+          <PopCard className="!shadow-[0_18px_50px_rgba(23,26,32,0.10)]">
             <div className="flex items-center gap-1.5 border-b border-[#EAE5DC] px-4 py-2.5">
               <span className="h-2.5 w-2.5 rounded-full bg-[#EAE5DC]" />
               <span className="h-2.5 w-2.5 rounded-full bg-[#EAE5DC]" />
@@ -249,8 +251,8 @@ export default function LandingV2() {
             <figcaption className="border-t border-[#EAE5DC] px-4 py-3 text-sm text-[#5B6069]">
               "$672 still sellable today — 7 more slots would fit." It tells you; you don't dig.
             </figcaption>
-          </figure>
-          <figure className="flex flex-col overflow-hidden rounded-2xl border border-[#EAE5DC] bg-white shadow-[0_18px_50px_rgba(23,26,32,0.10)]">
+          </PopCard>
+          <PopCard className="flex flex-col !shadow-[0_18px_50px_rgba(23,26,32,0.10)]">
             <div className="flex items-center gap-1.5 border-b border-[#EAE5DC] px-4 py-2.5">
               <span className="h-2.5 w-2.5 rounded-full bg-[#EAE5DC]" />
               <span className="h-2.5 w-2.5 rounded-full bg-[#EAE5DC]" />
@@ -262,8 +264,102 @@ export default function LandingV2() {
             <figcaption className="border-t border-[#EAE5DC] px-4 py-3 text-sm text-[#5B6069]">
               Pick the voice that answers as yours — Vinny, Rosie, Jacques, Priya…
             </figcaption>
-          </figure>
+          </PopCard>
         </div>
+      </section>
+
+      {/* ─── Camera Intelligence — it watches the room, too ──── */}
+      <section className="mx-auto max-w-6xl px-6 py-14">
+        <div className="grid items-center gap-10 lg:grid-cols-[1fr,1.35fr]">
+          <div>
+            <p className="inline-flex items-center gap-2 text-[13px] font-bold uppercase tracking-wide text-[#1A8FD6]">
+              <Cctv className="h-4 w-4 shrink-0" /> Camera intelligence
+            </p>
+            <h2 className="mt-3 text-4xl font-extrabold tracking-tight md:text-5xl">
+              It watches the room, too.
+            </h2>
+            <p className="mt-4 text-lg leading-relaxed text-[#5B6069]">
+              Plug in the cameras you already have. Meridian counts walk-ins,
+              occupancy, and queue time — and flags the moments that cost you:
+              a spill nobody's mopped, a host stand empty with two parties
+              waiting, a phone out behind the bar mid-service.
+            </p>
+            <ul className="mt-6 space-y-3">
+              {[
+                'Walk-ins, walk-outs, occupancy, and queue wait — live',
+                'Spills, unattended counters, after-hours motion flagged with confidence scores',
+                'One tap: "Dealt with" or "Not a real one" — it learns your floor',
+              ].map((t) => (
+                <li key={t} className="flex items-start gap-2.5 text-[15px] text-[#171A20]">
+                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-[#1A8FD6]" /> {t}
+                </li>
+              ))}
+            </ul>
+            <p className="mt-6 rounded-xl border border-[#EAE5DC] bg-white px-4 py-3 text-sm font-medium text-[#5B6069]">
+              Nobody is identified. The cameras record <span className="font-semibold text-[#171A20]">what happened</span> — never who.
+            </p>
+          </div>
+          <PopCard className="relative">
+            <div className="flex items-center gap-1.5 border-b border-[#EAE5DC] px-4 py-2.5">
+              <span className="h-2.5 w-2.5 rounded-full bg-[#EAE5DC]" />
+              <span className="h-2.5 w-2.5 rounded-full bg-[#EAE5DC]" />
+              <span className="h-2.5 w-2.5 rounded-full bg-[#EAE5DC]" />
+              <span className="ml-3 font-mono text-[11px] text-[#9BA0A8]">Camera Intelligence — What the cameras saw</span>
+            </div>
+            <img src="/landing2/shot-camera.webp" loading="lazy"
+                 alt="Meridian Camera Intelligence: walk-in counts, queue wait, and flagged events like a spill on the floor and an unattended host stand"
+                 className="w-full" />
+            <BorderBeam size={160} duration={9} colorFrom="#1A8FD6" colorTo="#17C5B0" />
+          </PopCard>
+        </div>
+      </section>
+
+      {/* ─── Feature comparison — where Meridian stands alone ── */}
+      <section className="mx-auto max-w-6xl px-6 py-14">
+        <div className="max-w-2xl">
+          <p className="text-[13px] font-bold uppercase tracking-wide text-[#1A8FD6]">Side by side</p>
+          <h2 className="mt-3 text-4xl font-extrabold tracking-tight md:text-5xl">
+            Every answering AI answers. Then the list gets short.
+          </h2>
+        </div>
+        <PopCard className="mt-10 overflow-x-auto">
+          <table className="w-full min-w-[640px] text-left text-[15px]">
+            <thead>
+              <tr className="border-b border-[#EAE5DC] font-mono text-xs uppercase tracking-wider text-[#9BA0A8]">
+                <th className="px-5 py-4 font-medium"></th>
+                <th className="px-5 py-4 font-bold text-[#1A8FD6]">Meridian</th>
+                <th className="px-5 py-4 font-medium">Slang.ai</th>
+                <th className="px-5 py-4 font-medium">Popmenu AI</th>
+                <th className="px-5 py-4 font-medium">SoundHound</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[
+                ['Answers every call, 24/7', true, true, true, true],
+                ['Takes orders straight into your POS', true, false, false, false],
+                ['Books into Square Appointments', true, false, false, false],
+                ['Calls your waitlist back — outbound', true, false, false, false],
+                ['Camera intelligence on your floor', true, false, false, false],
+                ['POS analytics in the same subscription', true, false, false, false],
+                ['Price printed on the website', true, false, false, false],
+              ].map(([label, ...cols]) => (
+                <tr key={label as string} className="border-b border-[#EAE5DC] last:border-0">
+                  <td className="px-5 py-3.5 font-medium text-[#171A20]">{label}</td>
+                  {(cols as boolean[]).map((ok, i) => (
+                    <td key={i} className={i === 0 ? 'bg-[#1A8FD6]/[0.06] px-5 py-3.5' : 'px-5 py-3.5'}>
+                      {ok
+                        ? <Check className={`h-5 w-5 shrink-0 ${i === 0 ? 'text-[#1A8FD6]' : 'text-[#9BA0A8]'}`} />
+                        : <Minus className="h-5 w-5 shrink-0 text-[#D8D2C6]" />}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="border-t border-[#EAE5DC] px-5 py-3 text-xs text-[#9BA0A8]">
+            Competitor capabilities as publicly described on their own sites, Sept 2026.
+          </p>
+        </PopCard>
       </section>
 
       {/* ─── Outbound — the claim nobody else can make ───────── */}
@@ -306,8 +402,8 @@ export default function LandingV2() {
             The price, next to everyone else's.
           </h2>
           <p className="mt-4 text-lg text-[#5B6069]">
-            Our measured cost is <span className="font-mono font-semibold text-[#171A20]">$0.104 a minute</span>,
-            so we don't need overage fees or a sales call to tell you a number.
+            From US$250 a month, month to month, no overage games — and we
+            don't need a sales call to tell you a number.
           </p>
         </div>
         <div className="mt-10">
@@ -323,10 +419,10 @@ export default function LandingV2() {
             ['Month to month', 'no contract, cancel from the dashboard'],
             ['Your number stays yours', 'we answer it; take it back any time'],
           ].map(([t, s]) => (
-            <div key={t} className="rounded-2xl border border-[#EAE5DC] bg-white p-6 shadow-sm">
+            <PopCard key={t} className="p-6">
               <div className="font-bold">{t}</div>
               <div className="mt-1 text-sm text-[#5B6069]">{s}</div>
-            </div>
+            </PopCard>
           ))}
         </div>
       </section>
