@@ -2,7 +2,7 @@
 // thin wrappers around this. Owns nothing itself: state machine in
 // useDialerSession, presentation in the sibling components.
 import { useMemo, useState } from 'react'
-import { Phone, PlayCircle, AlertTriangle, UserPlus, CalendarDays, PhoneCall } from 'lucide-react'
+import { Phone, PlayCircle, AlertTriangle, UserPlus, CalendarDays, PhoneCall, Star } from 'lucide-react'
 import { DISPOSITION_LABELS, type DialerMarket } from '@/lib/dialer-api'
 import { useDialerSession } from '@/hooks/useDialerSession'
 import { SessionHUD } from './SessionHUD'
@@ -13,13 +13,14 @@ import { WrapUpModal } from './WrapUpModal'
 import { BookingModal } from './BookingModal'
 import { LeadCapturePanel } from './LeadCapturePanel'
 import { AppointmentsCalendar } from './AppointmentsCalendar'
+import { InterestedPanel } from './InterestedPanel'
 
 const WRAP_CHOICES = [5, 10, 15, 30, 60]
 
 export function AutoDialerScreen({ market }: { market: DialerMarket }) {
   const d = useDialerSession(market)
   const [wrapUp, setWrapUp] = useState(15)
-  const [view, setView] = useState<'dialer' | 'calendar'>('dialer')
+  const [view, setView] = useState<'dialer' | 'interested' | 'calendar'>('dialer')
   const [captureOpen, setCaptureOpen] = useState(false)
   const [bookingOpen, setBookingOpen] = useState(false)
 
@@ -55,6 +56,14 @@ export function AutoDialerScreen({ market }: { market: DialerMarket }) {
               }`}
             >
               <PhoneCall size={13} />Dialer
+            </button>
+            <button
+              onClick={() => setView('interested')}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors border-l border-pm-canada-border ${
+                view === 'interested' ? 'bg-pm-accent/10 text-pm-accent' : 'text-pm-canada-text-muted hover:text-white'
+              }`}
+            >
+              <Star size={13} />Interested
             </button>
             <button
               onClick={() => setView('calendar')}
@@ -102,6 +111,8 @@ export function AutoDialerScreen({ market }: { market: DialerMarket }) {
 
       {view === 'calendar' ? (
         <AppointmentsCalendar />
+      ) : view === 'interested' ? (
+        <InterestedPanel />
       ) : (
       <>
       {d.error && (
@@ -127,7 +138,15 @@ export function AutoDialerScreen({ market }: { market: DialerMarket }) {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-1">
-          <QueuePanel queue={d.queue} currentEntry={d.currentEntry} dialedIds={dialedIds} />
+          <QueuePanel
+            queue={d.queue}
+            currentEntry={d.currentEntry}
+            dialedIds={dialedIds}
+            regionCounts={d.regionCounts}
+            selectedRegions={d.selectedRegions}
+            onToggleRegion={d.toggleRegion}
+            onClearRegions={d.clearRegions}
+          />
         </div>
 
         <div className="lg:col-span-2 space-y-4">
@@ -138,7 +157,7 @@ export function AutoDialerScreen({ market }: { market: DialerMarket }) {
             notesEnabled={d.phase === 'connected'}
             onSendToPipeline={d.sendToPipeline}
           />
-          <CallControls phase={d.phase} onHangup={d.hangup} onMute={d.setMuted} />
+          <CallControls phase={d.phase} onHangup={d.hangup} onMute={d.setMuted} onDtmf={d.sendDtmf} />
           {d.log.length > 0 && <RecentActivity log={d.log} />}
         </div>
       </div>

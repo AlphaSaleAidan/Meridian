@@ -23,6 +23,7 @@ export interface Softphone {
   dial(destinationE164: string): Promise<void>
   hangup(): void
   setMuted(muted: boolean): void
+  sendDtmf(digit: string): void
   destroy(): void
 }
 
@@ -66,6 +67,8 @@ export class SimSoftphone implements Softphone {
   }
 
   setMuted(_muted: boolean): void { /* nothing to mute in sim */ }
+
+  sendDtmf(_digit: string): void { /* no tones to send in sim */ }
 
   destroy(): void {
     this.inCall = false
@@ -159,6 +162,10 @@ export class TelnyxSoftphone implements Softphone {
 
   setMuted(muted: boolean): void {
     try { muted ? this.call?.muteAudio() : this.call?.unmuteAudio() } catch { /* no active call */ }
+  }
+
+  sendDtmf(digit: string): void {
+    try { this.call?.dtmf(digit) } catch { /* no active call */ }
   }
 
   destroy(): void {
